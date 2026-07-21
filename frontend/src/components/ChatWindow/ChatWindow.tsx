@@ -1,15 +1,23 @@
 import { useState } from "react";
 import { mockMessages } from "../../data/mockData";
+import type { Message } from "../../types";
 import "./ChatWindow.css";
 
-const contacts = [
+interface Contact {
+  name: string;
+  avatar: string;
+  preview: string;
+  active: boolean;
+}
+
+const contacts: Contact[] = [
   { name: "Rahim Hossain", avatar: "RH", preview: "Saturday 11AM works...", active: true },
   { name: "Nadia Islam", avatar: "NI", preview: "The room is available...", active: false },
   { name: "Arif Khan", avatar: "AK", preview: "Please visit anytime...", active: false },
 ];
 
 export default function ChatWindow() {
-  const [messages, setMessages] = useState(mockMessages);
+  const [messages, setMessages] = useState<Message[]>(mockMessages);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
 

@@ -1,22 +1,39 @@
 import { useState } from "react";
 import { AREAS, ROOM_TYPES, AMENITIES_LIST } from "../../data/mockData";
+import type { Filters, SortOption, GenderPref } from "../../types";
 import "./SearchFilter.css";
 
-export default function SearchFilter({ filters, setFilters }) {
+interface SearchFilterProps {
+  filters: Filters;
+  setFilters: React.Dispatch<React.SetStateAction<Filters>>;
+}
+
+export default function SearchFilter({ filters, setFilters }: SearchFilterProps) {
   const [showPanel, setShowPanel] = useState(false);
 
-  const update = (key, value) => setFilters((f) => ({ ...f, [key]: value }));
+  const update = <K extends keyof Filters>(key: K, value: Filters[K]) =>
+    setFilters((f) => ({ ...f, [key]: value }));
 
-  const toggleAmenity = (a) =>
+  const toggleAmenity = (a: string) =>
     setFilters((f) => ({
       ...f,
-      amenities: f.amenities?.includes(a)
+      amenities: f.amenities.includes(a)
         ? f.amenities.filter((x) => x !== a)
-        : [...(f.amenities || []), a],
+        : [...f.amenities, a],
     }));
 
   const reset = () => {
-    setFilters({ query: "", area: "All", type: "All", sort: "default", amenities: [], gender: "Any", available: "any" });
+    setFilters({
+      query: "",
+      area: "All",
+      type: "All",
+      sort: "default",
+      amenities: [],
+      gender: "Any",
+      available: "any",
+      minPrice: "",
+      maxPrice: "",
+    });
     setShowPanel(false);
   };
 
@@ -58,7 +75,10 @@ export default function SearchFilter({ filters, setFilters }) {
             ⚙️ Advanced
           </button>
 
-          <select value={filters.sort} onChange={(e) => update("sort", e.target.value)}>
+          <select
+            value={filters.sort}
+            onChange={(e) => update("sort", e.target.value as SortOption)}
+          >
             <option value="default">Sort: Default</option>
             <option value="price-asc">Price: Low→High</option>
             <option value="price-desc">Price: High→Low</option>
@@ -78,8 +98,8 @@ export default function SearchFilter({ filters, setFilters }) {
         <div className="filter-group">
           <label>Budget Range (৳/month)</label>
           <div className="range-row">
-            <input className="range-input" type="number" placeholder="Min" value={filters.minPrice || ""} onChange={(e) => update("minPrice", e.target.value)} />
-            <input className="range-input" type="number" placeholder="Max" value={filters.maxPrice || ""} onChange={(e) => update("maxPrice", e.target.value)} />
+            <input className="range-input" type="number" placeholder="Min" value={filters.minPrice} onChange={(e) => update("minPrice", e.target.value)} />
+            <input className="range-input" type="number" placeholder="Max" value={filters.maxPrice} onChange={(e) => update("maxPrice", e.target.value)} />
           </div>
         </div>
 
@@ -89,7 +109,7 @@ export default function SearchFilter({ filters, setFilters }) {
             {AMENITIES_LIST.map((a) => (
               <button
                 key={a}
-                className={`chip ${filters.amenities?.includes(a) ? "selected" : ""}`}
+                className={`chip ${filters.amenities.includes(a) ? "selected" : ""}`}
                 onClick={() => toggleAmenity(a)}
               >
                 {a}
@@ -101,7 +121,7 @@ export default function SearchFilter({ filters, setFilters }) {
         <div className="filter-group">
           <label>Gender Preference</label>
           <div className="chips-wrap">
-            {["Any", "Male", "Female"].map((g) => (
+            {(["Any", "Male", "Female"] as GenderPref[]).map((g) => (
               <button
                 key={g}
                 className={`chip ${filters.gender === g ? "selected" : ""}`}

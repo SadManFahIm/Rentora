@@ -2,7 +2,9 @@
 // MOCK DATA — Replace with real API calls later
 // ============================================================
 
-export const mockRooms = [
+import type { Room, Message, Notification, Review } from "../types";
+
+export const mockRooms: Room[] = [
   {
     id: 1,
     name: "Sunlit Studio, Dhanmondi",
@@ -131,24 +133,24 @@ export const mockRooms = [
   },
 ];
 
-export const mockMessages = [
+export const mockMessages: Message[] = [
   { id: 1, from: "Rahim Hossain", avatar: "RH", text: "Hello! The room is still available. When would you like to visit?", time: "10:30 AM", mine: false },
   { id: 2, from: "Me", avatar: "ME", text: "Hi! I'd like to visit this weekend if possible.", time: "10:35 AM", mine: true },
   { id: 3, from: "Rahim Hossain", avatar: "RH", text: "Saturday 11AM works great! I'll send you the exact location.", time: "10:37 AM", mine: false },
 ];
 
-export const mockNotifications = [
+export const mockNotifications: Notification[] = [
   { id: 1, text: "Your booking request was approved!", read: false, time: "2m ago" },
   { id: 2, text: "New message from Rahim Hossain", read: false, time: "15m ago" },
   { id: 3, text: "Price drop alert: Banani Studio -10%", read: true, time: "1h ago" },
 ];
 
-export const mockReviews = [
+export const mockReviews: Review[] = [
   { name: "Tahmina Akter", avatar: "TA", rating: 5, text: "Found my perfect studio in Dhanmondi within a week! The KYC verification gave me confidence.", date: "Jan 2025" },
   { name: "Mehedi Hasan", avatar: "MH", rating: 4, text: "The AI price suggestion saved me ৳2,000/month. Showed me the market average.", date: "Jan 2025" },
   { name: "Priya Sen", avatar: "PS", rating: 5, text: "Chat feature made communication with the landlord so easy. Booked without multiple visits!", date: "Dec 2024" },
 ];
 
-export const AREAS = ["All", "Dhanmondi", "Mirpur", "Gulshan", "Banani", "Mohammadpur", "Azimpur"];
-export const ROOM_TYPES = ["All", "Single", "Shared", "Studio"];
-export const AMENITIES_LIST = ["WiFi", "AC", "Attached Bath", "Furnished", "Gym", "Parking"];
+export const AREAS: string[] = ["All", "Dhanmondi", "Mirpur", "Gulshan", "Banani", "Mohammadpur", "Azimpur"];
+export const ROOM_TYPES: string[] = ["All", "Single", "Shared", "Studio"];
+export const AMENITIES_LIST: string[] = ["WiFi", "AC", "Attached Bath", "Furnished", "Gym", "Parking"];

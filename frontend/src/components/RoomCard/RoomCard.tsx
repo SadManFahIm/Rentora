@@ -1,10 +1,21 @@
 import { useApp } from "../../context/AppContext";
+import type { Room, RoomType } from "../../types";
 import "./RoomCard.css";
 
-export default function RoomCard({ room, onClick }) {
+interface RoomCardProps {
+  room: Room;
+  onClick: (room: Room) => void;
+}
+
+export default function RoomCard({ room, onClick }: RoomCardProps) {
   const { wishlist, toggleWishlist } = useApp();
   const isWishlisted = wishlist.includes(room.id);
-  const typeClass = { Single: "tag-single", Shared: "tag-shared", Studio: "tag-studio" }[room.type] || "";
+  const typeClasses: Record<RoomType, string> = {
+    Single: "tag-single",
+    Shared: "tag-shared",
+    Studio: "tag-studio",
+  };
+  const typeClass = typeClasses[room.type] || "";
 
   return (
     <div className="room-card fade-in" onClick={() => onClick(room)}>

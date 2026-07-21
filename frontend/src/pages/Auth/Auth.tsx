@@ -1,18 +1,27 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "../../context/AppContext";
 import "./Auth.css";
 
-export default function Auth({ setPage }) {
-  const { setUser } = useApp();
-  const [isLogin, setIsLogin] = useState(true);
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+interface AuthForm {
+  name: string;
+  email: string;
+  password: string;
+}
 
-  const update = (key, val) => setForm((f) => ({ ...f, [key]: val }));
+export default function Auth() {
+  const { setUser } = useApp();
+  const navigate = useNavigate();
+  const [isLogin, setIsLogin] = useState(true);
+  const [form, setForm] = useState<AuthForm>({ name: "", email: "", password: "" });
+
+  const update = <K extends keyof AuthForm>(key: K, val: AuthForm[K]) =>
+    setForm((f) => ({ ...f, [key]: val }));
 
   const handleSubmit = () => {
     if (form.email && form.password) {
       setUser({ name: form.name || "User", email: form.email });
-      setPage("dashboard");
+      navigate("/dashboard");
     }
   };
 
@@ -61,7 +70,7 @@ export default function Auth({ setPage }) {
         </div>
 
         <div style={{ textAlign: "center", marginTop: 12 }}>
-          <button className="btn-outline" style={{ fontSize: "0.85rem", padding: "8px 20px" }} onClick={() => setPage("home")}>
+          <button className="btn-outline" style={{ fontSize: "0.85rem", padding: "8px 20px" }} onClick={() => navigate("/")}>
             ← Back to Home
           </button>
         </div>

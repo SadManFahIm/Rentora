@@ -1,12 +1,21 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "../../context/AppContext";
 import RoomCard from "../../components/RoomCard/RoomCard";
 import RoomModal from "../../components/RoomModal/RoomModal";
 import AIRecommendations from "../../components/AIRecommendations/AIRecommendations";
 import { mockReviews } from "../../data/mockData";
+import type { Room } from "../../types";
 import "./Home.css";
 
-function HeroSection({ setPage }) {
+interface AIFeature {
+  icon: string;
+  title: string;
+  desc: string;
+}
+
+function HeroSection() {
+  const navigate = useNavigate();
   return (
     <div className="hero">
       <div className="hero-content">
@@ -15,7 +24,7 @@ function HeroSection({ setPage }) {
         <p>AI-powered room search with verified landlords, secure payments, and real-time availability. The smarter way to rent in 2025.</p>
         <div className="hero-search">
           <input placeholder="Search area, room type..." />
-          <button className="btn-primary" onClick={() => setPage("rooms")}>Search Rooms</button>
+          <button className="btn-primary" onClick={() => navigate("/rooms")}>Search Rooms</button>
         </div>
         <div className="hero-stats">
           <div className="hero-stat"><strong>2.4K+</strong><span>Active Listings</span></div>
@@ -43,7 +52,7 @@ function HeroSection({ setPage }) {
 }
 
 function AISection() {
-  const features = [
+  const features: AIFeature[] = [
     { icon: "🎯", title: "Smart Recommendations", desc: "Personalized room suggestions based on your budget, location history and preferences." },
     { icon: "✍️", title: "AI Description Generator", desc: "Auto-generate professional listing descriptions with grammar correction." },
     { icon: "🛡️", title: "Fraud Detection", desc: "Detects duplicate listings, suspicious pricing, and fake images automatically." },
@@ -94,21 +103,22 @@ function ReviewSection() {
   );
 }
 
-export default function Home({ setPage }) {
+export default function Home() {
   const { rooms } = useApp();
-  const [selectedRoom, setSelectedRoom] = useState(null);
+  const navigate = useNavigate();
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const featured = rooms.filter((r) => r.featured);
 
   return (
     <>
-      <HeroSection setPage={setPage} />
+      <HeroSection />
       <AIRecommendations />
 
       {/* Featured Rooms */}
       <div className="section-container">
         <div className="section-header">
           <div><h2>Featured Rooms</h2><p>Hand-picked by our team</p></div>
-          <button className="btn-outline" onClick={() => setPage("rooms")}>View All →</button>
+          <button className="btn-outline" onClick={() => navigate("/rooms")}>View All →</button>
         </div>
         <div className="rooms-grid">
           {featured.map((r) => <RoomCard key={r.id} room={r} onClick={setSelectedRoom} />)}

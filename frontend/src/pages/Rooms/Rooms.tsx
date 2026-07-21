@@ -4,27 +4,34 @@ import RoomCard from "../../components/RoomCard/RoomCard";
 import RoomModal from "../../components/RoomModal/RoomModal";
 import SearchFilter from "../../components/SearchFilter/SearchFilter";
 import AIRecommendations from "../../components/AIRecommendations/AIRecommendations";
+import type { Room, Filters } from "../../types";
 
-const DEFAULT_FILTERS = {
-  query: "", area: "All", type: "All", sort: "default",
-  amenities: [], gender: "Any", available: "any",
-  minPrice: "", maxPrice: "",
+const DEFAULT_FILTERS: Filters = {
+  query: "",
+  area: "All",
+  type: "All",
+  sort: "default",
+  amenities: [],
+  gender: "Any",
+  available: "any",
+  minPrice: "",
+  maxPrice: "",
 };
 
 export default function Rooms() {
   const { rooms } = useApp();
-  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [gridView, setGridView] = useState(true);
-  const [selectedRoom, setSelectedRoom] = useState(null);
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
 
   // Apply filters
-  let filtered = rooms.filter((r) => {
+  const filtered = rooms.filter((r) => {
     if (filters.query && !r.name.toLowerCase().includes(filters.query.toLowerCase()) && !r.area.toLowerCase().includes(filters.query.toLowerCase())) return false;
     if (filters.area !== "All" && r.area !== filters.area) return false;
     if (filters.type !== "All" && r.type !== filters.type) return false;
     if (filters.minPrice && r.price < parseInt(filters.minPrice)) return false;
     if (filters.maxPrice && r.price > parseInt(filters.maxPrice)) return false;
-    if (filters.amenities?.length && !filters.amenities.every((a) => r.amenities.includes(a))) return false;
+    if (filters.amenities.length && !filters.amenities.every((a) => r.amenities.includes(a))) return false;
     if (filters.gender !== "Any" && r.gender !== "Any" && r.gender !== filters.gender) return false;
     if (filters.available === "yes" && !r.available) return false;
     return true;

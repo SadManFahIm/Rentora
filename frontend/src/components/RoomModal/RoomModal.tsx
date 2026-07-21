@@ -1,8 +1,21 @@
+import type { Room } from "../../types";
 import "./RoomModal.css";
 
-const amenityEmoji = { WiFi: "📶", AC: "❄️", "Attached Bath": "🚿", Furnished: "🛋️", Gym: "💪", Parking: "🚗" };
+const amenityEmoji: Record<string, string> = {
+  WiFi: "📶",
+  AC: "❄️",
+  "Attached Bath": "🚿",
+  Furnished: "🛋️",
+  Gym: "💪",
+  Parking: "🚗",
+};
 
-export default function RoomModal({ room, onClose }) {
+interface RoomModalProps {
+  room: Room | null;
+  onClose: () => void;
+}
+
+export default function RoomModal({ room, onClose }: RoomModalProps) {
   if (!room) return null;
 
   return (
