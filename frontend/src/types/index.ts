@@ -78,3 +78,32 @@ export interface Filters {
   minPrice: string;
   maxPrice: string;
 }
+
+// Filters as sent to the service layer — every field optional.
+export type RoomFilters = Partial<Filters>;
+
+// ---- API payloads ----
+export type CreateRoomPayload = Omit<Room, "id" | "rating" | "reviews">;
+export type UpdateRoomPayload = Partial<CreateRoomPayload>;
+
+export interface LoginCredentials {
+  email: string;
+  password: string;
+}
+
+export interface RegisterPayload {
+  name: string;
+  email: string;
+  password: string;
+}
+
+export interface AuthResponse {
+  user: User;
+  token: string;
+  refreshToken: string;
+}
+
+export interface CreateBookingPayload {
+  roomId: number;
+  date: string;
+}

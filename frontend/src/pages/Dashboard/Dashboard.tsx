@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useApp } from "../../context/AppContext";
+import { useRooms } from "../../hooks/useRooms";
+import { useBookings } from "../../hooks/useBookings";
 import RoomCard from "../../components/RoomCard/RoomCard";
-import type { Booking } from "../../types";
 import "./Dashboard.css";
 
 type DashboardTab = "overview" | "bookings" | "wishlist";
@@ -16,14 +16,10 @@ interface StatCard {
 }
 
 export default function Dashboard() {
-  const { rooms } = useApp();
+  const { data: rooms = [] } = useRooms();
+  const { data: bookings = [] } = useBookings();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
-
-  const bookings: Booking[] = [
-    { ...rooms[0], status: "approved", date: "Feb 22, 2025" },
-    { ...rooms[2], status: "pending", date: "Feb 25, 2025" },
-  ];
 
   const stats: StatCard[] = [
     { icon: "🏠", label: "Saved Rooms", value: "3", change: "+2 this week", up: true },

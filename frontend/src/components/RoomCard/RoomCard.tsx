@@ -1,4 +1,4 @@
-import { useApp } from "../../context/AppContext";
+import { useWishlistStore } from "../../stores/wishlistStore";
 import type { Room, RoomType } from "../../types";
 import "./RoomCard.css";
 
@@ -8,7 +8,8 @@ interface RoomCardProps {
 }
 
 export default function RoomCard({ room, onClick }: RoomCardProps) {
-  const { wishlist, toggleWishlist } = useApp();
+  const wishlist = useWishlistStore((s) => s.wishlist);
+  const toggleWishlist = useWishlistStore((s) => s.toggleWishlist);
   const isWishlisted = wishlist.includes(room.id);
   const typeClasses: Record<RoomType, string> = {
     Single: "tag-single",

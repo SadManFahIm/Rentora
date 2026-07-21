@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useApp } from "../../context/AppContext";
+import { useUiStore } from "../../stores/uiStore";
+import { useWishlistStore } from "../../stores/wishlistStore";
+import { useNotificationStore } from "../../stores/notificationStore";
+import { useLogout } from "../../hooks/useAuth";
 import "./Navbar.css";
 
 const NAV_ITEMS: { label: string; to: string }[] = [
@@ -11,7 +15,14 @@ const NAV_ITEMS: { label: string; to: string }[] = [
 ];
 
 export default function Navbar() {
-  const { darkMode, setDarkMode, wishlist, notifications, user, setUser, markAllRead } = useApp();
+  const { user } = useApp();
+  const darkMode = useUiStore((s) => s.darkMode);
+  const toggleDarkMode = useUiStore((s) => s.toggleDarkMode);
+  const wishlist = useWishlistStore((s) => s.wishlist);
+  const notifications = useNotificationStore((s) => s.notifications);
+  const markAllRead = useNotificationStore((s) => s.markAllRead);
+  const logout = useLogout();
+
   const [showNotif, setShowNotif] = useState(false);
   const navigate = useNavigate();
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -45,7 +56,7 @@ export default function Navbar() {
 
       <div className="nav-actions">
         {/* Dark Mode */}
-        <button className="icon-btn" onClick={() => setDarkMode(!darkMode)}>
+        <button className="icon-btn" onClick={() => toggleDarkMode()}>
           {darkMode ? "☀️" : "🌙"}
         </button>
 
@@ -90,7 +101,11 @@ export default function Navbar() {
             >
               {user.name.slice(0, 2).toUpperCase()}
             </div>
-            <button className="btn-outline" onClick={() => setUser(null)} style={{ padding: "8px 14px" }}>
+            <button
+              className="btn-outline"
+              onClick={() => logout.mutate()}
+              style={{ padding: "8px 14px" }}
+            >
               Logout
             </button>
           </div>

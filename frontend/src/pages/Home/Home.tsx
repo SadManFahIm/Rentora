@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useApp } from "../../context/AppContext";
+import { useRooms } from "../../hooks/useRooms";
 import RoomCard from "../../components/RoomCard/RoomCard";
 import RoomModal from "../../components/RoomModal/RoomModal";
 import AIRecommendations from "../../components/AIRecommendations/AIRecommendations";
@@ -104,7 +104,7 @@ function ReviewSection() {
 }
 
 export default function Home() {
-  const { rooms } = useApp();
+  const { data: rooms = [] } = useRooms();
   const navigate = useNavigate();
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const featured = rooms.filter((r) => r.featured);

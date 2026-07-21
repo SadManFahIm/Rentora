@@ -1,5 +1,5 @@
 // Map Page
-import { useApp } from "../../context/AppContext";
+import { useRooms } from "../../hooks/useRooms";
 
 interface MapFeature {
   icon: string;
@@ -8,7 +8,7 @@ interface MapFeature {
 }
 
 export default function Map() {
-  const { rooms } = useApp();
+  const { data: rooms = [] } = useRooms();
 
   const features: MapFeature[] = [
     { icon: "🏫", title: "Near Universities", desc: "Rooms within 1km of DU, BUET, NSU" },

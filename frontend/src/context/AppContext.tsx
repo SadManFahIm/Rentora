@@ -4,20 +4,18 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { mockRooms, mockNotifications } from "../data/mockData";
-import type { Room, User, Notification } from "../types";
+import type { User } from "../types";
+
+// ============================================================
+// APP CONTEXT — auth state only.
+// Client UI state lives in Zustand stores (ui/wishlist/notification);
+// server data (rooms, bookings) comes from TanStack Query hooks.
+// The user here is a placeholder until API auth lands in Phase 3.
+// ============================================================
 
 interface AppContextValue {
-  rooms: Room[];
   user: User | null;
   setUser: React.Dispatch<React.SetStateAction<User | null>>;
-  darkMode: boolean;
-  setDarkMode: React.Dispatch<React.SetStateAction<boolean>>;
-  wishlist: number[];
-  toggleWishlist: (roomId: number) => void;
-  notifications: Notification[];
-  setNotifications: React.Dispatch<React.SetStateAction<Notification[]>>;
-  markAllRead: () => void;
 }
 
 const AppContext = createContext<AppContextValue | undefined>(undefined);
@@ -27,40 +25,10 @@ interface AppProviderProps {
 }
 
 export function AppProvider({ children }: AppProviderProps) {
-  const [rooms] = useState<Room[]>(mockRooms);
   const [user, setUser] = useState<User | null>(null);
-  const [darkMode, setDarkMode] = useState<boolean>(false);
-  const [wishlist, setWishlist] = useState<number[]>([]);
-  const [notifications, setNotifications] =
-    useState<Notification[]>(mockNotifications);
-
-  const toggleWishlist = (roomId: number) => {
-    setWishlist((prev) =>
-      prev.includes(roomId)
-        ? prev.filter((id) => id !== roomId)
-        : [...prev, roomId]
-    );
-  };
-
-  const markAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  };
 
   return (
-    <AppContext.Provider
-      value={{
-        rooms,
-        user,
-        setUser,
-        darkMode,
-        setDarkMode,
-        wishlist,
-        toggleWishlist,
-        notifications,
-        setNotifications,
-        markAllRead,
-      }}
-    >
+    <AppContext.Provider value={{ user, setUser }}>
       {children}
     </AppContext.Provider>
   );
