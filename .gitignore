@@ -5,7 +5,7 @@ frontend/.env
 frontend/.env.local
 
 # Backend
-backend/__pycache__/
+backend/**/__pycache__/
 backend/venv/
 backend/.env
 backend/db.sqlite3
