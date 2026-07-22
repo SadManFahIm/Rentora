@@ -55,6 +55,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         user = self.request.user
         return (
             Booking.objects.select_related("room", "room__owner", "tenant")
+            .prefetch_related("room__images")
             .filter(Q(tenant=user) | Q(room__owner=user))
             .distinct()
         )

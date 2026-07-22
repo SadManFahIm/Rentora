@@ -3,24 +3,20 @@ from datetime import date
 from rest_framework import serializers
 
 from config.sanitizers import sanitize_text
-from rooms.models import Room
-from rooms.serializers import RoomOwnerSerializer
+from rooms.serializers import RoomListSerializer, RoomOwnerSerializer
 
 from .models import Booking, Review
 
 
-class BookingRoomSerializer(serializers.ModelSerializer):
-    """Lightweight room representation embedded in booking responses."""
-
-    class Meta:
-        model = Room
-        fields = ["id", "title", "area", "price"]
-
-
 class BookingSerializer(serializers.ModelSerializer):
-    """Read representation used for list/retrieve."""
+    """Read representation used for list/retrieve.
 
-    room = BookingRoomSerializer(read_only=True)
+    The room is embedded with the full ``RoomListSerializer`` so the client
+    can render a booking card (image, amenities, owner, …) without a separate
+    room fetch.
+    """
+
+    room = RoomListSerializer(read_only=True)
     tenant = RoomOwnerSerializer(read_only=True)
 
     class Meta:

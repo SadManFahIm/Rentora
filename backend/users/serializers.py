@@ -52,20 +52,28 @@ class CustomUserDetailsSerializer(UserDetailsSerializer):
 
 
 class CustomRegisterSerializer(RegisterSerializer):
-    """Used by dj-rest-auth's POST /api/v1/auth/register/."""
+    """Used by dj-rest-auth's POST /api/v1/auth/register/.
 
+    Extends the default registration with a display ``name`` (stored on
+    ``first_name``) plus ``phone`` and ``role``. ``username`` remains required
+    by allauth; the frontend supplies the email as the username.
+    """
+
+    name = serializers.CharField(required=False, allow_blank=True, default="")
     phone = serializers.CharField(required=False, allow_blank=True, default="")
     role = serializers.ChoiceField(choices=User.Role.choices, required=False, default=User.Role.TENANT)
 
     def get_cleaned_data(self):
         data = super().get_cleaned_data()
+        data["name"] = self.validated_data.get("name", "")
         data["phone"] = self.validated_data.get("phone", "")
         data["role"] = self.validated_data.get("role", User.Role.TENANT)
         return data
 
     def save(self, request):
         user = super().save(request)
+        user.first_name = self.cleaned_data.get("name", "")
         user.phone = self.cleaned_data.get("phone", "")
         user.role = self.cleaned_data.get("role", User.Role.TENANT)
-        user.save(update_fields=["phone", "role"])
+        user.save(update_fields=["first_name", "phone", "role"])
         return user

@@ -24,18 +24,27 @@ class RoomOwnerSerializer(serializers.ModelSerializer):
 
 
 class RoomListSerializer(serializers.ModelSerializer):
-    """Lightweight representation used for the room list/browse endpoint."""
+    """Representation used for room list/browse and anywhere a room summary is
+    embedded (wishlist entries, bookings). Includes the fields the frontend
+    card *and* detail modal render, so the list endpoint needs no follow-up
+    detail fetch for the common views.
+    """
 
     images = RoomImageSerializer(many=True, read_only=True)
+    owner = RoomOwnerSerializer(read_only=True)
 
     class Meta:
         model = Room
         fields = [
             "id",
             "title",
+            "description",
             "room_type",
             "price",
             "area",
+            "lat",
+            "lng",
+            "amenities",
             "gender_preference",
             "size_sqft",
             "is_available",
@@ -43,6 +52,7 @@ class RoomListSerializer(serializers.ModelSerializer):
             "rating",
             "total_reviews",
             "verified",
+            "owner",
             "images",
             "created_at",
         ]

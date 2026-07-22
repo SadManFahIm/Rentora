@@ -27,9 +27,20 @@ export interface Room {
   verified: boolean;
 }
 
+export type UserRole = "tenant" | "landlord" | "admin";
+
 export interface User {
+  id?: number;
   name: string;
   email: string;
+  username?: string;
+  firstName?: string;
+  lastName?: string;
+  role?: UserRole;
+  avatar?: string | null;
+  phone?: string;
+  bio?: string;
+  nidVerified?: boolean;
 }
 
 export interface Notification {
@@ -56,11 +67,14 @@ export interface Review {
   date: string;
 }
 
-export type BookingStatus = "approved" | "pending" | "rejected";
+export type BookingStatus = "approved" | "pending" | "rejected" | "cancelled";
 
 export interface Booking extends Room {
+  bookingId: number;
   status: BookingStatus;
   date: string;
+  checkIn: string;
+  monthlyRent: number;
 }
 
 // ---- Search / filter state ----
@@ -97,13 +111,31 @@ export interface RegisterPayload {
   password: string;
 }
 
-export interface AuthResponse {
+export interface AuthResult {
   user: User;
-  token: string;
-  refreshToken: string;
+  access: string;
+  refresh: string;
 }
 
 export interface CreateBookingPayload {
   roomId: number;
-  date: string;
+  /** ISO date (YYYY-MM-DD) for check-in. */
+  checkIn: string;
+}
+
+export interface DashboardLandlordStats {
+  total_listings: number;
+  total_bookings_received: number;
+  avg_rating: number;
+  total_revenue: number;
+}
+
+export interface DashboardStats {
+  saved_rooms_count: number;
+  active_bookings: number;
+  pending_bookings: number;
+  total_reviews_given: number;
+  unread_notifications: number;
+  profile_completion: number;
+  landlord?: DashboardLandlordStats;
 }
