@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from django.contrib.auth import get_user_model
 
+from config.sanitizers import sanitize_text
+
 from .models import Notification
 
 User = get_user_model()
@@ -36,11 +38,17 @@ def create_notification(
     -------
     Notification
         The created, saved notification instance.
+
+    Notes
+    -----
+    ``title`` and ``message`` are HTML-sanitized before persistence: they are
+    frequently interpolated from user-controlled data (e.g. a room title), so
+    stripping markup here neutralises stored XSS at the single write path.
     """
     return Notification.objects.create(
         user=user,
         notification_type=notification_type,
-        title=title,
-        message=message,
+        title=sanitize_text(title),
+        message=sanitize_text(message),
         action_url=action_url,
     )

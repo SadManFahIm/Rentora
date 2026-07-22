@@ -1,4 +1,9 @@
-from rest_framework import mixins, permissions, viewsets
+from drf_spectacular.utils import (
+    extend_schema,
+    extend_schema_view,
+    inline_serializer,
+)
+from rest_framework import mixins, permissions, serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -7,6 +12,20 @@ from .models import Notification
 from .serializers import NotificationSerializer
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Notifications"],
+        summary="List notifications",
+        description="The authenticated user's notifications, paginated, newest first.",
+    ),
+    retrieve=extend_schema(tags=["Notifications"], summary="Retrieve a notification"),
+    partial_update=extend_schema(
+        tags=["Notifications"],
+        summary="Mark a notification read/unread",
+        description="Patch `is_read` on a single notification.",
+    ),
+    update=extend_schema(tags=["Notifications"], summary="Update a notification (is_read)"),
+)
 class NotificationViewSet(
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
@@ -32,8 +51,20 @@ class NotificationViewSet(
 
     def get_queryset(self):
         """Restrict every action to the requesting user's notifications."""
+        if getattr(self, "swagger_fake_view", False):
+            return Notification.objects.none()
         return Notification.objects.filter(user=self.request.user)
 
+    @extend_schema(
+        tags=["Notifications"],
+        summary="Mark all notifications read",
+        description="Flip every unread notification to read. Returns the number changed.",
+        request=None,
+        responses=inline_serializer(
+            "MarkAllReadResponse",
+            fields={"marked_count": serializers.IntegerField()},
+        ),
+    )
     @action(detail=False, methods=["post"], url_path="mark-all-read")
     def mark_all_read(self, request: Request) -> Response:
         """Mark all of the user's unread notifications as read.
@@ -44,6 +75,15 @@ class NotificationViewSet(
         marked_count = self.get_queryset().filter(is_read=False).update(is_read=True)
         return Response({"marked_count": marked_count})
 
+    @extend_schema(
+        tags=["Notifications"],
+        summary="Unread notification count",
+        description="Number of unread notifications for the authenticated user.",
+        responses=inline_serializer(
+            "UnreadCountResponse",
+            fields={"count": serializers.IntegerField()},
+        ),
+    )
     @action(detail=False, methods=["get"], url_path="unread-count")
     def unread_count(self, request: Request) -> Response:
         """Return ``{"count": N}`` — the user's unread notification count."""

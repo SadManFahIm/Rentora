@@ -9,6 +9,7 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
 
 # backend/config/settings/base.py -> parents: settings, config, backend
@@ -30,6 +31,7 @@ INSTALLED_APPS = [
     # Third-party
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
+    "drf_spectacular",
     "corsheaders",
     "django_filters",
     "allauth",
@@ -116,6 +118,34 @@ REST_FRAMEWORK = {
         "rest_framework.filters.SearchFilter",
         "rest_framework.filters.OrderingFilter",
     ),
+    # OpenAPI schema generation (drf-spectacular).
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # Unified error envelope (see config/exceptions.py).
+    "EXCEPTION_HANDLER": "config.exceptions.custom_exception_handler",
+    # Rate limiting. Anonymous requests are keyed by IP, authenticated by user.
+    # The per-IP `auth` scope is applied explicitly on the login/register views.
+    "DEFAULT_THROTTLE_CLASSES": (
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ),
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "100/hour",
+        "user": "1000/hour",
+        "auth": "10/hour",
+    },
+}
+
+# ============================================================
+# drf-spectacular (OpenAPI 3)
+# ============================================================
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Rentora API",
+    "DESCRIPTION": "AI-Powered Room Rental Platform API",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],
+    "SWAGGER_UI_SETTINGS": {"persistAuthorization": True},
+    "COMPONENT_SPLIT_REQUEST": True,
 }
 
 # ============================================================
@@ -159,9 +189,17 @@ ACCOUNT_EMAIL_VERIFICATION = "none"
 # ============================================================
 # CORS
 # ============================================================
+# Base defaults; dev.py opens this up and prod.py pins it to the real domains.
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000").split(",")
     if origin.strip()
 ]
+# Needed if we ever switch JWTs to cookies; harmless for the Bearer-header flow.
 CORS_ALLOW_CREDENTIALS = True
+# Explicitly allow the Authorization header (Bearer tokens) on cross-origin
+# requests. `authorization` is in corsheaders' defaults already, but we pin it
+# here so the contract is obvious and cannot regress.
+CORS_ALLOW_HEADERS = list(default_headers)
+if "authorization" not in CORS_ALLOW_HEADERS:
+    CORS_ALLOW_HEADERS.append("authorization")

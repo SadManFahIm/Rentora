@@ -1,6 +1,8 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
+from config.sanitizers import sanitize_text
+
 from .models import Room, RoomImage
 
 User = get_user_model()
@@ -108,6 +110,14 @@ class RoomCreateUpdateSerializer(serializers.ModelSerializer):
             "images",
             "uploaded_images",
         ]
+
+    def validate_title(self, value: str) -> str:
+        """Strip any HTML from the title to prevent stored XSS."""
+        return sanitize_text(value)
+
+    def validate_description(self, value: str) -> str:
+        """Strip any HTML from the free-text description (stored-XSS guard)."""
+        return sanitize_text(value)
 
     def create(self, validated_data):
         uploaded_images = validated_data.pop("uploaded_images", [])

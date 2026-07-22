@@ -2,6 +2,7 @@ from datetime import date
 
 from rest_framework import serializers
 
+from config.sanitizers import sanitize_text
 from rooms.models import Room
 from rooms.serializers import RoomOwnerSerializer
 
@@ -133,6 +134,10 @@ class ReviewCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Review
         fields = ["id", "room", "rating", "comment"]
+
+    def validate_comment(self, value: str) -> str:
+        """Strip any HTML from the review comment to prevent stored XSS."""
+        return sanitize_text(value)
 
     def validate(self, attrs):
         request = self.context["request"]

@@ -33,3 +33,11 @@ else:
     }
 
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+# ============================================================
+# CORS (development only)
+# ============================================================
+# Allow any origin locally so the Vite dev server (and tools like the
+# browsable API / mobile testing) work without maintaining an allow-list.
+# Never enabled in production — prod.py pins explicit origins instead.
+CORS_ALLOW_ALL_ORIGINS = True

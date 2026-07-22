@@ -1,5 +1,11 @@
 from django.shortcuts import get_object_or_404
-from rest_framework import mixins, permissions, status, viewsets
+from drf_spectacular.utils import (
+    OpenApiExample,
+    extend_schema,
+    extend_schema_view,
+    inline_serializer,
+)
+from rest_framework import mixins, permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -10,6 +16,18 @@ from .models import Wishlist
 from .serializers import WishlistSerializer
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Wishlist"],
+        summary="List saved rooms",
+        description="The authenticated user's wishlisted rooms (newest first).",
+    ),
+    destroy=extend_schema(
+        tags=["Wishlist"],
+        summary="Remove a wishlist entry",
+        description="Delete a specific wishlist entry by its id.",
+    ),
+)
 class WishlistViewSet(
     mixins.ListModelMixin,
     mixins.DestroyModelMixin,
@@ -33,12 +51,40 @@ class WishlistViewSet(
         ``room`` and its images/owner are pulled in the same query set to keep
         the nested ``RoomListSerializer`` free of N+1 lookups.
         """
+        if getattr(self, "swagger_fake_view", False):
+            return Wishlist.objects.none()
         return (
             Wishlist.objects.filter(user=self.request.user)
             .select_related("room", "room__owner")
             .prefetch_related("room__images")
         )
 
+    @extend_schema(
+        tags=["Wishlist"],
+        summary="Toggle a room in the wishlist",
+        description=(
+            "Add the room if it is not already saved, remove it if it is. "
+            "Idempotent per call — the response reports the resulting state."
+        ),
+        request=inline_serializer(
+            "WishlistToggleRequest",
+            fields={"room_id": serializers.IntegerField()},
+        ),
+        responses=inline_serializer(
+            "WishlistToggleResponse",
+            fields={
+                # Plain CharField (not a ChoiceField) so this ad-hoc "status"
+                # doesn't register as an enum and collide with Booking.status.
+                "status": serializers.CharField(),
+                "wishlisted": serializers.BooleanField(),
+            },
+        ),
+        examples=[
+            OpenApiExample("Toggle", value={"room_id": 1}, request_only=True),
+            OpenApiExample("Added", value={"status": "added", "wishlisted": True}, response_only=True),
+            OpenApiExample("Removed", value={"status": "removed", "wishlisted": False}, response_only=True),
+        ],
+    )
     @action(detail=False, methods=["post"])
     def toggle(self, request: Request) -> Response:
         """Add the room to the wishlist if absent, remove it if present.

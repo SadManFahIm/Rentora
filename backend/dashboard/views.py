@@ -3,7 +3,8 @@ from __future__ import annotations
 from decimal import Decimal
 
 from django.db.models import Avg, Count, Q, Sum
-from rest_framework import permissions
+from drf_spectacular.utils import OpenApiExample, extend_schema, inline_serializer
+from rest_framework import permissions, serializers
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -16,6 +17,55 @@ from users.models import User
 _PROFILE_FIELDS = ("avatar", "phone", "bio", "date_of_birth")
 
 
+@extend_schema(
+    tags=["Dashboard"],
+    summary="Dashboard statistics",
+    description=(
+        "Aggregated activity stats for the authenticated user. Always includes "
+        "the common block; landlords additionally receive a `landlord` block."
+    ),
+    responses=inline_serializer(
+        "DashboardStatsResponse",
+        fields={
+            "saved_rooms_count": serializers.IntegerField(),
+            "active_bookings": serializers.IntegerField(),
+            "pending_bookings": serializers.IntegerField(),
+            "total_reviews_given": serializers.IntegerField(),
+            "unread_notifications": serializers.IntegerField(),
+            "profile_completion": serializers.IntegerField(),
+            "landlord": inline_serializer(
+                "DashboardLandlordStats",
+                fields={
+                    "total_listings": serializers.IntegerField(),
+                    "total_bookings_received": serializers.IntegerField(),
+                    "avg_rating": serializers.FloatField(),
+                    "total_revenue": serializers.FloatField(),
+                },
+                required=False,
+            ),
+        },
+    ),
+    examples=[
+        OpenApiExample(
+            "Landlord stats",
+            value={
+                "saved_rooms_count": 3,
+                "active_bookings": 1,
+                "pending_bookings": 2,
+                "total_reviews_given": 4,
+                "unread_notifications": 5,
+                "profile_completion": 75,
+                "landlord": {
+                    "total_listings": 6,
+                    "total_bookings_received": 12,
+                    "avg_rating": 4.6,
+                    "total_revenue": 84000.0,
+                },
+            },
+            response_only=True,
+        ),
+    ],
+)
 class DashboardStatsView(APIView):
     """Aggregate activity stats for the authenticated user's dashboard.
 
