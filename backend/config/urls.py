@@ -52,6 +52,7 @@ urlpatterns = [
     path("api/v1/wishlist/", include("wishlist.urls")),
     path("api/v1/notifications/", include("notifications.urls")),
     path("api/v1/dashboard/", include("dashboard.urls")),
+    path("api/v1/chat/", include("chat.urls")),
 ]
 
 if settings.DEBUG:
