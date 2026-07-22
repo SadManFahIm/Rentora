@@ -2,7 +2,10 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRooms } from "../../hooks/useRooms";
 import { useBookings } from "../../hooks/useBookings";
+import { useWishlistStore } from "../../stores/wishlistStore";
 import RoomCard from "../../components/RoomCard/RoomCard";
+import RoomModal from "../../components/RoomModal/RoomModal";
+import type { Room } from "../../types";
 import "./Dashboard.css";
 
 type DashboardTab = "overview" | "bookings" | "wishlist";
@@ -18,11 +21,15 @@ interface StatCard {
 export default function Dashboard() {
   const { data: rooms = [] } = useRooms();
   const { data: bookings = [] } = useBookings();
+  const wishlist = useWishlistStore((s) => s.wishlist);
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+
+  const wishlistedRooms = rooms.filter((r) => wishlist.includes(r.id));
 
   const stats: StatCard[] = [
-    { icon: "🏠", label: "Saved Rooms", value: "3", change: "+2 this week", up: true },
+    { icon: "🏠", label: "Saved Rooms", value: String(wishlistedRooms.length), change: "+2 this week", up: true },
     { icon: "📅", label: "Booking Requests", value: "1", change: "1 pending", up: true },
     { icon: "💬", label: "Unread Messages", value: "2", change: "2 new", up: true },
     { icon: "⭐", label: "Profile Score", value: "87%", change: "+5% this month", up: true },
@@ -95,10 +102,20 @@ export default function Dashboard() {
       )}
 
       {activeTab === "wishlist" && (
-        <div className="rooms-grid">
-          {rooms.slice(0, 3).map((r) => <RoomCard key={r.id} room={r} onClick={() => {}} />)}
-        </div>
+        wishlistedRooms.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--text2)" }}>
+            <div style={{ fontSize: "3rem", marginBottom: 16 }}>🤍</div>
+            <h3 style={{ fontFamily: "var(--font)", marginBottom: 8 }}>No saved rooms yet</h3>
+            <p>Tap the heart icon on any room to save it here.</p>
+          </div>
+        ) : (
+          <div className="rooms-grid">
+            {wishlistedRooms.map((r) => <RoomCard key={r.id} room={r} onClick={setSelectedRoom} />)}
+          </div>
+        )
       )}
+
+      {selectedRoom && <RoomModal room={selectedRoom} onClose={() => setSelectedRoom(null)} />}
     </div>
   );
 }
