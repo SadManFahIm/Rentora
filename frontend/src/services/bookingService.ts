@@ -1,59 +1,36 @@
-import type { ApiResponse } from "./api";
-// import { api } from "./api"; // ← enable in Phase 3 for real HTTP calls
-import { mockRooms } from "../data/mockData";
+import { api } from "./api";
+import { mapBooking, type ApiBooking, type Paginated } from "./mappers";
 import type { Booking, BookingStatus, CreateBookingPayload } from "../types";
 
 // ============================================================
-// BOOKING SERVICE
-// Mock implementation backed by mockData.
+// BOOKING SERVICE — real /bookings/ endpoints
 // ============================================================
 
-const delay = (ms = 250) => new Promise((r) => setTimeout(r, ms));
-
-const wrap = <T>(data: T, meta?: Record<string, unknown>): ApiResponse<T> => ({
-  data,
-  meta,
-});
-
-// In-memory booking list seeded from mock rooms.
-let mockBookings: Booking[] = [
-  { ...mockRooms[0], status: "approved", date: "Feb 22, 2025" },
-  { ...mockRooms[2], status: "pending", date: "Feb 25, 2025" },
-];
-
 export const bookingService = {
-  async getMyBookings(): Promise<ApiResponse<Booking[]>> {
-    await delay();
-    return wrap(mockBookings, { total: mockBookings.length });
-    // Phase 3: return (await api.get<ApiResponse<Booking[]>>("/bookings/me")).data;
+  /** GET /bookings/ — bookings where the user is tenant or room owner. */
+  async getMyBookings(): Promise<Booking[]> {
+    const { data } = await api.get<Paginated<ApiBooking>>("/bookings/");
+    return data.results.map(mapBooking);
   },
 
-  async createBooking(
-    payload: CreateBookingPayload
-  ): Promise<ApiResponse<Booking>> {
-    await delay();
-    const room = mockRooms.find((r) => r.id === payload.roomId);
-    if (!room) {
-      throw new Error(`Room ${payload.roomId} not found`);
-    }
-    const booking: Booking = { ...room, status: "pending", date: payload.date };
-    mockBookings = [booking, ...mockBookings];
-    return wrap(booking);
-    // Phase 3: return (await api.post<ApiResponse<Booking>>("/bookings", payload)).data;
+  /** POST /bookings/ — request a booking for a room. */
+  async createBooking({ roomId, checkIn }: CreateBookingPayload): Promise<Booking> {
+    const { data } = await api.post<ApiBooking>("/bookings/", {
+      room: roomId,
+      check_in: checkIn,
+    });
+    return mapBooking(data);
   },
 
+  /** PATCH /bookings/:id/ — approve / reject / cancel. */
   async updateBookingStatus(
-    roomId: number,
+    bookingId: number,
     status: BookingStatus
-  ): Promise<ApiResponse<Booking>> {
-    await delay();
-    const booking = mockBookings.find((b) => b.id === roomId);
-    if (!booking) {
-      throw new Error(`Booking for room ${roomId} not found`);
-    }
-    booking.status = status;
-    return wrap(booking);
-    // Phase 3: return (await api.patch<ApiResponse<Booking>>(`/bookings/${roomId}`, { status })).data;
+  ): Promise<Booking> {
+    const { data } = await api.patch<ApiBooking>(`/bookings/${bookingId}/`, {
+      status,
+    });
+    return mapBooking(data);
   },
 };
 
