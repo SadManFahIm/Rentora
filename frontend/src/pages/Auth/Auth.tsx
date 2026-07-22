@@ -4,7 +4,11 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useLogin, useRegister } from "../../hooks/useAuth";
-import "./Auth.css";
+import { Dialog, DialogContent, DialogTitle } from "../../components/ui/dialog";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
+import { VisuallyHidden } from "../../components/ui/visually-hidden";
+import { cn } from "../../lib/utils";
 
 interface AuthFormValues {
   name: string;
@@ -93,110 +97,123 @@ export default function Auth() {
   };
 
   return (
-    <div className="modal-overlay">
-      <form className="auth-modal" onSubmit={onSubmit} noValidate>
-        <h2>{isLogin ? "Welcome Back!" : "Create Account"}</h2>
-        <p>
-          {isLogin
-            ? "Sign in to access your dashboard, messages, and bookings."
-            : "Join RentRoom BD and find your perfect room."}
-        </p>
+    <Dialog open onOpenChange={(open) => !open && navigate("/")}>
+      <DialogContent className="max-w-110 gap-0 p-9" showCloseButton>
+        <VisuallyHidden>
+          <DialogTitle>{isLogin ? "Welcome Back!" : "Create Account"}</DialogTitle>
+        </VisuallyHidden>
+        <form onSubmit={onSubmit} noValidate>
+          <h2 className="mb-2 font-display text-2xl font-extrabold text-foreground">
+            {isLogin ? "Welcome Back!" : "Create Account"}
+          </h2>
+          <p className="mb-6 text-sm text-muted-foreground">
+            {isLogin
+              ? "Sign in to access your dashboard, messages, and bookings."
+              : "Join RentRoom BD and find your perfect room."}
+          </p>
 
-        <div className="social-btns">
-          <button type="button" className="social-btn">🔵 Continue with Google</button>
-          <button type="button" className="social-btn">🟦 Continue with Facebook</button>
-        </div>
-        <div className="divider">or with email</div>
-
-        {rootError && (
-          <div className="auth-error">
-            Something went wrong. Please check your details and try again.
+          <div className="mb-5 flex flex-col gap-2.5">
+            <Button type="button" variant="outline" className="justify-center">
+              🔵 Continue with Google
+            </Button>
+            <Button type="button" variant="outline" className="justify-center">
+              🟦 Continue with Facebook
+            </Button>
           </div>
-        )}
 
-        {!isLogin && (
-          <div className="input-group">
-            <label>Full Name</label>
-            <input
-              placeholder="Your name"
-              className={errors.name ? "has-error" : ""}
-              {...field("name")}
+          <div className="relative mb-4 text-center text-sm text-muted-foreground before:absolute before:left-0 before:top-1/2 before:h-px before:w-[42%] before:bg-border after:absolute after:right-0 after:top-1/2 after:h-px after:w-[42%] after:bg-border">
+            or with email
+          </div>
+
+          {rootError && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">
+              Something went wrong. Please check your details and try again.
+            </div>
+          )}
+
+          {!isLogin && (
+            <div className="mb-4">
+              <label className="mb-1.5 block text-sm font-semibold text-muted-foreground">Full Name</label>
+              <Input
+                placeholder="Your name"
+                aria-invalid={!!errors.name}
+                {...field("name")}
+              />
+              {errors.name && <span className="mt-1.5 block text-xs font-medium text-red-600">{errors.name.message}</span>}
+            </div>
+          )}
+
+          <div className="mb-4">
+            <label className="mb-1.5 block text-sm font-semibold text-muted-foreground">Email Address</label>
+            <Input
+              type="email"
+              placeholder="you@email.com"
+              aria-invalid={!!errors.email}
+              {...field("email")}
             />
-            {errors.name && <span className="field-error">{errors.name.message}</span>}
+            {errors.email && <span className="mt-1.5 block text-xs font-medium text-red-600">{errors.email.message}</span>}
           </div>
-        )}
 
-        <div className="input-group">
-          <label>Email Address</label>
-          <input
-            type="email"
-            placeholder="you@email.com"
-            className={errors.email ? "has-error" : ""}
-            {...field("email")}
-          />
-          {errors.email && <span className="field-error">{errors.email.message}</span>}
-        </div>
-
-        <div className="input-group">
-          <label>Password</label>
-          <input
-            type="password"
-            placeholder="••••••••"
-            className={errors.password ? "has-error" : ""}
-            {...field("password")}
-          />
-          {errors.password && <span className="field-error">{errors.password.message}</span>}
-        </div>
-
-        {!isLogin && (
-          <div className="input-group">
-            <label>Confirm Password</label>
-            <input
+          <div className="mb-4">
+            <label className="mb-1.5 block text-sm font-semibold text-muted-foreground">Password</label>
+            <Input
               type="password"
               placeholder="••••••••"
-              className={errors.confirmPassword ? "has-error" : ""}
-              {...field("confirmPassword")}
+              aria-invalid={!!errors.password}
+              {...field("password")}
             />
-            {errors.confirmPassword && (
-              <span className="field-error">{errors.confirmPassword.message}</span>
-            )}
+            {errors.password && <span className="mt-1.5 block text-xs font-medium text-red-600">{errors.password.message}</span>}
           </div>
-        )}
 
-        {isLogin && (
-          <div style={{ textAlign: "right", marginBottom: 16 }}>
-            <span className="forgot-link">Forgot password?</span>
-          </div>
-        )}
+          {!isLogin && (
+            <div className="mb-4">
+              <label className="mb-1.5 block text-sm font-semibold text-muted-foreground">Confirm Password</label>
+              <Input
+                type="password"
+                placeholder="••••••••"
+                aria-invalid={!!errors.confirmPassword}
+                {...field("confirmPassword")}
+              />
+              {errors.confirmPassword && (
+                <span className="mt-1.5 block text-xs font-medium text-red-600">{errors.confirmPassword.message}</span>
+              )}
+            </div>
+          )}
 
-        <button
-          type="submit"
-          className="btn-primary auth-submit"
-          disabled={isSubmitting || login.isPending || register.isPending}
-        >
-          {isSubmitting || login.isPending || register.isPending
-            ? "Please wait…"
-            : isLogin
-              ? "Sign In"
-              : "Create Account"}
-        </button>
+          {isLogin && (
+            <div className="mb-4 text-right">
+              <span className="cursor-pointer text-sm text-brand">Forgot password?</span>
+            </div>
+          )}
 
-        <div className="auth-switch">
-          {isLogin ? "Don't have an account? " : "Already have an account? "}
-          <span onClick={switchMode}>{isLogin ? "Sign Up" : "Sign In"}</span>
-        </div>
-
-        <div style={{ textAlign: "center", marginTop: 12 }}>
-          <button
-            type="button"
-            className="btn-outline"
-            style={{ fontSize: "0.85rem", padding: "8px 20px" }}
-            onClick={() => navigate("/")}
+          <Button
+            type="submit"
+            variant="brand"
+            size="lg"
+            className={cn("w-full", !isLogin && "mt-1")}
+            disabled={isSubmitting || login.isPending || register.isPending}
           >
-            ← Back to Home
-          </button>
-        </div>
-      </form>
-    </div>
+            {isSubmitting || login.isPending || register.isPending
+              ? "Please wait…"
+              : isLogin
+                ? "Sign In"
+                : "Create Account"}
+          </Button>
+
+          <div className="mt-4 text-center text-sm text-muted-foreground">
+            {isLogin ? "Don't have an account? " : "Already have an account? "}
+            <span className="cursor-pointer font-semibold text-brand" onClick={switchMode}>
+              {isLogin ? "Sign Up" : "Sign In"}
+            </span>
+          </div>
+
+          <div className="mt-3 text-center">
+            <Button type="button" variant="outline" size="sm" onClick={() => navigate("/")}>
+              ← Back to Home
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

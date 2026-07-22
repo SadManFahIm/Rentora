@@ -1,9 +1,0 @@
-.rooms-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
-.rooms-list { display: grid; grid-template-columns: 1fr; gap: 16px; }
-.view-btn {
-  width: 36px; height: 36px; border-radius: 8px;
-  border: 1.5px solid var(--border); background: var(--bg);
-  cursor: pointer; display: flex; align-items: center;
-  justify-content: center; color: var(--text2); transition: all 0.2s;
-}
-.view-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(200,82,26,0.08); }

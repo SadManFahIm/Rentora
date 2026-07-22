@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Heart } from "lucide-react";
 import { useRooms } from "../../hooks/useRooms";
 import { useBookings } from "../../hooks/useBookings";
 import { useWishlistStore } from "../../stores/wishlistStore";
 import RoomCard from "../../components/RoomCard/RoomCard";
 import RoomModal from "../../components/RoomModal/RoomModal";
+import { Button } from "../../components/ui/button";
 import type { Room } from "../../types";
-import "./Dashboard.css";
+import { cn } from "../../lib/utils";
 
 type DashboardTab = "overview" | "bookings" | "wishlist";
 
@@ -17,6 +19,12 @@ interface StatCard {
   change: string;
   up: boolean;
 }
+
+const statusClasses: Record<string, string> = {
+  approved: "bg-emerald-500/10 text-emerald-500",
+  pending: "bg-amber-500/10 text-amber-500",
+  rejected: "bg-red-500/10 text-red-500",
+};
 
 export default function Dashboard() {
   const { data: rooms = [] } = useRooms();
@@ -38,63 +46,74 @@ export default function Dashboard() {
   const tabs: DashboardTab[] = ["overview", "bookings", "wishlist"];
 
   return (
-    <div className="section-container">
-      <div className="dashboard-top">
+    <div className="mx-auto max-w-300 px-4 py-8 sm:px-8">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="dashboard-title">My Dashboard</h1>
-          <p style={{ color: "var(--text2)", marginTop: 4 }}>Welcome back! Here's your activity.</p>
+          <h1 className="font-display text-2xl font-extrabold text-foreground">My Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Welcome back! Here's your activity.</p>
         </div>
-        <button className="btn-primary" onClick={() => navigate("/rooms")}>+ List a Room</button>
+        <Button variant="brand" onClick={() => navigate("/rooms")}>
+          + List a Room
+        </Button>
       </div>
 
-      <div className="tabs">
+      <div className="mb-6 flex w-fit gap-1 rounded-xl bg-muted p-1">
         {tabs.map((t) => (
-          <button key={t} className={`tab ${activeTab === t ? "active" : ""}`} onClick={() => setActiveTab(t)}>
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+          <button
+            key={t}
+            className={cn(
+              "rounded-lg px-5 py-2 text-sm font-medium capitalize transition-colors",
+              activeTab === t ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
+            onClick={() => setActiveTab(t)}
+          >
+            {t}
           </button>
         ))}
       </div>
 
       {activeTab === "overview" && (
         <>
-          <div className="stats-grid">
+          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {stats.map((s) => (
-              <div key={s.label} className="stat-card">
-                <div className="stat-icon">{s.icon}</div>
-                <h3>{s.value}</h3>
-                <p>{s.label}</p>
-                <div className={`stat-change ${s.up ? "" : "down"}`}>{s.change}</div>
+              <div key={s.label} className="rounded-2xl border border-border bg-card p-5">
+                <div className="mb-2.5 text-2xl">{s.icon}</div>
+                <h3 className="font-display text-2xl font-extrabold text-foreground">{s.value}</h3>
+                <p className="text-sm text-muted-foreground">{s.label}</p>
+                <div className={cn("text-sm font-semibold", s.up ? "text-emerald-500" : "text-red-500")}>
+                  {s.change}
+                </div>
               </div>
             ))}
           </div>
-          <div className="ai-insight">
-            <h3>🤖 AI Profile Insights</h3>
-            <p>Based on your search history, you prefer <strong>Studio rooms in Dhanmondi/Banani</strong> within ৳10K-20K budget. There are <strong>3 new listings</strong> matching your profile today. Consider completing <strong>KYC verification</strong> to get priority access to premium listings.</p>
+          <div className="rounded-2xl border border-border bg-card p-5">
+            <h3 className="mb-2.5 font-display font-bold text-foreground">🤖 AI Profile Insights</h3>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              Based on your search history, you prefer <strong className="text-foreground">Studio rooms in Dhanmondi/Banani</strong> within
+              ৳10K-20K budget. There are <strong className="text-foreground">3 new listings</strong> matching your profile today. Consider
+              completing <strong className="text-foreground">KYC verification</strong> to get priority access to premium listings.
+            </p>
           </div>
         </>
       )}
 
       {activeTab === "bookings" && (
-        <div className="bookings-list">
+        <div className="flex flex-col gap-4">
           {bookings.map((b) => (
-            <div key={b.id} className="booking-card">
-              <img src={b.img} alt={b.name} className="booking-img" />
-              <div className="booking-info">
-                <h4>{b.name}</h4>
-                <p className="booking-meta">Scheduled: {b.date} • ৳{b.price.toLocaleString()}/mo</p>
-                <span className={`booking-status ${b.status}`}>
+            <div key={b.id} className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 sm:flex-row sm:items-center">
+              <img src={b.img} alt={b.name} className="h-40 w-full shrink-0 rounded-lg object-cover sm:h-20 sm:w-25" />
+              <div className="flex-1">
+                <h4 className="font-display text-sm font-bold text-foreground">{b.name}</h4>
+                <p className="my-1 text-sm text-muted-foreground">
+                  Scheduled: {b.date} • ৳{b.price.toLocaleString()}/mo
+                </p>
+                <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold", statusClasses[b.status])}>
                   {b.status.charAt(0).toUpperCase() + b.status.slice(1)}
                 </span>
               </div>
-              <div className="booking-actions">
-                {b.status === "approved" && (
-                  <button className="btn-primary" style={{ padding: "8px 16px", fontSize: "0.85rem" }}>
-                    Sign Agreement 📝
-                  </button>
-                )}
-                <button className="btn-outline" style={{ padding: "8px 16px", fontSize: "0.85rem" }}>
-                  View Details
-                </button>
+              <div className="flex flex-col gap-2">
+                {b.status === "approved" && <Button variant="brand">Sign Agreement 📝</Button>}
+                <Button variant="outline">View Details</Button>
               </div>
             </div>
           ))}
@@ -103,13 +122,13 @@ export default function Dashboard() {
 
       {activeTab === "wishlist" && (
         wishlistedRooms.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--text2)" }}>
-            <div style={{ fontSize: "3rem", marginBottom: 16 }}>🤍</div>
-            <h3 style={{ fontFamily: "var(--font)", marginBottom: 8 }}>No saved rooms yet</h3>
+          <div className="flex flex-col items-center px-5 py-15 text-center text-muted-foreground">
+            <Heart className="mb-4 size-12" />
+            <h3 className="mb-2 font-display text-lg font-bold text-foreground">No saved rooms yet</h3>
             <p>Tap the heart icon on any room to save it here.</p>
           </div>
         ) : (
-          <div className="rooms-grid">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {wishlistedRooms.map((r) => <RoomCard key={r.id} room={r} onClick={setSelectedRoom} />)}
           </div>
         )

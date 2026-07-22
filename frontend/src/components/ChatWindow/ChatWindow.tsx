@@ -1,7 +1,10 @@
 import { useState } from "react";
+import { Paperclip, Phone, Send } from "lucide-react";
 import { mockMessages } from "../../data/mockData";
 import type { Message } from "../../types";
-import "./ChatWindow.css";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { cn } from "../../lib/utils";
 
 interface Contact {
   name: string;
@@ -33,63 +36,93 @@ export default function ChatWindow() {
   };
 
   return (
-    <div className="chat-section">
+    <div className="mx-auto grid max-w-300 gap-5 px-4 py-8 sm:px-8 md:grid-cols-[280px_1fr]">
       {/* Contact List */}
-      <div className="chat-list">
-        <div className="chat-list-header"><h3>💬 Messages</h3></div>
+      <div className="hidden overflow-hidden rounded-2xl border border-border bg-card md:block">
+        <div className="border-b border-border p-5">
+          <h3 className="font-display text-base font-bold text-foreground">💬 Messages</h3>
+        </div>
         {contacts.map((c) => (
-          <div key={c.name} className={`chat-contact ${c.active ? "active" : ""}`}>
-            <div className="owner-avatar">{c.avatar}</div>
-            <div className="chat-contact-info">
-              <div className="chat-contact-name">{c.name}</div>
-              <div className="chat-contact-preview">{c.preview}</div>
+          <div
+            key={c.name}
+            className={cn(
+              "flex items-center gap-3 border-b border-border px-5 py-3.5 transition-colors last:border-0 hover:bg-muted",
+              c.active && "bg-muted"
+            )}
+          >
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-br from-brand to-brand-dark text-xs font-bold text-white">
+              {c.avatar}
             </div>
-            {c.active && <div className="online-dot" />}
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold text-foreground">{c.name}</div>
+              <div className="truncate text-xs text-muted-foreground">{c.preview}</div>
+            </div>
+            {c.active && <div className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />}
           </div>
         ))}
       </div>
 
       {/* Chat Window */}
-      <div className="chat-window">
-        <div className="chat-window-header">
-          <div className="owner-avatar">RH</div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>Rahim Hossain</div>
-            <div className="online-status">● Online</div>
+      <div className="flex h-130 flex-col rounded-2xl border border-border bg-card">
+        <div className="flex items-center gap-3 border-b border-border px-5 py-4">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-br from-brand to-brand-dark text-xs font-bold text-white">
+            RH
           </div>
-          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-            <button className="icon-btn" title="Attach file">📎</button>
-            <button className="icon-btn" title="Voice call">📞</button>
+          <div>
+            <div className="text-sm font-bold text-foreground">Rahim Hossain</div>
+            <div className="text-xs text-emerald-500">● Online</div>
+          </div>
+          <div className="ml-auto flex gap-2">
+            <Button variant="outline" size="icon" className="rounded-xl" title="Attach file">
+              <Paperclip className="size-4" />
+            </Button>
+            <Button variant="outline" size="icon" className="rounded-xl" title="Voice call">
+              <Phone className="size-4" />
+            </Button>
           </div>
         </div>
 
-        <div className="chat-messages">
+        <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-5">
           {messages.map((m) => (
-            <div key={m.id} className={`message ${m.mine ? "mine" : ""}`}>
-              <div className="message-bubble">{m.text}</div>
-              <div className="message-time">{m.time}</div>
+            <div key={m.id} className={cn("max-w-[70%]", m.mine && "self-end")}>
+              <div
+                className={cn(
+                  "rounded-2xl rounded-bl-sm px-3.5 py-2.5 text-sm leading-relaxed",
+                  m.mine
+                    ? "rounded-bl-2xl rounded-br-sm bg-brand text-white"
+                    : "bg-muted text-foreground"
+                )}
+              >
+                {m.text}
+              </div>
+              <div className="mt-1 text-right text-xs text-muted-foreground">{m.time}</div>
             </div>
           ))}
           {typing && (
-            <div className="message">
-              <div className="message-bubble typing-bubble">
+            <div className="max-w-[70%]">
+              <div className="flex gap-1 rounded-2xl rounded-bl-sm bg-muted px-4 py-3">
                 {[0, 1, 2].map((i) => (
-                  <span key={i} className="typing-dot" style={{ animationDelay: `${i * 0.15}s` }} />
+                  <span
+                    key={i}
+                    className="block h-2 w-2 animate-pulse rounded-full bg-muted-foreground"
+                    style={{ animationDelay: `${i * 0.15}s` }}
+                  />
                 ))}
               </div>
             </div>
           )}
         </div>
 
-        <div className="chat-input-wrap">
-          <input
-            className="chat-input"
+        <div className="flex gap-2.5 border-t border-border p-4">
+          <Input
             placeholder="Type a message..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyPress={(e) => e.key === "Enter" && sendMessage()}
+            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
           />
-          <button className="send-btn" onClick={sendMessage}>➤</button>
+          <Button variant="brand" size="icon" className="h-11 w-11 shrink-0 rounded-xl" onClick={sendMessage}>
+            <Send className="size-4" />
+          </Button>
         </div>
       </div>
     </div>

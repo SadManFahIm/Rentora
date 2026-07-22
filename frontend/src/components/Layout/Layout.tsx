@@ -14,9 +14,9 @@ export default function Layout() {
   }, [darkMode]);
 
   return (
-    <div className="app">
+    <div className="min-h-screen bg-background text-foreground">
       <Navbar />
-      <main className="fade-in">
+      <main key={location.pathname} className="animate-in fade-in duration-300">
         <Outlet />
       </main>
       {!isAuthRoute && <Footer />}

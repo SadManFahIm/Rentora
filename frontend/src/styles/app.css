@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -17,6 +18,7 @@
   --color-taka: #1f9d55; /* accent for price / taka amounts */
 
   --font-display: "Poppins", "Segoe UI", system-ui, sans-serif;
+  --font-body: "DM Sans", "Segoe UI", system-ui, sans-serif;
 
   /* Bangla taka symbol available via content: var(--symbol-taka) */
   --symbol-taka: "৳";
@@ -95,6 +97,5 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* NOTE: Preflight is active, but we intentionally do NOT force
-   global `body { background/foreground }` here — existing global.css
-   owns the current look until components are migrated to Tailwind. */
+/* Base body styling (font/background/color) lives in global.css,
+   which is reset/base-only — all component styling is Tailwind utilities. */

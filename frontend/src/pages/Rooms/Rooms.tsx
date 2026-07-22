@@ -1,10 +1,14 @@
 import { useState } from "react";
+import { LayoutGrid, List, SearchX } from "lucide-react";
 import { useRooms } from "../../hooks/useRooms";
 import RoomCard from "../../components/RoomCard/RoomCard";
+import RoomCardSkeleton from "../../components/RoomCardSkeleton";
 import RoomModal from "../../components/RoomModal/RoomModal";
 import SearchFilter from "../../components/SearchFilter/SearchFilter";
 import AIRecommendations from "../../components/AIRecommendations/AIRecommendations";
+import { Button } from "../../components/ui/button";
 import type { Room, Filters } from "../../types";
+import { cn } from "../../lib/utils";
 
 const DEFAULT_FILTERS: Filters = {
   query: "",
@@ -30,33 +34,50 @@ export default function Rooms() {
     <>
       <SearchFilter filters={filters} setFilters={setFilters} />
 
-      <div className="section-container">
-        <div className="section-header">
+      <div className="mx-auto max-w-300 px-4 py-8 sm:px-8">
+        <div className="mb-6 flex items-center justify-between">
           <div>
-            <h2>Available Rooms</h2>
-            <p>{isLoading ? "Loading…" : `${rooms.length} listings found`}</p>
+            <h2 className="font-display text-xl font-bold text-foreground sm:text-2xl">Available Rooms</h2>
+            <p className="text-sm text-muted-foreground">
+              {isLoading ? "Loading…" : `${rooms.length} listings found`}
+            </p>
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className={`view-btn ${gridView ? "active" : ""}`} onClick={() => setGridView(true)}>⊞</button>
-            <button className={`view-btn ${!gridView ? "active" : ""}`} onClick={() => setGridView(false)}>≡</button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              className={cn("rounded-lg", gridView && "border-brand bg-brand/10 text-brand")}
+              onClick={() => setGridView(true)}
+            >
+              <LayoutGrid className="size-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className={cn("rounded-lg", !gridView && "border-brand bg-brand/10 text-brand")}
+              onClick={() => setGridView(false)}
+            >
+              <List className="size-4" />
+            </Button>
           </div>
         </div>
 
         <AIRecommendations />
 
         {isLoading ? (
-          <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--text2)" }}>
-            <div style={{ fontSize: "3rem", marginBottom: 16 }}>⏳</div>
-            <h3 style={{ fontFamily: "var(--font)", marginBottom: 8 }}>Loading rooms…</h3>
+          <div className={gridView ? "grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3" : "grid grid-cols-1 gap-4"}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <RoomCardSkeleton key={i} />
+            ))}
           </div>
         ) : rooms.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--text2)" }}>
-            <div style={{ fontSize: "3rem", marginBottom: 16 }}>🔍</div>
-            <h3 style={{ fontFamily: "var(--font)", marginBottom: 8 }}>No rooms found</h3>
+          <div className="flex flex-col items-center px-5 py-15 text-center text-muted-foreground">
+            <SearchX className="mb-4 size-12" />
+            <h3 className="mb-2 font-display text-lg font-bold text-foreground">No rooms found</h3>
             <p>Try adjusting your filters</p>
           </div>
         ) : (
-          <div className={gridView ? "rooms-grid" : "rooms-list"}>
+          <div className={gridView ? "grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3" : "grid grid-cols-1 gap-4"}>
             {rooms.map((r) => <RoomCard key={r.id} room={r} onClick={setSelectedRoom} />)}
           </div>
         )}
