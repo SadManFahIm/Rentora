@@ -1,6 +1,6 @@
 import { Star, MapPin, Heart, ShieldCheck } from "lucide-react";
 import { useWishlistStore } from "../../stores/wishlistStore";
-import type { Room, RoomType } from "../../types";
+import type { Room } from "../../types";
 import { Card, CardContent } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { cn } from "../../lib/utils";
@@ -10,12 +10,6 @@ interface RoomCardProps {
   onClick: (room: Room) => void;
 }
 
-const typeClasses: Record<RoomType, string> = {
-  Single: "border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  Shared: "border-violet-500/30 bg-violet-500/10 text-violet-600 dark:text-violet-400",
-  Studio: "border-brand/30 bg-brand/10 text-brand",
-};
-
 export default function RoomCard({ room, onClick }: RoomCardProps) {
   const wishlist = useWishlistStore((s) => s.wishlist);
   const toggleWishlist = useWishlistStore((s) => s.toggleWishlist);
@@ -23,7 +17,7 @@ export default function RoomCard({ room, onClick }: RoomCardProps) {
 
   return (
     <Card
-      className="group cursor-pointer gap-0 overflow-hidden py-0! transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+      className="group cursor-pointer gap-0 overflow-hidden rounded-xl border-gray-200 py-0! transition-all duration-300 hover:-translate-y-1 hover:shadow-lg dark:border-gray-800"
       onClick={() => onClick(room)}
     >
       {/* Image */}
@@ -35,8 +29,10 @@ export default function RoomCard({ room, onClick }: RoomCardProps) {
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
         <Badge
-          variant={room.available ? "brand" : "secondary"}
-          className="absolute left-3 top-3"
+          className={cn(
+            "absolute left-3 top-3 border-transparent",
+            room.available ? "bg-orange-600 text-white" : "bg-gray-500 text-white"
+          )}
         >
           {room.available ? room.type : "Unavailable"}
         </Badge>
@@ -49,7 +45,7 @@ export default function RoomCard({ room, onClick }: RoomCardProps) {
           aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
         >
           <Heart
-            className={cn("size-4", isWishlisted ? "fill-brand text-brand" : "text-neutral-500")}
+            className={cn("size-4", isWishlisted ? "fill-orange-600 text-orange-600" : "text-neutral-500")}
           />
         </button>
       </div>
@@ -61,43 +57,41 @@ export default function RoomCard({ room, onClick }: RoomCardProps) {
             <div className="truncate font-display text-base font-bold leading-tight text-foreground">
               {room.name}
             </div>
-            <div className="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
+            <div className="mt-1 flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400">
               <MapPin className="size-3.5 shrink-0" /> {room.area}
             </div>
           </div>
           <div className="shrink-0 text-right">
-            <div className="font-display text-lg font-extrabold text-taka">
+            <div className="font-display text-lg font-bold text-orange-600">
               ৳{room.price.toLocaleString()}
-              <sub className="text-xs font-medium text-muted-foreground">/mo</sub>
+              <sub className="text-xs font-medium text-gray-500">/mo</sub>
             </div>
-            <Badge variant="outline" className={cn("mt-1", typeClasses[room.type])}>
-              {room.type}
-            </Badge>
+            <Badge className="mt-1 border-transparent bg-orange-600 text-white">{room.type}</Badge>
           </div>
         </div>
 
         {/* Amenities */}
         <div className="mb-3 flex flex-wrap gap-1.5">
           {room.amenities.slice(0, 3).map((a) => (
-            <span key={a} className="rounded-md bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+            <span key={a} className="rounded-md bg-gray-50 px-2.5 py-1 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-400">
               {a}
             </span>
           ))}
           {room.amenities.length > 3 && (
-            <span className="rounded-md bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+            <span className="rounded-md bg-gray-50 px-2.5 py-1 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-400">
               +{room.amenities.length - 3}
             </span>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-border pt-3">
+        <div className="flex items-center justify-between border-t border-gray-200 pt-3 dark:border-gray-800">
           <div className="flex items-center gap-1 text-sm font-semibold text-foreground">
             <Star className="size-3.5 fill-amber-500 text-amber-500" /> {room.rating}
-            <span className="font-normal text-muted-foreground">({room.reviews})</span>
+            <span className="font-normal text-gray-600 dark:text-gray-400">({room.reviews})</span>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-linear-to-br from-brand to-brand-dark text-[0.65rem] font-bold text-white">
+          <div className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-600 text-[0.65rem] font-bold text-white">
               {room.ownerAvatar}
             </div>
             {room.owner}

@@ -36,26 +36,26 @@ export default function ChatWindow() {
   };
 
   return (
-    <div className="mx-auto grid max-w-300 gap-5 px-4 py-8 sm:px-8 md:grid-cols-[280px_1fr]">
+    <div className="mx-auto grid max-w-7xl gap-5 px-4 py-12 md:grid-cols-[280px_1fr] md:px-6 md:py-16 lg:px-8">
       {/* Contact List */}
-      <div className="hidden overflow-hidden rounded-2xl border border-border bg-card md:block">
-        <div className="border-b border-border p-5">
+      <div className="hidden overflow-hidden rounded-2xl border border-gray-200 bg-card dark:border-gray-800 md:block">
+        <div className="border-b border-gray-200 p-5 dark:border-gray-800">
           <h3 className="font-display text-base font-bold text-foreground">💬 Messages</h3>
         </div>
         {contacts.map((c) => (
           <div
             key={c.name}
             className={cn(
-              "flex items-center gap-3 border-b border-border px-5 py-3.5 transition-colors last:border-0 hover:bg-muted",
-              c.active && "bg-muted"
+              "flex items-center gap-3 border-b border-gray-200 px-5 py-3.5 transition-colors last:border-0 hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800/50",
+              c.active && "bg-gray-50 dark:bg-gray-800/50"
             )}
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-br from-brand to-brand-dark text-xs font-bold text-white">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-600 text-xs font-bold text-white">
               {c.avatar}
             </div>
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold text-foreground">{c.name}</div>
-              <div className="truncate text-xs text-muted-foreground">{c.preview}</div>
+              <div className="truncate text-xs text-gray-600 dark:text-gray-400">{c.preview}</div>
             </div>
             {c.active && <div className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />}
           </div>
@@ -63,9 +63,9 @@ export default function ChatWindow() {
       </div>
 
       {/* Chat Window */}
-      <div className="flex h-130 flex-col rounded-2xl border border-border bg-card">
-        <div className="flex items-center gap-3 border-b border-border px-5 py-4">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-br from-brand to-brand-dark text-xs font-bold text-white">
+      <div className="flex h-130 flex-col rounded-2xl border border-gray-200 bg-card dark:border-gray-800">
+        <div className="flex items-center gap-3 border-b border-gray-200 px-5 py-4 dark:border-gray-800">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-600 text-xs font-bold text-white">
             RH
           </div>
           <div>
@@ -89,22 +89,22 @@ export default function ChatWindow() {
                 className={cn(
                   "rounded-2xl rounded-bl-sm px-3.5 py-2.5 text-sm leading-relaxed",
                   m.mine
-                    ? "rounded-bl-2xl rounded-br-sm bg-brand text-white"
-                    : "bg-muted text-foreground"
+                    ? "rounded-bl-2xl rounded-br-sm bg-orange-600 text-white"
+                    : "bg-gray-100 text-foreground dark:bg-gray-800"
                 )}
               >
                 {m.text}
               </div>
-              <div className="mt-1 text-right text-xs text-muted-foreground">{m.time}</div>
+              <div className="mt-1 text-right text-xs text-gray-600 dark:text-gray-400">{m.time}</div>
             </div>
           ))}
           {typing && (
             <div className="max-w-[70%]">
-              <div className="flex gap-1 rounded-2xl rounded-bl-sm bg-muted px-4 py-3">
+              <div className="flex gap-1 rounded-2xl rounded-bl-sm bg-gray-100 px-4 py-3 dark:bg-gray-800">
                 {[0, 1, 2].map((i) => (
                   <span
                     key={i}
-                    className="block h-2 w-2 animate-pulse rounded-full bg-muted-foreground"
+                    className="block h-2 w-2 animate-pulse rounded-full bg-gray-500"
                     style={{ animationDelay: `${i * 0.15}s` }}
                   />
                 ))}
@@ -113,14 +113,14 @@ export default function ChatWindow() {
           )}
         </div>
 
-        <div className="flex gap-2.5 border-t border-border p-4">
+        <div className="flex gap-2.5 border-t border-gray-200 p-4 dark:border-gray-800">
           <Input
             placeholder="Type a message..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendMessage()}
           />
-          <Button variant="brand" size="icon" className="h-11 w-11 shrink-0 rounded-xl" onClick={sendMessage}>
+          <Button className="h-11 w-11 shrink-0 rounded-xl bg-orange-600 text-white hover:bg-orange-700" size="icon" onClick={sendMessage}>
             <Send className="size-4" />
           </Button>
         </div>

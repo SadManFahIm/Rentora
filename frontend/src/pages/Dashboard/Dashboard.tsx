@@ -46,24 +46,26 @@ export default function Dashboard() {
   const tabs: DashboardTab[] = ["overview", "bookings", "wishlist"];
 
   return (
-    <div className="mx-auto max-w-300 px-4 py-8 sm:px-8">
+    <div className="mx-auto max-w-7xl px-4 py-12 md:px-6 md:py-16 lg:px-8">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-display text-2xl font-extrabold text-foreground">My Dashboard</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Welcome back! Here's your activity.</p>
+          <h1 className="font-display text-2xl font-bold text-foreground">My Dashboard</h1>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Welcome back! Here's your activity.</p>
         </div>
-        <Button variant="brand" onClick={() => navigate("/rooms")}>
+        <Button className="bg-orange-600 text-white hover:bg-orange-700" onClick={() => navigate("/rooms")}>
           + List a Room
         </Button>
       </div>
 
-      <div className="mb-6 flex w-fit gap-1 rounded-xl bg-muted p-1">
+      <div className="mb-6 flex w-fit gap-1 rounded-xl bg-gray-50 p-1 dark:bg-gray-800">
         {tabs.map((t) => (
           <button
             key={t}
             className={cn(
               "rounded-lg px-5 py-2 text-sm font-medium capitalize transition-colors",
-              activeTab === t ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              activeTab === t
+                ? "bg-card text-foreground shadow-sm"
+                : "text-gray-600 hover:text-foreground dark:text-gray-400"
             )}
             onClick={() => setActiveTab(t)}
           >
@@ -76,19 +78,19 @@ export default function Dashboard() {
         <>
           <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {stats.map((s) => (
-              <div key={s.label} className="rounded-2xl border border-border bg-card p-5">
+              <div key={s.label} className="rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800">
                 <div className="mb-2.5 text-2xl">{s.icon}</div>
-                <h3 className="font-display text-2xl font-extrabold text-foreground">{s.value}</h3>
-                <p className="text-sm text-muted-foreground">{s.label}</p>
+                <h3 className="font-display text-2xl font-bold text-foreground">{s.value}</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{s.label}</p>
                 <div className={cn("text-sm font-semibold", s.up ? "text-emerald-500" : "text-red-500")}>
                   {s.change}
                 </div>
               </div>
             ))}
           </div>
-          <div className="rounded-2xl border border-border bg-card p-5">
+          <div className="rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800">
             <h3 className="mb-2.5 font-display font-bold text-foreground">🤖 AI Profile Insights</h3>
-            <p className="text-sm leading-relaxed text-muted-foreground">
+            <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
               Based on your search history, you prefer <strong className="text-foreground">Studio rooms in Dhanmondi/Banani</strong> within
               ৳10K-20K budget. There are <strong className="text-foreground">3 new listings</strong> matching your profile today. Consider
               completing <strong className="text-foreground">KYC verification</strong> to get priority access to premium listings.
@@ -100,11 +102,11 @@ export default function Dashboard() {
       {activeTab === "bookings" && (
         <div className="flex flex-col gap-4">
           {bookings.map((b) => (
-            <div key={b.id} className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 sm:flex-row sm:items-center">
+            <div key={b.id} className="flex flex-col gap-4 rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800 sm:flex-row sm:items-center">
               <img src={b.img} alt={b.name} className="h-40 w-full shrink-0 rounded-lg object-cover sm:h-20 sm:w-25" />
               <div className="flex-1">
                 <h4 className="font-display text-sm font-bold text-foreground">{b.name}</h4>
-                <p className="my-1 text-sm text-muted-foreground">
+                <p className="my-1 text-sm text-gray-600 dark:text-gray-400">
                   Scheduled: {b.date} • ৳{b.price.toLocaleString()}/mo
                 </p>
                 <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold", statusClasses[b.status])}>
@@ -112,7 +114,9 @@ export default function Dashboard() {
                 </span>
               </div>
               <div className="flex flex-col gap-2">
-                {b.status === "approved" && <Button variant="brand">Sign Agreement 📝</Button>}
+                {b.status === "approved" && (
+                  <Button className="bg-orange-600 text-white hover:bg-orange-700">Sign Agreement 📝</Button>
+                )}
                 <Button variant="outline">View Details</Button>
               </div>
             </div>
@@ -122,13 +126,13 @@ export default function Dashboard() {
 
       {activeTab === "wishlist" && (
         wishlistedRooms.length === 0 ? (
-          <div className="flex flex-col items-center px-5 py-15 text-center text-muted-foreground">
+          <div className="flex flex-col items-center px-5 py-15 text-center text-gray-600 dark:text-gray-400">
             <Heart className="mb-4 size-12" />
             <h3 className="mb-2 font-display text-lg font-bold text-foreground">No saved rooms yet</h3>
             <p>Tap the heart icon on any room to save it here.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {wishlistedRooms.map((r) => <RoomCard key={r.id} room={r} onClick={setSelectedRoom} />)}
           </div>
         )

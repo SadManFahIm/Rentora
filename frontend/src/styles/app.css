@@ -10,12 +10,12 @@
    Usable as utilities, e.g. bg-brand, text-brand, ring-brand.
    ============================================================ */
 @theme {
-  --color-brand: #c8521a;
+  --color-brand: oklch(0.646 0.222 41.116); /* Tailwind orange-600 */
   --color-brand-foreground: #ffffff;
-  --color-brand-muted: #f4e3d9;
-  --color-brand-dark: #a23f12;
+  --color-brand-muted: oklch(0.98 0.016 39.4); /* Tailwind orange-50 */
+  --color-brand-dark: oklch(0.553 0.195 38.402); /* Tailwind orange-700, used for hover */
 
-  --color-taka: #1f9d55; /* accent for price / taka amounts */
+  --color-taka: oklch(0.646 0.222 41.116); /* prices use the brand orange, not a separate accent */
 
   --font-display: "Poppins", "Segoe UI", system-ui, sans-serif;
   --font-body: "DM Sans", "Segoe UI", system-ui, sans-serif;
@@ -39,13 +39,13 @@
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  --muted: oklch(0.98 0 0); /* gray-50 */
+  --muted-foreground: oklch(0.446 0.03 256.802); /* gray-600 */
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  --border: oklch(0.928 0.006 264.531); /* gray-200 */
+  --input: oklch(0.928 0.006 264.531);
   --ring: oklch(0.708 0 0);
 }
 

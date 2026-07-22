@@ -33,19 +33,23 @@ export default function Navbar() {
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     cn(
-      "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
-      isActive ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+      "rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
+      isActive
+        ? "border border-gray-300 text-gray-900 dark:border-gray-700 dark:text-gray-100"
+        : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
     );
 
   const mobileNavLinkClass = ({ isActive }: { isActive: boolean }) =>
     cn(
-      "block rounded-lg px-4 py-3 text-base font-medium transition-colors",
-      isActive ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+      "block rounded-full px-4 py-2 text-base font-medium transition-colors",
+      isActive
+        ? "border border-gray-300 text-gray-900 dark:border-gray-700 dark:text-gray-100"
+        : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
     );
 
   return (
-    <nav className="sticky top-0 z-[100] border-b border-border bg-card/95 backdrop-blur-md">
-      <div className="flex h-16 items-center justify-between px-4 sm:px-8">
+    <nav className="sticky top-0 z-[100] border-b border-gray-200 bg-card/95 backdrop-blur-md dark:border-gray-800">
+      <div className="flex h-16 items-center justify-between px-4 md:px-6 lg:px-8">
         <div
           className="flex shrink-0 cursor-pointer items-center gap-2 font-display text-lg font-extrabold tracking-tight text-brand sm:text-xl"
           onClick={() => navigate("/")}
@@ -97,8 +101,8 @@ export default function Navbar() {
               )}
             </Button>
             {showNotif && (
-              <div className="absolute right-0 top-[52px] z-[150] w-80 overflow-hidden rounded-2xl border border-border bg-popover shadow-lg">
-                <div className="flex items-center justify-between border-b border-border p-4 font-display text-sm font-bold">
+              <div className="absolute right-0 top-[52px] z-[150] w-80 overflow-hidden rounded-2xl border border-gray-200 bg-popover dark:border-gray-800 shadow-lg">
+                <div className="flex items-center justify-between border-b border-gray-200 p-4 font-display dark:border-gray-800 text-sm font-bold">
                   Notifications
                   <button
                     className="text-xs font-medium text-brand hover:underline"
@@ -112,7 +116,7 @@ export default function Navbar() {
                     <div
                       key={n.id}
                       className={cn(
-                        "flex gap-3 border-b border-border p-4 last:border-0 hover:bg-muted",
+                        "flex gap-3 border-b border-gray-200 p-4 last:border-0 dark:border-gray-800 hover:bg-muted",
                         !n.read && "bg-brand/5"
                       )}
                     >
@@ -161,7 +165,7 @@ export default function Navbar() {
 
       {/* Mobile menu panel */}
       {mobileOpen && (
-        <div className="border-t border-border bg-card px-4 py-4 md:hidden">
+        <div className="border-t border-gray-200 bg-card dark:border-gray-800 px-4 py-4 md:hidden">
           <div className="flex flex-col gap-1">
             {NAV_ITEMS.map((item) => (
               <NavLink
@@ -181,7 +185,7 @@ export default function Navbar() {
             )}
           </div>
 
-          <div className="mt-4 flex items-center gap-2 border-t border-border pt-4">
+          <div className="mt-4 flex items-center gap-2 border-t border-gray-200 pt-4 dark:border-gray-800">
             <Button variant="outline" size="icon" className="rounded-xl" onClick={() => toggleDarkMode()}>
               {darkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
             </Button>
@@ -217,8 +221,8 @@ export default function Navbar() {
           </div>
 
           {showNotif && (
-            <div className="mt-3 overflow-hidden rounded-2xl border border-border bg-popover shadow-lg">
-              <div className="flex items-center justify-between border-b border-border p-4 font-display text-sm font-bold">
+            <div className="mt-3 overflow-hidden rounded-2xl border border-gray-200 bg-popover dark:border-gray-800 shadow-lg">
+              <div className="flex items-center justify-between border-b border-gray-200 p-4 font-display dark:border-gray-800 text-sm font-bold">
                 Notifications
                 <button className="text-xs font-medium text-brand hover:underline" onClick={markAllRead}>
                   Mark all read
@@ -229,7 +233,7 @@ export default function Navbar() {
                   <div
                     key={n.id}
                     className={cn(
-                      "flex gap-3 border-b border-border p-4 last:border-0",
+                      "flex gap-3 border-b border-gray-200 p-4 last:border-0 dark:border-gray-800",
                       !n.read && "bg-brand/5"
                     )}
                   >
@@ -244,7 +248,7 @@ export default function Navbar() {
             </div>
           )}
 
-          <div className="mt-4 border-t border-border pt-4">
+          <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-800">
             {user ? (
               <Button variant="outline" className="w-full" onClick={() => logout.mutate()}>
                 Logout
