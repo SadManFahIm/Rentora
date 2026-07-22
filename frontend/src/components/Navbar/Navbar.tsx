@@ -1,46 +1,67 @@
 import { useState } from "react";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useApp } from "../../context/AppContext";
+import { useUiStore } from "../../stores/uiStore";
+import { useWishlistStore } from "../../stores/wishlistStore";
+import { useNotificationStore } from "../../stores/notificationStore";
+import { useLogout } from "../../hooks/useAuth";
 import "./Navbar.css";
 
-export default function Navbar({ page, setPage }) {
-  const { darkMode, setDarkMode, wishlist, notifications, user, setUser, markAllRead } = useApp();
+const NAV_ITEMS: { label: string; to: string }[] = [
+  { label: "Home", to: "/" },
+  { label: "Rooms", to: "/rooms" },
+  { label: "Map", to: "/map" },
+  { label: "Chat", to: "/chat" },
+];
+
+export default function Navbar() {
+  const { user } = useApp();
+  const darkMode = useUiStore((s) => s.darkMode);
+  const toggleDarkMode = useUiStore((s) => s.toggleDarkMode);
+  const wishlist = useWishlistStore((s) => s.wishlist);
+  const notifications = useNotificationStore((s) => s.notifications);
+  const markAllRead = useNotificationStore((s) => s.markAllRead);
+  const logout = useLogout();
+
   const [showNotif, setShowNotif] = useState(false);
+  const navigate = useNavigate();
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
     <nav className="navbar">
-      <div className="navbar-brand" onClick={() => setPage("home")}>
+      <div className="navbar-brand" onClick={() => navigate("/")}>
         🏠 RentRoom <span className="navbar-badge">BD</span>
       </div>
 
       <div className="nav-links">
-        {["home", "rooms", "map", "chat"].map((p) => (
-          <button
-            key={p}
-            className={`nav-link ${page === p ? "active" : ""}`}
-            onClick={() => setPage(p)}
+        {NAV_ITEMS.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.to === "/"}
+            className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
           >
-            {p.charAt(0).toUpperCase() + p.slice(1)}
-          </button>
+            {item.label}
+          </NavLink>
         ))}
         {user && (
-          <button
-            className={`nav-link ${page === "dashboard" ? "active" : ""}`}
-            onClick={() => setPage("dashboard")}
+          <NavLink
+            to="/dashboard"
+            className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
           >
             Dashboard
-          </button>
+          </NavLink>
         )}
       </div>
 
       <div className="nav-actions">
         {/* Dark Mode */}
-        <button className="icon-btn" onClick={() => setDarkMode(!darkMode)}>
+        <button className="icon-btn" onClick={() => toggleDarkMode()}>
           {darkMode ? "☀️" : "🌙"}
         </button>
 
         {/* Wishlist */}
-        <button className="icon-btn" onClick={() => setPage("rooms")}>
+        <button className="icon-btn" onClick={() => navigate("/rooms")}>
           ❤️ {wishlist.length > 0 && <span className="badge">{wishlist.length}</span>}
         </button>
 
@@ -76,16 +97,20 @@ export default function Navbar({ page, setPage }) {
             <div
               className="owner-avatar"
               style={{ width: 36, height: 36, cursor: "pointer" }}
-              onClick={() => setPage("dashboard")}
+              onClick={() => navigate("/dashboard")}
             >
               {user.name.slice(0, 2).toUpperCase()}
             </div>
-            <button className="btn-outline" onClick={() => setUser(null)} style={{ padding: "8px 14px" }}>
+            <button
+              className="btn-outline"
+              onClick={() => logout.mutate()}
+              style={{ padding: "8px 14px" }}
+            >
               Logout
             </button>
           </div>
         ) : (
-          <button className="btn-primary" onClick={() => setPage("auth")}>
+          <button className="btn-primary" onClick={() => navigate("/auth")}>
             Sign In
           </button>
         )}

@@ -1,8 +1,8 @@
-import { useApp } from "../../context/AppContext";
+import { useRooms } from "../../hooks/useRooms";
 import "./AIRecommendations.css";
 
 export default function AIRecommendations() {
-  const { rooms } = useApp();
+  const { data: rooms = [] } = useRooms();
   const aiPicks = rooms.filter((r) => r.featured && r.available).slice(0, 2);
 
   return (

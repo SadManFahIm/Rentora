@@ -1,16 +1,34 @@
 import { useState } from "react";
-import { useApp } from "../../context/AppContext";
+import { useNavigate } from "react-router-dom";
+import { useRooms } from "../../hooks/useRooms";
+import { useBookings } from "../../hooks/useBookings";
 import RoomCard from "../../components/RoomCard/RoomCard";
 import "./Dashboard.css";
 
-export default function Dashboard({ setPage }) {
-  const { rooms } = useApp();
-  const [activeTab, setActiveTab] = useState("overview");
+type DashboardTab = "overview" | "bookings" | "wishlist";
 
-  const bookings = [
-    { ...rooms[0], status: "approved", date: "Feb 22, 2025" },
-    { ...rooms[2], status: "pending", date: "Feb 25, 2025" },
+interface StatCard {
+  icon: string;
+  label: string;
+  value: string;
+  change: string;
+  up: boolean;
+}
+
+export default function Dashboard() {
+  const { data: rooms = [] } = useRooms();
+  const { data: bookings = [] } = useBookings();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
+
+  const stats: StatCard[] = [
+    { icon: "🏠", label: "Saved Rooms", value: "3", change: "+2 this week", up: true },
+    { icon: "📅", label: "Booking Requests", value: "1", change: "1 pending", up: true },
+    { icon: "💬", label: "Unread Messages", value: "2", change: "2 new", up: true },
+    { icon: "⭐", label: "Profile Score", value: "87%", change: "+5% this month", up: true },
   ];
+
+  const tabs: DashboardTab[] = ["overview", "bookings", "wishlist"];
 
   return (
     <div className="section-container">
@@ -19,11 +37,11 @@ export default function Dashboard({ setPage }) {
           <h1 className="dashboard-title">My Dashboard</h1>
           <p style={{ color: "var(--text2)", marginTop: 4 }}>Welcome back! Here's your activity.</p>
         </div>
-        <button className="btn-primary" onClick={() => setPage("rooms")}>+ List a Room</button>
+        <button className="btn-primary" onClick={() => navigate("/rooms")}>+ List a Room</button>
       </div>
 
       <div className="tabs">
-        {["overview", "bookings", "wishlist"].map((t) => (
+        {tabs.map((t) => (
           <button key={t} className={`tab ${activeTab === t ? "active" : ""}`} onClick={() => setActiveTab(t)}>
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
@@ -33,12 +51,7 @@ export default function Dashboard({ setPage }) {
       {activeTab === "overview" && (
         <>
           <div className="stats-grid">
-            {[
-              { icon: "🏠", label: "Saved Rooms", value: "3", change: "+2 this week", up: true },
-              { icon: "📅", label: "Booking Requests", value: "1", change: "1 pending", up: true },
-              { icon: "💬", label: "Unread Messages", value: "2", change: "2 new", up: true },
-              { icon: "⭐", label: "Profile Score", value: "87%", change: "+5% this month", up: true },
-            ].map((s) => (
+            {stats.map((s) => (
               <div key={s.label} className="stat-card">
                 <div className="stat-icon">{s.icon}</div>
                 <h3>{s.value}</h3>

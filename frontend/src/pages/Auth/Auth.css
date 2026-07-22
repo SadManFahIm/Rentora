@@ -40,3 +40,7 @@
 
 .auth-switch { text-align: center; margin-top: 16px; font-size: 0.88rem; color: var(--text2); }
 .auth-switch span { color: var(--accent); font-weight: 600; cursor: pointer; }
+
+.field-error { display: block; margin-top: 6px; font-size: 0.78rem; color: #dc2626; font-weight: 500; }
+.input-group input.has-error { border-color: #dc2626; }
+.auth-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; border-radius: 10px; padding: 10px 14px; font-size: 0.82rem; margin-bottom: 16px; }

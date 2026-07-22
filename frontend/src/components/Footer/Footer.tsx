@@ -1,6 +1,9 @@
+import { useNavigate } from "react-router-dom";
 import "./Footer.css";
 
-export default function Footer({ setPage }) {
+export default function Footer() {
+  const navigate = useNavigate();
+
   return (
     <footer className="footer">
       <div className="footer-inner">
@@ -10,17 +13,17 @@ export default function Footer({ setPage }) {
         </div>
         <div className="footer-col">
           <h4>Browse</h4>
-          <a onClick={() => setPage("rooms")}>All Rooms</a>
-          <a onClick={() => setPage("map")}>Map View</a>
+          <a onClick={() => navigate("/rooms")}>All Rooms</a>
+          <a onClick={() => navigate("/map")}>Map View</a>
           <a>Featured Listings</a>
           <a>New Listings</a>
         </div>
         <div className="footer-col">
           <h4>Account</h4>
-          <a onClick={() => setPage("auth")}>Sign In</a>
-          <a onClick={() => setPage("auth")}>Register</a>
-          <a onClick={() => setPage("dashboard")}>Dashboard</a>
-          <a onClick={() => setPage("chat")}>Messages</a>
+          <a onClick={() => navigate("/auth")}>Sign In</a>
+          <a onClick={() => navigate("/auth")}>Register</a>
+          <a onClick={() => navigate("/dashboard")}>Dashboard</a>
+          <a onClick={() => navigate("/chat")}>Messages</a>
         </div>
         <div className="footer-col">
           <h4>Company</h4>
