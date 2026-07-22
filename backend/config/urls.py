@@ -19,6 +19,9 @@ urlpatterns = [
     path("api/v1/users/", include("users.urls")),
     path("api/v1/rooms/", include("rooms.urls")),
     path("api/v1/", include("bookings.urls")),
+    path("api/v1/wishlist/", include("wishlist.urls")),
+    path("api/v1/notifications/", include("notifications.urls")),
+    path("api/v1/dashboard/", include("dashboard.urls")),
 ]
 
 if settings.DEBUG:
