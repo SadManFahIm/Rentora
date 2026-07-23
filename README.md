@@ -258,6 +258,11 @@ Frontend runs at `http://localhost:3000`
 ---
 
 ## 📸 Screenshots
+<img width="1920" height="2178" alt="RentRoom_BD" src="https://github.com/user-attachments/assets/8e7cd2b5-174e-4855-a8d6-beea394a12cc" /> 
+<img width="1920" height="1433" alt="RentRoom_BD__1_" src="https://github.com/user-attachments/assets/e03dcd15-632b-4e2d-8659-de4bc2946f43" />
+<img width="1920" height="927" alt="RentRoom_BD__3_" src="https://github.com/user-attachments/assets/6dc84e24-8d02-4cf5-a6a6-3ff926b21371" />
+<img width="1920" height="927" alt="RentRoom_BD__2_" src="https://github.com/user-attachments/assets/6b958b77-127f-4424-8b62-76b6f6a09520" />
+
 
 
 ---
@@ -266,7 +271,6 @@ Frontend runs at `http://localhost:3000`
 
 **Sadman Chowdhury Fahim**
 - GitHub: [@SadManFahIm](https://github.com/SadManFahIm)
-- Company: NeoNexor Software
 
 ---
 
