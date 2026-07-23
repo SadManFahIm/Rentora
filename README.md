@@ -259,17 +259,6 @@ Frontend runs at `http://localhost:3000`
 
 ## 📸 Screenshots
 
-### Home Page
-![Home](ScreenShots/home.png)
-
-### Room Listings
-![Rooms](ScreenShots/rooms.png)
-
-### Chat
-![Chat](ScreenShots/chat.png)
-
-### Map View
-![Map](ScreenShots/map.png)
 
 ---
 
