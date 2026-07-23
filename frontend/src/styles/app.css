@@ -1,0 +1,101 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap');
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* Enable class-based dark mode (documentElement gets `.dark`). */
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================================
+   RENTORA BRAND TOKENS
+   Usable as utilities, e.g. bg-brand, text-brand, ring-brand.
+   ============================================================ */
+@theme {
+  --color-brand: oklch(0.646 0.222 41.116); /* Tailwind orange-600 */
+  --color-brand-foreground: #ffffff;
+  --color-brand-muted: oklch(0.98 0.016 39.4); /* Tailwind orange-50 */
+  --color-brand-dark: oklch(0.553 0.195 38.402); /* Tailwind orange-700, used for hover */
+
+  --color-taka: oklch(0.646 0.222 41.116); /* prices use the brand orange, not a separate accent */
+
+  --font-display: "Poppins", "Segoe UI", system-ui, sans-serif;
+  --font-body: "DM Sans", "Segoe UI", system-ui, sans-serif;
+
+  /* Bangla taka symbol available via content: var(--symbol-taka) */
+  --symbol-taka: "৳";
+}
+
+/* ============================================================
+   shadcn/ui design tokens — New York style, neutral base color
+   ============================================================ */
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.98 0 0); /* gray-50 */
+  --muted-foreground: oklch(0.446 0.03 256.802); /* gray-600 */
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.928 0.006 264.531); /* gray-200 */
+  --input: oklch(0.928 0.006 264.531);
+  --ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+}
+
+/* Map the CSS variables to Tailwind color/radius utilities. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* Base body styling (font/background/color) lives in global.css,
+   which is reset/base-only — all component styling is Tailwind utilities. */
