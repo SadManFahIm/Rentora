@@ -1,6 +1,8 @@
+from django.conf import settings
 from django.db.models import Q
 from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
 from rest_framework import permissions, status, viewsets
+from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from .models import Booking, Review
@@ -68,7 +70,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         return BookingSerializer
 
     def get_permissions(self):
-        if self.action in ("update", "partial_update", "destroy", "retrieve"):
+        if self.action in ("update", "partial_update", "destroy", "retrieve", "deposit_status"):
             return [permissions.IsAuthenticated(), IsTenantOrRoomOwner()]
         return [permissions.IsAuthenticated()]
 
@@ -87,6 +89,27 @@ class BookingViewSet(viewsets.ModelViewSet):
         booking = serializer.save()
         output = BookingSerializer(booking, context=self.get_serializer_context())
         return Response(output.data)
+
+    @extend_schema(
+        tags=["Bookings"],
+        summary="Security deposit status (owner or tenant)",
+        description="Whether a deposit is required for this booking, and its paid/refunded state.",
+    )
+    @action(detail=True, methods=["get"], url_path="deposit-status")
+    def deposit_status(self, request, pk=None):
+        booking = self.get_object()
+        required = bool(getattr(settings, "REQUIRE_SECURITY_DEPOSIT_BEFORE_APPROVAL", False)) and (
+            booking.security_deposit_amount > 0
+        )
+        return Response(
+            {
+                "booking_id": booking.id,
+                "security_deposit_amount": float(booking.security_deposit_amount),
+                "security_deposit_paid": booking.security_deposit_paid,
+                "security_deposit_refunded": booking.security_deposit_refunded,
+                "required_before_approval": required,
+            }
+        )
 
 
 @extend_schema_view(

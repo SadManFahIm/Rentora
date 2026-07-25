@@ -1,5 +1,6 @@
 from datetime import date
 
+from django.conf import settings
 from rest_framework import serializers
 
 from config.sanitizers import sanitize_text
@@ -31,6 +32,9 @@ class BookingSerializer(serializers.ModelSerializer):
             "monthly_rent",
             "agreement_signed",
             "notes",
+            "security_deposit_amount",
+            "security_deposit_paid",
+            "security_deposit_refunded",
             "created_at",
             "updated_at",
         ]
@@ -42,8 +46,19 @@ class BookingCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Booking
-        fields = ["id", "room", "check_in", "check_out", "monthly_rent", "notes"]
-        extra_kwargs = {"monthly_rent": {"required": False}}
+        fields = [
+            "id",
+            "room",
+            "check_in",
+            "check_out",
+            "monthly_rent",
+            "notes",
+            "security_deposit_amount",
+        ]
+        extra_kwargs = {
+            "monthly_rent": {"required": False},
+            "security_deposit_amount": {"required": False},
+        }
 
     def validate(self, attrs):
         request = self.context["request"]
@@ -107,6 +122,20 @@ class BookingUpdateSerializer(serializers.ModelSerializer):
             if new_status not in valid_targets:
                 raise serializers.ValidationError(
                     f"Cannot transition booking from '{booking.status}' to '{new_status}'."
+                )
+
+            # Configurable business rule: a room owner may be required to
+            # wait for the security deposit to clear before approving. Off by
+            # default (`REQUIRE_SECURITY_DEPOSIT_BEFORE_APPROVAL` in settings)
+            # so platforms that don't collect deposits upfront aren't blocked.
+            if (
+                new_status == Booking.Status.APPROVED
+                and getattr(settings, "REQUIRE_SECURITY_DEPOSIT_BEFORE_APPROVAL", False)
+                and booking.security_deposit_amount > 0
+                and not booking.security_deposit_paid
+            ):
+                raise serializers.ValidationError(
+                    "The security deposit must be paid before this booking can be approved."
                 )
 
         if attrs.get("agreement_signed") and booking.status != Booking.Status.APPROVED:
