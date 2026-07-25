@@ -73,6 +73,13 @@ def notify_on_booking_change(sender, instance: Booking, created: bool, **kwargs)
             message=f"Your booking for {room_title} has been approved!",
             action_url=_BOOKING_ACTION_URL,
         )
+        # Local import: payments imports bookings.models at module load, so
+        # importing payments back at bookings' own module-load time would
+        # risk a cycle. Deferring to call time (well after both apps have
+        # finished loading) sidesteps that entirely.
+        from payments.services.schedule import generate_payment_schedule
+
+        generate_payment_schedule(instance)
     elif instance.status == Booking.Status.REJECTED:
         create_notification(
             user=instance.tenant,
