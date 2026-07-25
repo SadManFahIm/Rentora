@@ -18,6 +18,8 @@ class Notification(models.Model):
         BOOKING_CANCELLED = "booking_cancelled", "Booking Cancelled"
         NEW_REVIEW = "new_review", "New Review"
         NEW_MESSAGE = "new_message", "New Message"
+        PAYMENT_SUCCESS = "payment_success", "Payment Success"
+        PAYMENT_FAILED = "payment_failed", "Payment Failed"
         SYSTEM = "system", "System"
 
     user = models.ForeignKey(
