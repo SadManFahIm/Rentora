@@ -107,6 +107,24 @@ else:
         "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"},
     }
 
+# ============================================================
+# Cache — also used for chat online-presence tracking (chat/presence.py).
+# Same CHANNELS_BACKEND toggle as above: a single dev process shares state
+# fine with LocMemCache, but multi-process (prod) needs Redis so presence is
+# consistent across workers. prod.py forces Redis unconditionally.
+# ============================================================
+if os.getenv("CHANNELS_BACKEND") == "redis":
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+        }
+    }
+else:
+    CACHES = {
+        "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
+    }
+
 AUTH_USER_MODEL = "users.User"
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -159,6 +177,7 @@ REST_FRAMEWORK = {
         "anon": "100/hour",
         "user": "1000/hour",
         "auth": "10/hour",
+        "chat_upload": "30/hour",
     },
 }
 

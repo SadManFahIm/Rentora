@@ -5,6 +5,7 @@ from rest_framework import serializers
 from config.sanitizers import sanitize_text
 
 from .models import ChatRoom, Message
+from .presence import is_online
 
 User = get_user_model()
 
@@ -18,9 +19,14 @@ class ChatUserSerializer(serializers.ModelSerializer):
 
 
 class MessageSerializer(serializers.ModelSerializer):
-    """Read representation of a message, with nested sender."""
+    """Read representation of a message, with nested sender.
+
+    ``status`` is derived, not stored: it's "delivered"/"read" per the other
+    room member(s)' online state and ``last_read_at`` — see ``get_status``.
+    """
 
     sender = ChatUserSerializer(read_only=True)
+    status = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
@@ -32,9 +38,24 @@ class MessageSerializer(serializers.ModelSerializer):
             "message_type",
             "file_url",
             "is_read",
+            "status",
             "created_at",
         ]
         read_only_fields = fields
+
+    def get_status(self, obj: Message) -> str:
+        """"read" once every other member has read past this message's
+        timestamp; else "delivered" if any of them is currently online;
+        else "sent". For a direct chat "every other member" is just the one
+        other participant, so this reduces to the usual 1:1 semantics."""
+        others = [m for m in obj.chat_room.memberships.all() if m.user_id != obj.sender_id]
+        if not others:
+            return "sent"
+        if all(m.last_read_at is not None and m.last_read_at > obj.created_at for m in others):
+            return "read"
+        if any(is_online(m.user_id) for m in others):
+            return "delivered"
+        return "sent"
 
 
 class MessageCreateSerializer(serializers.ModelSerializer):
@@ -59,6 +80,7 @@ class ChatRoomSerializer(serializers.ModelSerializer):
     message preview, and the requesting user's unread count."""
 
     other_participant = serializers.SerializerMethodField()
+    is_other_user_online = serializers.SerializerMethodField()
     participants = ChatUserSerializer(source="members", many=True, read_only=True)
     last_message = serializers.SerializerMethodField()
     unread_count = serializers.SerializerMethodField()
@@ -73,6 +95,7 @@ class ChatRoomSerializer(serializers.ModelSerializer):
             "listing_title",
             "participants",
             "other_participant",
+            "is_other_user_online",
             "last_message",
             "unread_count",
             "created_at",
@@ -84,14 +107,22 @@ class ChatRoomSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         return getattr(request, "user", None)
 
-    @extend_schema_field(ChatUserSerializer)
-    def get_other_participant(self, obj: ChatRoom):
-        """For a direct chat, the member who isn't the requesting user."""
+    def _other_member(self, obj: ChatRoom):
+        """For a direct chat, the member who isn't the requesting user.
+        ``None`` for a group chat (or if the requester isn't a member)."""
         user = self._request_user()
         others = [m for m in obj.members.all() if m.pk != getattr(user, "pk", None)]
-        if not others:
-            return None
-        return ChatUserSerializer(others[0], context=self.context).data
+        return others[0] if others else None
+
+    @extend_schema_field(ChatUserSerializer)
+    def get_other_participant(self, obj: ChatRoom):
+        other = self._other_member(obj)
+        return ChatUserSerializer(other, context=self.context).data if other else None
+
+    def get_is_other_user_online(self, obj: ChatRoom) -> bool | None:
+        """``None`` when there's no single "other" participant (group chat)."""
+        other = self._other_member(obj)
+        return is_online(other.pk) if other else None
 
     @extend_schema_field(MessageSerializer)
     def get_last_message(self, obj: ChatRoom):

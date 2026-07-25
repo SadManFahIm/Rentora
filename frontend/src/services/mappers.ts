@@ -11,6 +11,12 @@ import type {
   BookingStatus,
   Notification,
   User,
+  ChatUser,
+  ChatMessage,
+  ChatMessageType,
+  ChatMessageStatus,
+  ChatRoom,
+  ChatRoomType,
 } from "../types";
 
 // ---- DRF wire shapes (only the fields we consume) ----
@@ -83,6 +89,40 @@ export interface ApiNotification {
   is_read: boolean;
   action_url: string;
   created_at: string;
+}
+
+export interface ApiChatUser {
+  id: number;
+  username: string;
+  first_name: string;
+  last_name: string;
+  avatar: string | null;
+}
+
+export interface ApiChatMessage {
+  id: number;
+  chat_room: number;
+  sender: ApiChatUser;
+  content: string;
+  message_type: string;
+  file_url: string;
+  is_read: boolean;
+  status: string;
+  created_at: string;
+}
+
+export interface ApiChatRoom {
+  id: number;
+  room_type: string;
+  listing: number | null;
+  listing_title: string | null;
+  participants: ApiChatUser[];
+  other_participant: ApiChatUser | null;
+  is_other_user_online: boolean | null;
+  last_message: ApiChatMessage | null;
+  unread_count: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ApiUser {
@@ -177,6 +217,7 @@ export function mapRoom(api: ApiRoom): Room {
     description: api.description ?? "",
     size: api.size_sqft,
     owner,
+    ownerId: api.owner?.id ?? null,
     ownerAvatar: initials(owner),
     verified: api.verified,
   };
@@ -199,6 +240,45 @@ export function mapNotification(api: ApiNotification): Notification {
     text: api.message || api.title,
     read: api.is_read,
     time: relativeTime(api.created_at),
+  };
+}
+
+export function mapChatUser(api: ApiChatUser): ChatUser {
+  return {
+    id: api.id,
+    username: api.username,
+    firstName: api.first_name,
+    lastName: api.last_name,
+    avatar: api.avatar,
+  };
+}
+
+export function mapChatMessage(api: ApiChatMessage): ChatMessage {
+  return {
+    id: api.id,
+    chatRoomId: api.chat_room,
+    sender: mapChatUser(api.sender),
+    content: api.content,
+    messageType: api.message_type as ChatMessageType,
+    fileUrl: api.file_url,
+    status: api.status as ChatMessageStatus,
+    createdAt: api.created_at,
+  };
+}
+
+export function mapChatRoom(api: ApiChatRoom): ChatRoom {
+  return {
+    id: api.id,
+    roomType: api.room_type as ChatRoomType,
+    listingId: api.listing,
+    listingTitle: api.listing_title,
+    participants: api.participants.map(mapChatUser),
+    otherParticipant: api.other_participant ? mapChatUser(api.other_participant) : null,
+    isOtherUserOnline: api.is_other_user_online,
+    lastMessage: api.last_message ? mapChatMessage(api.last_message) : null,
+    unreadCount: api.unread_count,
+    createdAt: api.created_at,
+    updatedAt: api.updated_at,
   };
 }
 
