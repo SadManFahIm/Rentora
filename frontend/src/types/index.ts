@@ -23,6 +23,7 @@ export interface Room {
   description: string;
   size: number;
   owner: string;
+  ownerId: number | null;
   ownerAvatar: string;
   verified: boolean;
 }
@@ -50,13 +51,43 @@ export interface Notification {
   time: string;
 }
 
-export interface Message {
+// ---- Chat (real-time, backed by chat/ REST + WebSocket) ----
+export interface ChatUser {
   id: number;
-  from: string;
-  avatar: string;
-  text: string;
-  time: string;
-  mine: boolean;
+  username: string;
+  firstName: string;
+  lastName: string;
+  avatar: string | null;
+}
+
+export type ChatMessageType = "text" | "image" | "file" | "system";
+export type ChatMessageStatus = "sent" | "delivered" | "read";
+
+export interface ChatMessage {
+  id: number;
+  chatRoomId: number;
+  sender: ChatUser;
+  content: string;
+  messageType: ChatMessageType;
+  fileUrl: string;
+  status: ChatMessageStatus;
+  createdAt: string;
+}
+
+export type ChatRoomType = "direct" | "group";
+
+export interface ChatRoom {
+  id: number;
+  roomType: ChatRoomType;
+  listingId: number | null;
+  listingTitle: string | null;
+  participants: ChatUser[];
+  otherParticipant: ChatUser | null;
+  isOtherUserOnline: boolean | null;
+  lastMessage: ChatMessage | null;
+  unreadCount: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Review {

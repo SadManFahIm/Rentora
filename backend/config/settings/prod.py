@@ -64,3 +64,15 @@ CHANNEL_LAYERS = {
         },
     }
 }
+
+# ============================================================
+# Cache — Redis, unconditionally (multi-process safe). Also backs chat
+# online-presence tracking (chat/presence.py), which must be consistent
+# across every worker process, not just the one a given socket connected to.
+# ============================================================
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+    }
+}
