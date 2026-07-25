@@ -30,8 +30,10 @@ logger = logging.getLogger(__name__)
 
 SANDBOX_SESSION_URL = "https://sandbox.sslcommerz.com/gwprocess/v4/api.php"
 SANDBOX_VALIDATION_URL = "https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php"
+SANDBOX_REFUND_URL = "https://sandbox.sslcommerz.com/validator/api/refundAPI.php"
 LIVE_SESSION_URL = "https://securepay.sslcommerz.com/gwprocess/v4/api.php"
 LIVE_VALIDATION_URL = "https://securepay.sslcommerz.com/validator/api/validationserverAPI.php"
+LIVE_REFUND_URL = "https://securepay.sslcommerz.com/validator/api/refundAPI.php"
 
 REQUEST_TIMEOUT_SECONDS = 15
 
@@ -46,6 +48,10 @@ def _session_url() -> str:
 
 def _validation_url() -> str:
     return SANDBOX_VALIDATION_URL if settings.SSLCOMMERZ_IS_SANDBOX else LIVE_VALIDATION_URL
+
+
+def _refund_url() -> str:
+    return SANDBOX_REFUND_URL if settings.SSLCOMMERZ_IS_SANDBOX else LIVE_REFUND_URL
 
 
 def initiate_payment(payment: Payment, success_url: str, fail_url: str, cancel_url: str) -> dict[str, Any]:
@@ -116,3 +122,35 @@ def validate_payment(val_id: str) -> dict[str, Any]:
     except (requests.RequestException, ValueError) as exc:
         logger.error("SSLCommerz validate_payment failed for val_id=%s: %s", val_id, exc)
         raise SSLCommerzError(f"Could not validate payment with SSLCommerz: {exc}") from exc
+
+
+def refund_payment(bank_tran_id: str, refund_amount: str, refund_remarks: str = "Refund requested by landlord") -> dict[str, Any]:
+    """Request a refund for a previously validated transaction.
+
+    ``bank_tran_id`` is SSLCommerz's own transaction reference (stored on the
+    Payment as ``gateway_transaction_id`` once ``validate_payment`` confirms
+    a success) — refunds are only ever issued against a genuinely-settled
+    transaction, never a bare merchant ``tran_id``.
+    """
+    payload = {
+        "bank_tran_id": bank_tran_id,
+        "refund_amount": str(refund_amount),
+        "refund_remarks": refund_remarks,
+        "store_id": settings.SSLCOMMERZ_STORE_ID,
+        "store_passwd": settings.SSLCOMMERZ_STORE_PASSWORD,
+        "format": "json",
+    }
+
+    try:
+        response = requests.post(_refund_url(), data=payload, timeout=REQUEST_TIMEOUT_SECONDS)
+        response.raise_for_status()
+        data = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        logger.error("SSLCommerz refund_payment failed for bank_tran_id=%s: %s", bank_tran_id, exc)
+        raise SSLCommerzError(f"Could not process SSLCommerz refund: {exc}") from exc
+
+    if data.get("status") not in ("success", "processing"):
+        logger.error("SSLCommerz rejected refund for bank_tran_id=%s: %s", bank_tran_id, data)
+        raise SSLCommerzError(data.get("errorReason") or "SSLCommerz rejected the refund request.")
+
+    return data
