@@ -1,14 +1,22 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { Menu, X, Sun, Moon, Heart, Bell } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { useUiStore } from "../../stores/uiStore";
 import { useWishlistStore } from "../../stores/wishlistStore";
 import { useNotificationStore } from "../../stores/notificationStore";
 import { useLogout } from "../../hooks/useAuth";
+import { useWebSocket } from "../../hooks/useWebSocket";
+import { mapNotification, type ApiNotification } from "../../services/mappers";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { cn } from "../../lib/utils";
+
+interface NotificationWsEvent {
+  type: "notification";
+  data: ApiNotification;
+}
 
 const NAV_ITEMS: { label: string; to: string }[] = [
   { label: "Home", to: "/" },
@@ -30,6 +38,21 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
   const unreadCount = notifications.filter((n) => !n.read).length;
+
+  // Live notification push. `enabled` (tied to `user`) means this connects on
+  // login and the hook's own cleanup disconnects it on logout — nothing
+  // further to wire up for that.
+  const { lastMessage: notificationEvent } = useWebSocket<NotificationWsEvent>(
+    "/ws/notifications/",
+    { enabled: !!user }
+  );
+
+  useEffect(() => {
+    if (!notificationEvent || notificationEvent.type !== "notification") return;
+    const notification = mapNotification(notificationEvent.data);
+    useNotificationStore.getState().addNotification(notification);
+    toast(notification.text, { description: notificationEvent.data.notification_type_display });
+  }, [notificationEvent]);
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     cn(
