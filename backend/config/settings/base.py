@@ -179,6 +179,15 @@ REST_FRAMEWORK = {
         "user": "1000/hour",
         "auth": "10/hour",
         "chat_upload": "30/hour",
+        # Payment initiation is deliberately much tighter than the general
+        # "user" scope — there's no legitimate reason to start dozens of
+        # payment sessions an hour, and it's a prime target for abuse/testing
+        # stolen cards against the gateway.
+        "payment_initiate": "5/hour",
+        # Gateway callbacks have no user session (AllowAny/no auth), so they
+        # can't use the "user" scope; keyed per-IP to absorb legitimate
+        # gateway retries while still capping flood/replay attempts.
+        "webhook_callback": "20/minute",
     },
 }
 
@@ -278,7 +287,34 @@ BKASH_PASSWORD = os.getenv("BKASH_PASSWORD", "")
 BKASH_SANDBOX_BASE_URL = os.getenv(
     "BKASH_SANDBOX_BASE_URL", "https://tokenized.sandbox.bka.sh/v1.2.0-beta"
 )
+BKASH_IS_SANDBOX = os.getenv("BKASH_IS_SANDBOX", "True") == "True"
 
 # Base URL of the frontend app — used to build the redirect target after a
 # bKash callback resolves (bKash itself only ever hits backend URLs).
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+# ============================================================
+# Payments — business rules & webhook hardening (Phase 5 Day 3)
+# ============================================================
+# Whether a landlord may approve a booking that has an unpaid security
+# deposit attached. Off by default so platforms/rooms that don't require a
+# deposit are never blocked; flip on via env once deposit collection is a
+# hard requirement.
+REQUIRE_SECURITY_DEPOSIT_BEFORE_APPROVAL = os.getenv(
+    "REQUIRE_SECURITY_DEPOSIT_BEFORE_APPROVAL", "False"
+) == "True"
+
+# Number of monthly installments to generate for an approved booking whose
+# `check_out` is open-ended (no fixed lease end date).
+DEFAULT_LEASE_SCHEDULE_MONTHS = int(os.getenv("DEFAULT_LEASE_SCHEDULE_MONTHS", "12"))
+
+# Known gateway webhook source IPs, comma-separated. Sandbox IPs vary and
+# aren't published, so this is empty (no enforcement) by default — see
+# `payments/services/webhook_security.py`. Populate in production once the
+# live gateway's outbound IP ranges are known.
+SSLCOMMERZ_WEBHOOK_IP_ALLOWLIST = [
+    ip.strip() for ip in os.getenv("SSLCOMMERZ_WEBHOOK_IP_ALLOWLIST", "").split(",") if ip.strip()
+]
+BKASH_WEBHOOK_IP_ALLOWLIST = [
+    ip.strip() for ip in os.getenv("BKASH_WEBHOOK_IP_ALLOWLIST", "").split(",") if ip.strip()
+]
