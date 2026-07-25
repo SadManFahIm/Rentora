@@ -23,6 +23,15 @@ class Booking(models.Model):
     monthly_rent = models.DecimalField(max_digits=10, decimal_places=2)
     agreement_signed = models.BooleanField(default=False)
     notes = models.TextField(blank=True)
+
+    # Security deposit tracking. `security_deposit_amount` of 0 means no
+    # deposit is required for this booking. Whether an unpaid deposit blocks
+    # approval is a global, configurable business rule — see
+    # `settings.REQUIRE_SECURITY_DEPOSIT_BEFORE_APPROVAL` — not hardcoded here.
+    security_deposit_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    security_deposit_paid = models.BooleanField(default=False)
+    security_deposit_refunded = models.BooleanField(default=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

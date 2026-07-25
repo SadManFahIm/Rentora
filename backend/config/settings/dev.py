@@ -7,7 +7,9 @@ from .base import BASE_DIR
 
 DEBUG = True
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+# "testserver" is Django's default test-client host — harmless to allow in
+# dev (never included in prod.py's ALLOWED_HOSTS).
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
 
 # SQLite is the default for local dev so the project runs immediately with
 # no extra setup. PostgreSQL 16 is installed on this machine — to use it

@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import Payment
+from .models import Invoice, Payment, PaymentAuditLog, PaymentSchedule
 
 STATUS_COLORS = {
     Payment.Status.INITIATED: "#6b7280",
@@ -38,3 +38,33 @@ class PaymentAdmin(admin.ModelAdmin):
             color,
             obj.get_status_display(),
         )
+
+
+@admin.register(Invoice)
+class InvoiceAdmin(admin.ModelAdmin):
+    list_display = ["invoice_number", "booking", "amount", "status", "period_start", "period_end", "created_at"]
+    list_filter = ["status"]
+    search_fields = ["invoice_number", "booking__tenant__username", "booking__room__title"]
+    autocomplete_fields = ["booking", "payment"]
+    readonly_fields = ["invoice_number", "created_at", "updated_at"]
+
+
+@admin.register(PaymentSchedule)
+class PaymentScheduleAdmin(admin.ModelAdmin):
+    list_display = ["booking", "due_date", "amount", "status", "payment"]
+    list_filter = ["status"]
+    autocomplete_fields = ["booking", "payment"]
+
+
+@admin.register(PaymentAuditLog)
+class PaymentAuditLogAdmin(admin.ModelAdmin):
+    list_display = ["payment", "old_status", "new_status", "changed_by", "created_at"]
+    list_filter = ["new_status", "changed_by"]
+    search_fields = ["payment__transaction_id"]
+    readonly_fields = ["payment", "old_status", "new_status", "changed_by", "metadata", "created_at"]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False

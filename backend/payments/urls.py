@@ -8,6 +8,7 @@ from .views import (
     PaymentFailCallbackView,
     PaymentInitiateView,
     PaymentSuccessCallbackView,
+    PaymentSummaryView,
     PaymentViewSet,
 )
 
@@ -18,11 +19,13 @@ urlpatterns = [
     # Explicit paths first — the router's `<pk>/` pattern below would
     # otherwise swallow these as a (nonexistent) payment id.
     path("initiate/", PaymentInitiateView.as_view(), name="payment-initiate"),
+    path("summary/", PaymentSummaryView.as_view(), name="payment-summary"),
     path("sslcommerz/success/", PaymentSuccessCallbackView.as_view(), name="payment-sslcommerz-success"),
     path("sslcommerz/fail/", PaymentFailCallbackView.as_view(), name="payment-sslcommerz-fail"),
     path("sslcommerz/cancel/", PaymentCancelCallbackView.as_view(), name="payment-sslcommerz-cancel"),
     path("bkash/initiate/", BkashInitiateView.as_view(), name="payment-bkash-initiate"),
     path("bkash/callback/", BkashCallbackView.as_view(), name="payment-bkash-callback"),
     # router last: provides "" (list), "<pk>/" (retrieve), "<pk>/refund/",
-    # and "<pk>/receipt/" (the last two via @action on PaymentViewSet).
+    # "<pk>/receipt/", and "<pk>/invoice/" (the last three via @action on
+    # PaymentViewSet).
 ] + router.urls

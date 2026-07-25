@@ -58,3 +58,104 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"{self.transaction_id} ({self.status}) - {self.amount} BDT"
+
+    def transition_status(self, new_status, *, changed_by="system", metadata=None, extra_update_fields=None):
+        """Move this payment to ``new_status`` and record a
+        :class:`PaymentAuditLog` entry for it in the same call.
+
+        This is the single place that mutates `Payment.status` so every
+        transition — gateway callback, refund, initiate failure — is
+        guaranteed to leave an audit trail, rather than relying on every call
+        site to remember to log it separately.
+        """
+        old_status = self.status
+        self.status = new_status
+        update_fields = {"status", "updated_at"} | set(extra_update_fields or [])
+        self.save(update_fields=list(update_fields))
+
+        if old_status != new_status:
+            PaymentAuditLog.objects.create(
+                payment=self,
+                old_status=old_status,
+                new_status=new_status,
+                changed_by=changed_by,
+                metadata=metadata or {},
+            )
+
+
+class PaymentAuditLog(models.Model):
+    """Immutable record of every status transition a Payment goes through."""
+
+    payment = models.ForeignKey(Payment, on_delete=models.CASCADE, related_name="audit_logs")
+    old_status = models.CharField(max_length=10, blank=True)
+    new_status = models.CharField(max_length=10)
+    # "system" for gateway-callback-driven transitions, "user:<id>" for
+    # transitions a human explicitly triggered (e.g. a landlord's refund).
+    changed_by = models.CharField(max_length=32, default="system")
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["payment", "created_at"])]
+
+    def __str__(self):
+        return f"{self.payment_id}: {self.old_status} -> {self.new_status}"
+
+
+class Invoice(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        SENT = "sent", "Sent"
+        PAID = "paid", "Paid"
+
+    booking = models.ForeignKey(Booking, on_delete=models.CASCADE, related_name="invoices")
+    payment = models.OneToOneField(Payment, on_delete=models.CASCADE, related_name="invoice")
+    # Sequential, human-facing reference, e.g. "INV-2026-0001". Generated
+    # server-side (see payments/services/invoice.py) — never client-supplied.
+    invoice_number = models.CharField(max_length=32, unique=True, editable=False)
+    period_start = models.DateField()
+    period_end = models.DateField()
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.DRAFT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.invoice_number
+
+
+class PaymentSchedule(models.Model):
+    """One installment (e.g. one month's rent) in a booking's payment plan.
+
+    Generated when a booking is approved (see payments/services/schedule.py)
+    so tenants and landlords can see the full advance schedule up front, not
+    just payments already made.
+    """
+
+    class Status(models.TextChoices):
+        UPCOMING = "upcoming", "Upcoming"
+        DUE = "due", "Due"
+        OVERDUE = "overdue", "Overdue"
+        PAID = "paid", "Paid"
+
+    booking = models.ForeignKey(Booking, on_delete=models.CASCADE, related_name="payment_schedules")
+    due_date = models.DateField()
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.UPCOMING)
+    # Set once the corresponding real Payment succeeds; nullable until then.
+    payment = models.ForeignKey(
+        Payment, on_delete=models.SET_NULL, null=True, blank=True, related_name="schedule_entries"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["due_date"]
+        indexes = [models.Index(fields=["booking", "due_date"])]
+
+    def __str__(self):
+        return f"{self.booking_id}: {self.amount} due {self.due_date} ({self.status})"
