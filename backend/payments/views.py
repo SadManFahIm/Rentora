@@ -402,6 +402,35 @@ def _notify_payment_result(payment: Payment, *, success: bool) -> None:
         )
 
 
+def _frontend_outcome(payment_status: str) -> str:
+    """Map a persisted Payment.Status to the frontend's `status` query value.
+
+    Used on the idempotency fast paths, where the callback that originally
+    settled the payment may not be the same outcome as the one a later
+    (retried/forged) callback hit — the redirect must always reflect what
+    actually happened, not which URL the gateway happened to call again.
+    """
+    if payment_status in (Payment.Status.SUCCESS, Payment.Status.REFUNDED):
+        return "success"
+    if payment_status == Payment.Status.CANCELLED:
+        return "cancel"
+    return "fail"
+
+
+def _frontend_redirect(payment_status: str, tran_id: str | None):
+    """Send the user's browser to the frontend's payment-status page.
+
+    Every gateway callback that the user's browser lands on directly (as
+    opposed to a server-to-server webhook) must end in a browser redirect
+    here — returning a raw DRF JSON Response would just render as plain text
+    in the user's browser instead of taking them back into the app.
+    """
+    url = f"{settings.FRONTEND_URL}/payment/status?status={payment_status}"
+    if tran_id:
+        url += f"&transaction_id={tran_id}"
+    return redirect(url)
+
+
 class PaymentSuccessCallbackView(APIView):
     """SSLCommerz redirects/POSTs the browser here after a completed payment.
 
@@ -423,37 +452,37 @@ class PaymentSuccessCallbackView(APIView):
         return self._handle(request)
 
     def _handle(self, request):
+        tran_id = request.data.get("tran_id") or request.query_params.get("tran_id")
+        val_id = request.data.get("val_id") or request.query_params.get("val_id")
+
         if not check_webhook_ip(
             request,
             allowlist=settings.SSLCOMMERZ_WEBHOOK_IP_ALLOWLIST,
             sandbox=settings.SSLCOMMERZ_IS_SANDBOX,
             gateway="sslcommerz",
         ):
-            return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
-
-        tran_id = request.data.get("tran_id") or request.query_params.get("tran_id")
-        val_id = request.data.get("val_id") or request.query_params.get("val_id")
+            return _frontend_redirect("fail", tran_id)
 
         if not tran_id or not val_id:
-            return Response({"detail": "Missing tran_id or val_id."}, status=status.HTTP_400_BAD_REQUEST)
+            return _frontend_redirect("fail", tran_id)
 
         try:
             payment = Payment.objects.get(transaction_id=tran_id)
         except Payment.DoesNotExist:
-            return Response({"detail": "Unknown transaction."}, status=status.HTTP_404_NOT_FOUND)
+            return _frontend_redirect("fail", tran_id)
 
         # Idempotency fast path: skip re-validating with the gateway entirely
         # once a transaction has already settled (success, fail, cancel, or
         # refund) — e.g. the gateway retries the callback, or a forged retry
         # tries to flip an already-cancelled/failed payment to something else.
         if payment.status in TERMINAL_STATUSES:
-            return Response({"detail": "Already processed.", "transaction_id": tran_id})
+            return _frontend_redirect(_frontend_outcome(payment.status), tran_id)
 
         try:
             validation = sslcommerz_service.validate_payment(val_id)
         except SSLCommerzError as exc:
             logger.error("Validation call failed for tran_id=%s: %s", tran_id, exc)
-            return Response({"detail": "Could not validate payment."}, status=status.HTTP_502_BAD_GATEWAY)
+            return _frontend_redirect("fail", tran_id)
 
         if validation.get("status") not in ("VALID", "VALIDATED"):
             logger.warning("Payment %s failed validation: %s", tran_id, validation.get("status"))
@@ -461,7 +490,7 @@ class PaymentSuccessCallbackView(APIView):
                 try:
                     payment = Payment.objects.select_for_update().get(transaction_id=tran_id)
                 except Payment.DoesNotExist:
-                    return Response({"detail": "Unknown transaction."}, status=status.HTTP_404_NOT_FOUND)
+                    return _frontend_redirect("fail", tran_id)
                 if payment.status not in TERMINAL_STATUSES:
                     payment.failure_reason = f"Validation returned status={validation.get('status')}"
                     payment.gateway_response = validation
@@ -471,7 +500,7 @@ class PaymentSuccessCallbackView(APIView):
                         metadata={"validation_status": validation.get("status")},
                         extra_update_fields=["failure_reason", "gateway_response"],
                     )
-            return Response({"detail": "Payment could not be validated as successful."}, status=status.HTTP_400_BAD_REQUEST)
+            return _frontend_redirect("fail", tran_id)
 
         # Also confirm the validated amount/currency match what we expect,
         # so a validated-but-mismatched transaction can't be misapplied.
@@ -479,13 +508,13 @@ class PaymentSuccessCallbackView(APIView):
             try:
                 payment = Payment.objects.select_for_update().get(transaction_id=tran_id)
             except Payment.DoesNotExist:
-                return Response({"detail": "Unknown transaction."}, status=status.HTTP_404_NOT_FOUND)
+                return _frontend_redirect("fail", tran_id)
 
             # Re-check under the row lock: another concurrent request may
             # have already settled this transaction between the fast-path
             # check above and acquiring this lock.
             if payment.status in TERMINAL_STATUSES:
-                return Response({"detail": "Already processed.", "transaction_id": tran_id})
+                return _frontend_redirect(_frontend_outcome(payment.status), tran_id)
 
             validated_amount = validation.get("amount") or validation.get("currency_amount")
             if validated_amount is not None and abs(float(validated_amount) - float(payment.amount)) > 0.01:
@@ -500,7 +529,7 @@ class PaymentSuccessCallbackView(APIView):
                     extra_update_fields=["failure_reason", "gateway_response"],
                 )
                 logger.error("Amount mismatch on tran_id=%s", tran_id)
-                return Response({"detail": "Amount mismatch."}, status=status.HTTP_400_BAD_REQUEST)
+                return _frontend_redirect("fail", tran_id)
 
             payment.gateway_transaction_id = validation.get("val_id", val_id)
             payment.gateway_response = validation
@@ -512,7 +541,7 @@ class PaymentSuccessCallbackView(APIView):
             _apply_success_side_effects(payment)
 
         _notify_payment_result(payment, success=True)
-        return Response({"detail": "Payment confirmed.", "transaction_id": tran_id})
+        return _frontend_redirect("success", tran_id)
 
 
 class PaymentFailCallbackView(APIView):
@@ -528,26 +557,27 @@ class PaymentFailCallbackView(APIView):
         return self._handle(request)
 
     def _handle(self, request):
+        tran_id = request.data.get("tran_id") or request.query_params.get("tran_id")
+
         if not check_webhook_ip(
             request,
             allowlist=settings.SSLCOMMERZ_WEBHOOK_IP_ALLOWLIST,
             sandbox=settings.SSLCOMMERZ_IS_SANDBOX,
             gateway="sslcommerz",
         ):
-            return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
+            return _frontend_redirect("fail", tran_id)
 
-        tran_id = request.data.get("tran_id") or request.query_params.get("tran_id")
         if not tran_id:
-            return Response({"detail": "Missing tran_id."}, status=status.HTTP_400_BAD_REQUEST)
+            return _frontend_redirect("fail", tran_id)
 
         with transaction.atomic():
             try:
                 payment = Payment.objects.select_for_update().get(transaction_id=tran_id)
             except Payment.DoesNotExist:
-                return Response({"detail": "Unknown transaction."}, status=status.HTTP_404_NOT_FOUND)
+                return _frontend_redirect("fail", tran_id)
 
             if payment.status in TERMINAL_STATUSES:
-                return Response({"detail": "Already processed.", "transaction_id": tran_id})
+                return _frontend_redirect(_frontend_outcome(payment.status), tran_id)
 
             payment.failure_reason = "Gateway reported payment failure."
             payment.gateway_response = dict(request.data)
@@ -557,7 +587,7 @@ class PaymentFailCallbackView(APIView):
             )
 
         _notify_payment_result(payment, success=False)
-        return Response({"detail": "Payment marked as failed.", "transaction_id": tran_id})
+        return _frontend_redirect("fail", tran_id)
 
 
 class PaymentCancelCallbackView(APIView):
@@ -573,33 +603,34 @@ class PaymentCancelCallbackView(APIView):
         return self._handle(request)
 
     def _handle(self, request):
+        tran_id = request.data.get("tran_id") or request.query_params.get("tran_id")
+
         if not check_webhook_ip(
             request,
             allowlist=settings.SSLCOMMERZ_WEBHOOK_IP_ALLOWLIST,
             sandbox=settings.SSLCOMMERZ_IS_SANDBOX,
             gateway="sslcommerz",
         ):
-            return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
+            return _frontend_redirect("cancel", tran_id)
 
-        tran_id = request.data.get("tran_id") or request.query_params.get("tran_id")
         if not tran_id:
-            return Response({"detail": "Missing tran_id."}, status=status.HTTP_400_BAD_REQUEST)
+            return _frontend_redirect("cancel", tran_id)
 
         with transaction.atomic():
             try:
                 payment = Payment.objects.select_for_update().get(transaction_id=tran_id)
             except Payment.DoesNotExist:
-                return Response({"detail": "Unknown transaction."}, status=status.HTTP_404_NOT_FOUND)
+                return _frontend_redirect("cancel", tran_id)
 
             if payment.status in TERMINAL_STATUSES:
-                return Response({"detail": "Already processed.", "transaction_id": tran_id})
+                return _frontend_redirect(_frontend_outcome(payment.status), tran_id)
 
             payment.gateway_response = dict(request.data)
             payment.transition_status(
                 Payment.Status.CANCELLED, changed_by="system", extra_update_fields=["gateway_response"],
             )
 
-        return Response({"detail": "Payment cancelled.", "transaction_id": tran_id})
+        return _frontend_redirect("cancel", tran_id)
 
 
 class BkashCallbackView(APIView):
@@ -628,28 +659,27 @@ class BkashCallbackView(APIView):
             sandbox=settings.BKASH_IS_SANDBOX,
             gateway="bkash",
         ):
-            return self._redirect("failed", tran_id)
+            return _frontend_redirect("fail", tran_id)
 
         if not tran_id or not payment_id:
-            return self._redirect("failed", tran_id)
+            return _frontend_redirect("fail", tran_id)
 
         try:
             payment = Payment.objects.get(transaction_id=tran_id)
         except Payment.DoesNotExist:
-            return self._redirect("failed", tran_id)
+            return _frontend_redirect("fail", tran_id)
 
         # Idempotency fast path — mirrors the SSLCommerz callback: once
         # settled, no further callback (genuine retry or forged replay) may
         # touch this payment again.
         if payment.status in TERMINAL_STATUSES:
-            outcome = "success" if payment.status == Payment.Status.SUCCESS else "failed"
-            return self._redirect(outcome, tran_id)
+            return _frontend_redirect(_frontend_outcome(payment.status), tran_id)
 
         try:
             query_result = bkash_service.query_payment(payment_id)
         except BkashError as exc:
             logger.error("bKash query_payment failed for tran_id=%s: %s", tran_id, exc)
-            return self._redirect("failed", tran_id)
+            return _frontend_redirect("fail", tran_id)
 
         transaction_status = query_result.get("transactionStatus")
 
@@ -662,7 +692,7 @@ class BkashCallbackView(APIView):
                 try:
                     payment = Payment.objects.select_for_update().get(transaction_id=tran_id)
                 except Payment.DoesNotExist:
-                    return self._redirect("failed", tran_id)
+                    return _frontend_redirect("fail", tran_id)
                 if payment.status not in TERMINAL_STATUSES:
                     payment.failure_reason = f"bKash transactionStatus={transaction_status}"
                     payment.gateway_response = {**payment.gateway_response, "query": query_result}
@@ -673,7 +703,7 @@ class BkashCallbackView(APIView):
                     mutated = True
             if mutated:
                 _notify_payment_result(payment, success=False)
-            return self._redirect("failed", tran_id)
+            return _frontend_redirect("fail", tran_id)
 
         # bKash confirms the checkout was completed — finalize it by
         # executing the payment (bKash's two-step tokenized checkout flow).
@@ -681,7 +711,7 @@ class BkashCallbackView(APIView):
             execute_result = bkash_service.execute_payment(payment_id)
         except BkashError as exc:
             logger.error("bKash execute_payment failed for tran_id=%s: %s", tran_id, exc)
-            return self._redirect("failed", tran_id)
+            return _frontend_redirect("fail", tran_id)
 
         if execute_result.get("transactionStatus") != "Completed":
             mutated = False
@@ -689,7 +719,7 @@ class BkashCallbackView(APIView):
                 try:
                     payment = Payment.objects.select_for_update().get(transaction_id=tran_id)
                 except Payment.DoesNotExist:
-                    return self._redirect("failed", tran_id)
+                    return _frontend_redirect("fail", tran_id)
                 if payment.status not in TERMINAL_STATUSES:
                     payment.failure_reason = execute_result.get("statusMessage") or "bKash execute did not complete."
                     payment.gateway_response = {**payment.gateway_response, "execute": execute_result}
@@ -700,19 +730,18 @@ class BkashCallbackView(APIView):
                     mutated = True
             if mutated:
                 _notify_payment_result(payment, success=False)
-            return self._redirect("failed", tran_id)
+            return _frontend_redirect("fail", tran_id)
 
         with transaction.atomic():
             try:
                 payment = Payment.objects.select_for_update().get(transaction_id=tran_id)
             except Payment.DoesNotExist:
-                return self._redirect("failed", tran_id)
+                return _frontend_redirect("fail", tran_id)
 
             # Re-check under the row lock in case a concurrent callback hit
             # already settled this transaction while we were talking to bKash.
             if payment.status in TERMINAL_STATUSES:
-                outcome = "success" if payment.status == Payment.Status.SUCCESS else "failed"
-                return self._redirect(outcome, tran_id)
+                return _frontend_redirect(_frontend_outcome(payment.status), tran_id)
 
             executed_amount = execute_result.get("amount")
             if executed_amount is not None and abs(float(executed_amount) - float(payment.amount)) > 0.01:
@@ -726,7 +755,7 @@ class BkashCallbackView(APIView):
                 )
                 logger.error("bKash amount mismatch on tran_id=%s", tran_id)
                 _notify_payment_result(payment, success=False)
-                return self._redirect("failed", tran_id)
+                return _frontend_redirect("fail", tran_id)
 
             payment.gateway_transaction_id = execute_result.get("trxID", "")
             payment.gateway_response = {**payment.gateway_response, "execute": execute_result}
@@ -737,11 +766,4 @@ class BkashCallbackView(APIView):
             _apply_success_side_effects(payment)
 
         _notify_payment_result(payment, success=True)
-        return self._redirect("success", tran_id)
-
-    @staticmethod
-    def _redirect(outcome: str, tran_id: str | None):
-        url = f"{settings.FRONTEND_URL}/payment/{outcome}"
-        if tran_id:
-            url += f"?transaction_id={tran_id}"
-        return redirect(url)
+        return _frontend_redirect("success", tran_id)

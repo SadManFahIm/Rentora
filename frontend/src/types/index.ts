@@ -106,6 +106,9 @@ export interface Booking extends Room {
   date: string;
   checkIn: string;
   monthlyRent: number;
+  securityDepositAmount: number;
+  securityDepositPaid: boolean;
+  securityDepositRefunded: boolean;
 }
 
 // ---- Search / filter state ----
@@ -170,3 +173,70 @@ export interface DashboardStats {
   profile_completion: number;
   landlord?: DashboardLandlordStats;
 }
+
+// ---- Payments (Phase 5) ----
+
+/** Gateways a payment can actually be *initiated* through from the UI. */
+export type PaymentGateway = "sslcommerz" | "bkash";
+
+export type PaymentMethod = PaymentGateway | "nagad" | "manual";
+
+export type PaymentType = "booking_deposit" | "monthly_rent" | "security_deposit";
+
+export type PaymentStatus =
+  | "initiated"
+  | "pending"
+  | "success"
+  | "failed"
+  | "cancelled"
+  | "refunded";
+
+export interface Payment {
+  id: number;
+  bookingId: number;
+  amount: number;
+  method: PaymentMethod;
+  type: PaymentType;
+  status: PaymentStatus;
+  transactionId: string;
+  gatewayTransactionId: string;
+  failureReason: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Filters as sent to the service layer — every field optional. */
+export interface PaymentFilters {
+  status?: PaymentStatus;
+  method?: PaymentMethod;
+  type?: PaymentType;
+  /** ISO date (YYYY-MM-DD). */
+  dateFrom?: string;
+  /** ISO date (YYYY-MM-DD). */
+  dateTo?: string;
+}
+
+export interface PaymentSummary {
+  totalPaid: number;
+  totalPending: number;
+  totalRefunded: number;
+  countPaid: number;
+  countPending: number;
+  countRefunded: number;
+}
+
+export interface DepositStatus {
+  bookingId: number;
+  securityDepositAmount: number;
+  securityDepositPaid: boolean;
+  securityDepositRefunded: boolean;
+  requiredBeforeApproval: boolean;
+}
+
+export interface InitiatePaymentResult {
+  paymentUrl: string;
+  transactionId: string;
+}
+
+/** The outcome the backend redirects the browser back with after a gateway callback. */
+export type PaymentOutcome = "success" | "fail" | "cancel";
