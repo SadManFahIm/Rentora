@@ -52,3 +52,15 @@ CORS_ALLOWED_ORIGINS = [
     "https://www.rentora.com",
 ]
 CORS_ALLOW_CREDENTIALS = True
+
+# ============================================================
+# Django Channels — Redis channel layer (multi-process safe)
+# ============================================================
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [os.getenv("REDIS_URL", "redis://localhost:6379/0")],
+        },
+    }
+}
