@@ -2,6 +2,8 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    BkashCallbackView,
+    BkashInitiateView,
     PaymentCancelCallbackView,
     PaymentFailCallbackView,
     PaymentInitiateView,
@@ -19,4 +21,8 @@ urlpatterns = [
     path("sslcommerz/success/", PaymentSuccessCallbackView.as_view(), name="payment-sslcommerz-success"),
     path("sslcommerz/fail/", PaymentFailCallbackView.as_view(), name="payment-sslcommerz-fail"),
     path("sslcommerz/cancel/", PaymentCancelCallbackView.as_view(), name="payment-sslcommerz-cancel"),
+    path("bkash/initiate/", BkashInitiateView.as_view(), name="payment-bkash-initiate"),
+    path("bkash/callback/", BkashCallbackView.as_view(), name="payment-bkash-callback"),
+    # router last: provides "" (list), "<pk>/" (retrieve), "<pk>/refund/",
+    # and "<pk>/receipt/" (the last two via @action on PaymentViewSet).
 ] + router.urls
