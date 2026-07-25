@@ -20,6 +20,10 @@ load_dotenv(BASE_DIR / ".env")
 SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-change-me-in-production")
 
 INSTALLED_APPS = [
+    # Daphne must come before django.contrib.staticfiles so its ASGI-aware
+    # runserver replaces the default (WSGI) one.
+    "daphne",
+
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -29,6 +33,7 @@ INSTALLED_APPS = [
     "django.contrib.sites",
 
     # Third-party
+    "channels",
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
     "drf_spectacular",
@@ -47,6 +52,7 @@ INSTALLED_APPS = [
     "wishlist",
     "notifications",
     "dashboard",
+    "chat",
 ]
 
 MIDDLEWARE = [
@@ -79,6 +85,27 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "config.wsgi.application"
+ASGI_APPLICATION = "config.asgi.application"
+
+# ============================================================
+# Django Channels — channel layer
+# ============================================================
+# Dev defaults to the in-memory layer (single-process, no Redis). Production
+# overrides this with the Redis layer in prod.py. The env-driven REDIS_URL
+# lets a developer opt into Redis locally by setting CHANNELS_BACKEND=redis.
+if os.getenv("CHANNELS_BACKEND") == "redis":
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [os.getenv("REDIS_URL", "redis://localhost:6379/0")],
+            },
+        }
+    }
+else:
+    CHANNEL_LAYERS = {
+        "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"},
+    }
 
 AUTH_USER_MODEL = "users.User"
 
@@ -146,6 +173,16 @@ SPECTACULAR_SETTINGS = {
     "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],
     "SWAGGER_UI_SETTINGS": {"persistAuthorization": True},
     "COMPONENT_SPLIT_REQUEST": True,
+    # Distinct names for the two "room_type" enums (Room listing vs ChatRoom)
+    # so their differing choice sets don't collide during schema generation.
+    "ENUM_NAME_OVERRIDES": {
+        "ListingRoomTypeEnum": [
+            ("single", "Single"),
+            ("shared", "Shared"),
+            ("studio", "Studio"),
+        ],
+        "ChatRoomTypeEnum": [("direct", "Direct"), ("group", "Group")],
+    },
 }
 
 # ============================================================
