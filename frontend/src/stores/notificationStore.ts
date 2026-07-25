@@ -13,6 +13,9 @@ interface NotificationState {
   loading: boolean;
   /** Fetch the latest notifications + unread count from the backend. */
   fetch: () => Promise<void>;
+  /** Prepend a notification pushed live over the WebSocket. Deduplicates by
+   * id in case the same notification arrives twice (e.g. a reconnect). */
+  addNotification: (notification: Notification) => void;
   /** Mark every unread notification read (server + local). */
   markAllRead: () => Promise<void>;
   /** Mark a single notification read (server + local). */
@@ -42,6 +45,13 @@ export const useNotificationStore = create<NotificationState>()((set, get) => ({
     } finally {
       set({ loading: false });
     }
+  },
+
+  addNotification: (notification) => {
+    const { notifications } = get();
+    if (notifications.some((n) => n.id === notification.id)) return;
+    const next = [notification, ...notifications];
+    set({ notifications: next, unreadCount: countUnread(next) });
   },
 
   markAllRead: async () => {
