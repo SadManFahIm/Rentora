@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     "notifications",
     "dashboard",
     "chat",
+    "payments",
 ]
 
 MIDDLEWARE = [
@@ -259,3 +260,10 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = list(default_headers)
 if "authorization" not in CORS_ALLOW_HEADERS:
     CORS_ALLOW_HEADERS.append("authorization")
+
+# ============================================================
+# SSLCommerz (payments) — sandbox credentials only; never commit real keys.
+# ============================================================
+SSLCOMMERZ_STORE_ID = os.getenv("SSLCOMMERZ_STORE_ID", "")
+SSLCOMMERZ_STORE_PASSWORD = os.getenv("SSLCOMMERZ_STORE_PASSWORD", "")
+SSLCOMMERZ_IS_SANDBOX = os.getenv("SSLCOMMERZ_SANDBOX", "True") == "True"
