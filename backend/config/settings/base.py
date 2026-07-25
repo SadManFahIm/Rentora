@@ -267,3 +267,18 @@ if "authorization" not in CORS_ALLOW_HEADERS:
 SSLCOMMERZ_STORE_ID = os.getenv("SSLCOMMERZ_STORE_ID", "")
 SSLCOMMERZ_STORE_PASSWORD = os.getenv("SSLCOMMERZ_STORE_PASSWORD", "")
 SSLCOMMERZ_IS_SANDBOX = os.getenv("SSLCOMMERZ_SANDBOX", "True") == "True"
+
+# ============================================================
+# bKash Tokenized Checkout (payments) — sandbox credentials only.
+# ============================================================
+BKASH_APP_KEY = os.getenv("BKASH_APP_KEY", "")
+BKASH_APP_SECRET = os.getenv("BKASH_APP_SECRET", "")
+BKASH_USERNAME = os.getenv("BKASH_USERNAME", "")
+BKASH_PASSWORD = os.getenv("BKASH_PASSWORD", "")
+BKASH_SANDBOX_BASE_URL = os.getenv(
+    "BKASH_SANDBOX_BASE_URL", "https://tokenized.sandbox.bka.sh/v1.2.0-beta"
+)
+
+# Base URL of the frontend app — used to build the redirect target after a
+# bKash callback resolves (bKash itself only ever hits backend URLs).
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")

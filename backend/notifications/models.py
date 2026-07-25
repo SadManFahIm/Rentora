@@ -20,6 +20,7 @@ class Notification(models.Model):
         NEW_MESSAGE = "new_message", "New Message"
         PAYMENT_SUCCESS = "payment_success", "Payment Success"
         PAYMENT_FAILED = "payment_failed", "Payment Failed"
+        PAYMENT_REMINDER = "payment_reminder", "Payment Reminder"
         SYSTEM = "system", "System"
 
     user = models.ForeignKey(
