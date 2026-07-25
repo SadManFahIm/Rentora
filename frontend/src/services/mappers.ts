@@ -77,6 +77,9 @@ export interface ApiBooking {
   monthly_rent: string | number;
   agreement_signed: boolean;
   notes: string;
+  security_deposit_amount: string | number;
+  security_deposit_paid: boolean;
+  security_deposit_refunded: boolean;
   created_at: string;
 }
 
@@ -231,6 +234,9 @@ export function mapBooking(api: ApiBooking): Booking {
     date: formatDate(api.check_in),
     checkIn: api.check_in,
     monthlyRent: Number(api.monthly_rent),
+    securityDepositAmount: Number(api.security_deposit_amount ?? 0),
+    securityDepositPaid: api.security_deposit_paid ?? false,
+    securityDepositRefunded: api.security_deposit_refunded ?? false,
   };
 }
 
