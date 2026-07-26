@@ -29,9 +29,9 @@ jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
 msgpack==1.2.1
 narwhals==2.24.0
-numpy==2.5.1
+numpy==2.4.6
 packaging==26.2
-pandas==3.0.5
+pandas==2.3.3
 pillow==12.3.0
 psycopg2-binary==2.9.12
 pycparser==3.0
@@ -40,13 +40,14 @@ pyOpenSSL==26.3.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
 PyYAML==6.0.3
+pytz==2026.3.post1
 redis==8.0.1
 referencing==0.37.0
 reportlab==5.0.0
 requests==2.34.2
 rpds-py==2026.6.3
 scikit-learn==1.9.0
-scipy==1.18.0
+scipy==1.17.1
 service-identity==26.1.0
 six==1.17.0
 sqlparse==0.5.5
