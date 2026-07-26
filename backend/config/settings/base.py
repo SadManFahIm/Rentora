@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     "chat",
     "payments",
     "recommendations",
+    "pricing",
 ]
 
 MIDDLEWARE = [

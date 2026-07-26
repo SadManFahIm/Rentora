@@ -63,6 +63,10 @@ class RoomDetailSerializer(serializers.ModelSerializer):
 
     images = RoomImageSerializer(many=True, read_only=True)
     owner = RoomOwnerSerializer(read_only=True)
+    price_insight = serializers.SerializerMethodField(
+        help_text="How this room's price compares to its market segment; null if there "
+        "isn't yet a big-enough market sample for its (area, room_type) to compare against."
+    )
 
     class Meta:
         model = Room
@@ -86,9 +90,22 @@ class RoomDetailSerializer(serializers.ModelSerializer):
             "total_reviews",
             "verified",
             "images",
+            "price_insight",
             "created_at",
             "updated_at",
         ]
+
+    def get_price_insight(self, obj):
+        # Imported lazily so `rooms` never has to import `pricing` at module
+        # load time — keeps `pricing` an optional, bolt-on concern rather
+        # than a hard dependency of the rooms app.
+        from pricing.serializers import PriceInsightSerializer
+        from pricing.services.insight import get_price_insight
+
+        insight = get_price_insight(obj)
+        if insight is None:
+            return None
+        return PriceInsightSerializer(insight).data
 
 
 class RoomCreateUpdateSerializer(serializers.ModelSerializer):
