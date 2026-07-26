@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     "dashboard",
     "chat",
     "payments",
+    "recommendations",
 ]
 
 MIDDLEWARE = [
@@ -66,6 +67,7 @@ MIDDLEWARE = [
     "allauth.account.middleware.AccountMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "recommendations.middleware.RoomViewActivityMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
