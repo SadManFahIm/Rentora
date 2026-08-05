@@ -3,9 +3,72 @@ from rest_framework import serializers
 
 from config.sanitizers import sanitize_text
 
+from .geo import haversine_km, landmarks_within, nearest_landmark
+from .landmarks import ALL_LANDMARKS, METRO_STATIONS, UNIVERSITIES, Landmark
 from .models import Room, RoomImage
 
 User = get_user_model()
+
+
+class LandmarkSerializer(serializers.Serializer):
+    """A single landmark (university or metro station) from the static
+    reference set — used by the `/rooms/landmarks/` map-layer endpoint."""
+
+    key = serializers.CharField()
+    name = serializers.CharField()
+    kind = serializers.SerializerMethodField()
+    lat = serializers.FloatField()
+    lng = serializers.FloatField()
+
+    def get_kind(self, obj: Landmark) -> str:
+        return obj.kind.value
+
+
+def _nearby_payload(pair: tuple[Landmark, float] | None) -> dict | None:
+    """Shape one (landmark, distance) result for API output, or None."""
+    if pair is None:
+        return None
+    landmark, distance_km = pair
+    return {
+        "key": landmark.key,
+        "name": landmark.name,
+        "kind": landmark.kind.value,
+        "distance_km": round(distance_km, 2),
+    }
+
+
+class RoomProximityMixin(serializers.Serializer):
+    """Adds map/proximity fields shared by the list and detail representations.
+
+    - `proximity`: the nearest university and nearest metro station to the
+      room, each with its distance in km (or null if somehow no landmark
+      exists). Computed in pure Python over the small static landmark set, so
+      it adds no queries.
+    - `distance_km`: distance from the *query's* reference point — populated
+      only when the request carried one (`near_lat`/`near_lng` or
+      `near_landmark`), so a client can render "2.3 km away". Null otherwise.
+    """
+
+    proximity = serializers.SerializerMethodField(
+        help_text="Nearest university and metro station to this room, each with distance in km."
+    )
+    distance_km = serializers.SerializerMethodField(
+        help_text="Distance (km) from the query's reference point; null unless the "
+        "request supplied near_lat/near_lng or near_landmark."
+    )
+
+    def get_proximity(self, obj: Room) -> dict:
+        lat, lng = float(obj.lat), float(obj.lng)
+        return {
+            "nearest_university": _nearby_payload(nearest_landmark(lat, lng, UNIVERSITIES)),
+            "nearest_metro": _nearby_payload(nearest_landmark(lat, lng, METRO_STATIONS)),
+        }
+
+    def get_distance_km(self, obj: Room) -> float | None:
+        reference = self.context.get("reference_point")
+        if not reference:
+            return None
+        return round(haversine_km(reference[0], reference[1], float(obj.lat), float(obj.lng)), 2)
 
 
 class RoomImageSerializer(serializers.ModelSerializer):
@@ -23,7 +86,7 @@ class RoomOwnerSerializer(serializers.ModelSerializer):
         fields = ["id", "username", "first_name", "last_name", "avatar", "phone", "nid_verified"]
 
 
-class RoomListSerializer(serializers.ModelSerializer):
+class RoomListSerializer(RoomProximityMixin, serializers.ModelSerializer):
     """Representation used for room list/browse and anywhere a room summary is
     embedded (wishlist entries, bookings). Includes the fields the frontend
     card *and* detail modal render, so the list endpoint needs no follow-up
@@ -54,11 +117,13 @@ class RoomListSerializer(serializers.ModelSerializer):
             "verified",
             "owner",
             "images",
+            "proximity",
+            "distance_km",
             "created_at",
         ]
 
 
-class RoomDetailSerializer(serializers.ModelSerializer):
+class RoomDetailSerializer(RoomProximityMixin, serializers.ModelSerializer):
     """Full room representation, including nested images and owner profile."""
 
     images = RoomImageSerializer(many=True, read_only=True)
@@ -67,6 +132,13 @@ class RoomDetailSerializer(serializers.ModelSerializer):
         help_text="How this room's price compares to its market segment; null if there "
         "isn't yet a big-enough market sample for its (area, room_type) to compare against."
     )
+    nearby_landmarks = serializers.SerializerMethodField(
+        help_text="All universities and metro stations within NEARBY_RADIUS_KM of the room, nearest first."
+    )
+
+    # Radius (km) used to populate `nearby_landmarks` on the detail view — a
+    # short walk/rickshaw ride, the distance a tenant actually cares about.
+    NEARBY_RADIUS_KM = 3.0
 
     class Meta:
         model = Room
@@ -91,6 +163,9 @@ class RoomDetailSerializer(serializers.ModelSerializer):
             "verified",
             "images",
             "price_insight",
+            "proximity",
+            "nearby_landmarks",
+            "distance_km",
             "created_at",
             "updated_at",
         ]
@@ -106,6 +181,12 @@ class RoomDetailSerializer(serializers.ModelSerializer):
         if insight is None:
             return None
         return PriceInsightSerializer(insight).data
+
+    def get_nearby_landmarks(self, obj: Room) -> list[dict]:
+        within = landmarks_within(
+            float(obj.lat), float(obj.lng), self.NEARBY_RADIUS_KM, ALL_LANDMARKS
+        )
+        return [_nearby_payload(pair) for pair in within]
 
 
 class RoomCreateUpdateSerializer(serializers.ModelSerializer):
