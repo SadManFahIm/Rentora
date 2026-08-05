@@ -103,6 +103,10 @@ Rentora/
 │   ├── wishlist/              # Wishlist toggle
 │   ├── notifications/         # Auto-notifications + API
 │   ├── dashboard/             # Aggregated stats endpoint
+│   ├── chat/                  # Real-time chat (Channels, WebSocket, presence)
+│   ├── payments/              # SSLCommerz + bKash, refunds, invoices, receipts
+│   ├── recommendations/       # Content-based + collaborative + hybrid engine
+│   ├── pricing/               # Market stats + price insight + fair-price prediction
 │   ├── manage.py
 │   └── requirements.txt
 │
@@ -223,6 +227,40 @@ Frontend runs at `http://localhost:3000`
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
 | GET | `/api/v1/dashboard/stats/` | Auth | User stats (tenant + landlord) |
+
+### Chat
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| GET/POST | `/api/v1/chat/rooms/` | Auth | List / create chat rooms |
+| GET | `/api/v1/chat/rooms/:id/messages/` | Auth | Messages in a room |
+| POST | `/api/v1/chat/rooms/:id/messages/` | Auth | Send a message |
+| GET | `/api/v1/chat/online-status/` | Auth | Online status of users |
+| POST | `/api/v1/chat/upload/` | Auth | Upload a chat attachment |
+| WS | `/ws/chat/:room_id/` | Auth | Real-time chat socket (typing, read receipts) |
+
+### Payments
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| POST | `/api/v1/payments/initiate/` | Auth | Initiate a payment (SSLCommerz) |
+| POST | `/api/v1/payments/bkash/initiate/` | Auth | Initiate a bKash payment |
+| POST | `/api/v1/payments/bkash/callback/` | Public | bKash gateway callback |
+| POST | `/api/v1/payments/sslcommerz/success\|fail\|cancel/` | Public | SSLCommerz callbacks |
+| GET | `/api/v1/payments/` | Auth | My payment history |
+| GET | `/api/v1/payments/:id/` | Auth | Payment detail / receipt |
+| POST | `/api/v1/payments/:id/refund/` | Auth | Request a refund |
+| GET | `/api/v1/payments/summary/` | Auth | Payment summary |
+
+### Recommendations
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| GET | `/api/v1/recommendations/?limit=N` | Auth | Hybrid room recommendations |
+
+### Pricing (AI)
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| POST | `/api/v1/pricing/predict/` | Auth | Predict fair price for a new listing |
+| GET | `/api/v1/pricing/insight/:room_id/` | Public | Price insight vs market for a room |
+| GET | `/api/v1/pricing/market-stats/?area=X&room_type=Y` | Public | Raw market stats |
 
 ### Documentation
 | Endpoint | Description |
