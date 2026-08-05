@@ -249,9 +249,9 @@ Frontend runs at `http://localhost:3000`
 - [x] **Phase 1-2:** Frontend prototype (React, mock data)
 - [x] **Phase 2.5:** Frontend refactor (Vite, TypeScript, Tailwind, Zustand, React Query)
 - [x] **Phase 3:** Django backend (6 apps, JWT auth, full REST API, frontend integration)
-- [ ] **Phase 4:** Real-time chat (Django Channels, WebSocket) — *in progress*
-- [ ] **Phase 5:** Payment integration (SSLCommerz + bKash)
-- [ ] **Phase 6:** AI features (recommendation engine, fraud detection, price prediction)
+- [x] **Phase 4:** Real-time chat (Django Channels, WebSocket — typing indicators, online status, read receipts, file upload, search) + real-time notifications
+- [x] **Phase 5:** Payment integration (SSLCommerz + bKash, refunds, PDF receipts, invoices, security deposits, payment schedules, webhook security + audit log, full frontend integration)
+- [x] **Phase 6:** AI features (recommendation engine — content-based + collaborative + hybrid; price insight + fair-price prediction) — *fraud detection pending*
 - [ ] **Phase 7:** Map integration (Leaflet.js, heatmap, university/metro proximity)
 - [ ] **Phase 8:** Docker + CI/CD + deployment
 
