@@ -184,6 +184,63 @@ Frontend runs at `http://localhost:3000`
 
 ---
 
+## 🧹 Lint & Format
+
+Both codebases are enforced by **CI** (GitHub Actions) **and** a **pre-commit hook** — style drift fails the pipeline automatically.
+
+### Backend (ruff)
+
+```bash
+cd backend
+
+# Lint
+venv/Scripts/python.exe -m ruff check .
+
+# Auto-fix what's safe to fix
+venv/Scripts/python.exe -m ruff check --fix .
+
+# Format (black-compatible) + verify
+venv/Scripts/python.exe -m ruff format .
+venv/Scripts/python.exe -m ruff format --check .
+```
+
+### Frontend (ESLint + Prettier)
+
+```bash
+cd frontend
+
+# Lint
+npm run lint
+
+# Format / verify
+npm run format
+npm run format:check
+```
+
+### Pre-commit hook (husky + lint-staged)
+
+Installed automatically by `npm install` (`prepare` script). On every commit it runs, **only on staged files**:
+
+| Staged file | Runs |
+|---|---|
+| `backend/**/*.py` | `ruff check --fix` + `ruff format` |
+| `frontend/**/*.{ts,tsx}` | `prettier --write` + `eslint` |
+| `frontend/**/*.{css,json,md,html}` | `prettier --write` |
+
+If a check fails, the commit is **blocked** — fix the reported issues and commit again. To bypass intentionally (rare), use `git commit --no-verify`.
+
+### Coverage
+
+```bash
+# Backend (threshold: 50% lines, set in backend/.coveragerc)
+cd backend && venv/Scripts/python.exe -m coverage run manage.py test && venv/Scripts/python.exe -m coverage report
+
+# Frontend (threshold: 55% lines, set in frontend/vite.config.ts)
+cd frontend && npm run test:coverage
+```
+
+---
+
 ## 📡 API Endpoints
 
 ### Authentication

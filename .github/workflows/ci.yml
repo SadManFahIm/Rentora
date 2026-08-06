@@ -39,8 +39,9 @@ jobs:
       - name: Verify no pending migrations
         run: python manage.py makemigrations --check --dry-run
 
-      - name: Run tests
-        run: python manage.py test
+      - name: Run tests with coverage
+        # fail_under=55 lives in backend/.coveragerc
+        run: coverage run manage.py test && coverage report
 
   frontend:
     name: Frontend (Vitest + build)
@@ -69,8 +70,8 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
-      - name: Run unit tests
-        run: npm test
+      - name: Run unit tests with coverage
+        run: npm run test:coverage
 
       - name: Build
         run: npm run build
