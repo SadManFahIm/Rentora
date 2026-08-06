@@ -18,6 +18,13 @@ interface AIFeature {
 
 function HeroSection() {
   const navigate = useNavigate();
+  const [query, setQuery] = useState("");
+
+  const handleSearch = () => {
+    const q = query.trim();
+    navigate(q ? `/rooms?q=${encodeURIComponent(q)}` : "/rooms");
+  };
+
   return (
     <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-10 px-4 py-12 md:gap-16 md:px-6 md:py-16 lg:grid-cols-2 lg:px-8">
       <div>
@@ -34,8 +41,13 @@ function HeroSection() {
           <Input
             className="h-11 border-none bg-transparent shadow-none focus-visible:ring-0"
             placeholder="Search area, room type..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSearch();
+            }}
           />
-          <Button className="h-11 shrink-0 bg-orange-600 text-white hover:bg-orange-700" onClick={() => navigate("/rooms")}>
+          <Button className="h-11 shrink-0 bg-orange-600 text-white hover:bg-orange-700" onClick={handleSearch}>
             Search Rooms
           </Button>
         </div>
