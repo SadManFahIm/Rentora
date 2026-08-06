@@ -18,3 +18,5 @@ backend/staticfiles/
 .vscode/
 .idea/
 
+# Local tooling
+.tmp-chrome-profile/
