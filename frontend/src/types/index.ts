@@ -240,3 +240,119 @@ export interface InitiatePaymentResult {
 
 /** The outcome the backend redirects the browser back with after a gateway callback. */
 export type PaymentOutcome = "success" | "fail" | "cancel";
+
+// ---- Roommate matching (Phase: roommate matching) ----
+
+export type LifestyleTag =
+  | "early_bird"
+  | "night_owl"
+  | "non_smoker"
+  | "smoker"
+  | "student"
+  | "working_professional"
+  | "quiet"
+  | "social"
+  | "veggie"
+  | "pet_friendly"
+  | "clean"
+  | "guest_friendly";
+
+export interface RoommateProfile {
+  id: number;
+  username: string;
+  budgetMin: number;
+  budgetMax: number;
+  preferredArea: string;
+  roomTypePref: string;
+  genderPref: string;
+  lifestyle: LifestyleTag[];
+  occupation: string;
+  bio: string;
+  moveInDate: string | null;
+  isLooking: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The public view of another user's profile, embedded in a match. */
+export interface RoommateProfilePublic extends RoommateProfile {
+  user: {
+    id: number;
+    username: string;
+    first_name: string;
+    last_name: string;
+    avatar: string | null;
+    phone: string;
+    nid_verified: boolean;
+  };
+}
+
+export interface RoommateMatch {
+  score: number;
+  reasons: string[];
+  profile: RoommateProfilePublic;
+}
+
+export type RoommateRequestStatus = "pending" | "approved" | "rejected";
+
+export interface RoommateRequest {
+  id: number;
+  sender: RoommateProfilePublic["user"];
+  receiver: RoommateProfilePublic["user"];
+  message: string;
+  status: RoommateRequestStatus;
+  statusDisplay: string;
+  direction: "incoming" | "outgoing" | "";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RoommateProfilePayload {
+  budgetMin: number;
+  budgetMax: number;
+  preferredArea: string;
+  roomTypePref: string;
+  genderPref: string;
+  lifestyle: LifestyleTag[];
+  occupation: string;
+  bio: string;
+  moveInDate: string | null;
+  isLooking: boolean;
+}
+
+// ---- Fraud detection ----
+
+export type FraudSeverity = "clean" | "low" | "medium" | "high";
+export type FraudReportStatus = "open" | "reviewed" | "dismissed";
+
+export interface FraudStatus {
+  roomId: number;
+  severity: FraudSeverity;
+  score: number;
+  flagged: boolean;
+  message: string;
+}
+
+export interface FraudSignal {
+  id: number;
+  detector: string;
+  detectorDisplay: string;
+  severity: FraudSeverity;
+  message: string;
+  detail: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface FraudReport {
+  id: number;
+  room: Room;
+  severity: FraudSeverity;
+  severityDisplay: string;
+  status: FraudReportStatus;
+  statusDisplay: string;
+  score: number;
+  summary: string;
+  signals: FraudSignal[];
+  createdAt: string;
+  updatedAt: string;
+}

@@ -56,6 +56,8 @@ urlpatterns = [
     path("api/v1/payments/", include("payments.urls")),
     path("api/v1/recommendations/", include("recommendations.urls")),
     path("api/v1/pricing/", include("pricing.urls")),
+    path("api/v1/roommates/", include("roommates.urls")),
+    path("api/v1/fraud/", include("fraud.urls")),
 ]
 
 if settings.DEBUG:
