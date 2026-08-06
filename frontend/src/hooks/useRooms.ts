@@ -12,11 +12,11 @@ export const roomKeys = {
   detail: (id: number) => [...roomKeys.all, "detail", id] as const,
 };
 
-/** Fetch the room list, optionally filtered. */
+/** Fetch the room list, optionally filtered (server-side). */
 export function useRooms(filters: RoomFilters = {}) {
   return useQuery<Room[]>({
     queryKey: roomKeys.list(filters),
-    queryFn: async () => (await roomService.getRooms(filters)).data,
+    queryFn: () => roomService.getRooms(filters),
     staleTime: 60_000,
   });
 }
@@ -25,7 +25,7 @@ export function useRooms(filters: RoomFilters = {}) {
 export function useRoom(id: number | null | undefined) {
   return useQuery<Room>({
     queryKey: roomKeys.detail(id ?? -1),
-    queryFn: async () => (await roomService.getRoomById(id as number)).data,
+    queryFn: () => roomService.getRoomById(id as number),
     enabled: id != null,
   });
 }

@@ -23,13 +23,25 @@ export interface Room {
   description: string;
   size: number;
   owner: string;
+  ownerId: number | null;
   ownerAvatar: string;
   verified: boolean;
 }
 
+export type UserRole = "tenant" | "landlord" | "admin";
+
 export interface User {
+  id?: number;
   name: string;
   email: string;
+  username?: string;
+  firstName?: string;
+  lastName?: string;
+  role?: UserRole;
+  avatar?: string | null;
+  phone?: string;
+  bio?: string;
+  nidVerified?: boolean;
 }
 
 export interface Notification {
@@ -39,13 +51,43 @@ export interface Notification {
   time: string;
 }
 
-export interface Message {
+// ---- Chat (real-time, backed by chat/ REST + WebSocket) ----
+export interface ChatUser {
   id: number;
-  from: string;
-  avatar: string;
-  text: string;
-  time: string;
-  mine: boolean;
+  username: string;
+  firstName: string;
+  lastName: string;
+  avatar: string | null;
+}
+
+export type ChatMessageType = "text" | "image" | "file" | "system";
+export type ChatMessageStatus = "sent" | "delivered" | "read";
+
+export interface ChatMessage {
+  id: number;
+  chatRoomId: number;
+  sender: ChatUser;
+  content: string;
+  messageType: ChatMessageType;
+  fileUrl: string;
+  status: ChatMessageStatus;
+  createdAt: string;
+}
+
+export type ChatRoomType = "direct" | "group";
+
+export interface ChatRoom {
+  id: number;
+  roomType: ChatRoomType;
+  listingId: number | null;
+  listingTitle: string | null;
+  participants: ChatUser[];
+  otherParticipant: ChatUser | null;
+  isOtherUserOnline: boolean | null;
+  lastMessage: ChatMessage | null;
+  unreadCount: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Review {
@@ -56,11 +98,17 @@ export interface Review {
   date: string;
 }
 
-export type BookingStatus = "approved" | "pending" | "rejected";
+export type BookingStatus = "approved" | "pending" | "rejected" | "cancelled";
 
 export interface Booking extends Room {
+  bookingId: number;
   status: BookingStatus;
   date: string;
+  checkIn: string;
+  monthlyRent: number;
+  securityDepositAmount: number;
+  securityDepositPaid: boolean;
+  securityDepositRefunded: boolean;
 }
 
 // ---- Search / filter state ----
@@ -97,13 +145,98 @@ export interface RegisterPayload {
   password: string;
 }
 
-export interface AuthResponse {
+export interface AuthResult {
   user: User;
-  token: string;
-  refreshToken: string;
+  access: string;
+  refresh: string;
 }
 
 export interface CreateBookingPayload {
   roomId: number;
-  date: string;
+  /** ISO date (YYYY-MM-DD) for check-in. */
+  checkIn: string;
 }
+
+export interface DashboardLandlordStats {
+  total_listings: number;
+  total_bookings_received: number;
+  avg_rating: number;
+  total_revenue: number;
+}
+
+export interface DashboardStats {
+  saved_rooms_count: number;
+  active_bookings: number;
+  pending_bookings: number;
+  total_reviews_given: number;
+  unread_notifications: number;
+  profile_completion: number;
+  landlord?: DashboardLandlordStats;
+}
+
+// ---- Payments (Phase 5) ----
+
+/** Gateways a payment can actually be *initiated* through from the UI. */
+export type PaymentGateway = "sslcommerz" | "bkash";
+
+export type PaymentMethod = PaymentGateway | "nagad" | "manual";
+
+export type PaymentType = "booking_deposit" | "monthly_rent" | "security_deposit";
+
+export type PaymentStatus =
+  | "initiated"
+  | "pending"
+  | "success"
+  | "failed"
+  | "cancelled"
+  | "refunded";
+
+export interface Payment {
+  id: number;
+  bookingId: number;
+  amount: number;
+  method: PaymentMethod;
+  type: PaymentType;
+  status: PaymentStatus;
+  transactionId: string;
+  gatewayTransactionId: string;
+  failureReason: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Filters as sent to the service layer — every field optional. */
+export interface PaymentFilters {
+  status?: PaymentStatus;
+  method?: PaymentMethod;
+  type?: PaymentType;
+  /** ISO date (YYYY-MM-DD). */
+  dateFrom?: string;
+  /** ISO date (YYYY-MM-DD). */
+  dateTo?: string;
+}
+
+export interface PaymentSummary {
+  totalPaid: number;
+  totalPending: number;
+  totalRefunded: number;
+  countPaid: number;
+  countPending: number;
+  countRefunded: number;
+}
+
+export interface DepositStatus {
+  bookingId: number;
+  securityDepositAmount: number;
+  securityDepositPaid: boolean;
+  securityDepositRefunded: boolean;
+  requiredBeforeApproval: boolean;
+}
+
+export interface InitiatePaymentResult {
+  paymentUrl: string;
+  transactionId: string;
+}
+
+/** The outcome the backend redirects the browser back with after a gateway callback. */
+export type PaymentOutcome = "success" | "fail" | "cancel";

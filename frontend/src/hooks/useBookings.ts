@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { bookingService } from "../services/bookingService";
-import type { Booking, CreateBookingPayload } from "../types";
+import { getApiErrorMessage } from "../services/errors";
+import type { Booking, BookingStatus, CreateBookingPayload } from "../types";
 
 // ============================================================
 // BOOKING QUERY / MUTATION HOOKS
@@ -15,7 +17,7 @@ export const bookingKeys = {
 export function useBookings() {
   return useQuery<Booking[]>({
     queryKey: bookingKeys.mine(),
-    queryFn: async () => (await bookingService.getMyBookings()).data,
+    queryFn: () => bookingService.getMyBookings(),
   });
 }
 
@@ -23,10 +25,29 @@ export function useBookings() {
 export function useCreateBooking() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: CreateBookingPayload) =>
-      (await bookingService.createBooking(payload)).data,
+    mutationFn: (payload: CreateBookingPayload) =>
+      bookingService.createBooking(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: bookingKeys.mine() });
+      toast.success("Booking request sent!");
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, "Could not create booking."));
+    },
+  });
+}
+
+/** Approve / reject / cancel a booking. */
+export function useUpdateBookingStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ bookingId, status }: { bookingId: number; status: BookingStatus }) =>
+      bookingService.updateBookingStatus(bookingId, status),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: bookingKeys.mine() });
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, "Could not update booking."));
     },
   });
 }
