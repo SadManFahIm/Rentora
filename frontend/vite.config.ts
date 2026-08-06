@@ -18,7 +18,7 @@ export default defineConfig({
     include: ["src/**/*.test.{ts,tsx}"],
     coverage: {
       provider: "v8",
-      exclude: ["**/*.test.ts", "**/node_modules/**"],
+      exclude: ["**/*.test.{ts,tsx}"],
       thresholds: {
         lines: 55,
         statements: 50,
