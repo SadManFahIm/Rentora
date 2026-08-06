@@ -152,6 +152,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Download backend coverage
         uses: actions/download-artifact@v4
@@ -165,26 +167,29 @@ jobs:
           name: coverage-frontend
           path: coverage/frontend
 
-      - name: Fetch existing history from coverage-history branch
+      - name: Fetch previous history
         run: |
           git fetch origin coverage-history || true
-          if git ls-tree -r --name-only origin/coverage-history -- docs/coverage/history.csv 2>/dev/null | grep -q history.csv; then
-            mkdir -p docs/coverage
-            git show origin/coverage-history:docs/coverage/history.csv > docs/coverage/history.csv
+          mkdir -p coverage-site
+          if git cat-file -e origin/coverage-history:history.csv 2>/dev/null; then
+            git show origin/coverage-history:history.csv > coverage-site/history.csv
           fi
 
       - name: Update coverage history
         run: |
-          python3 scripts/coverage_history.py coverage/backend/coverage.xml coverage/frontend/cobertura-coverage.xml docs/coverage
+          python3 scripts/coverage_history.py coverage/backend/coverage.xml coverage/frontend/cobertura-coverage.xml coverage-site
 
       - name: Deploy to coverage-history branch
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: coverage-history
-          publish_dir: docs/coverage
-          keep_files: true
-          force_orphan: false
-          user_name: github-actions[bot]
-          user_email: github-actions[bot]@users.noreply.github.com
-          commit_message: "coverage: update history for ${{ github.sha }}"
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan coverage-history
+          git rm -rf . --quiet 2>/dev/null || true
+          cp coverage-site/history.csv coverage-site/index.html ./
+          git add history.csv index.html
+          if git diff --cached --quiet; then
+            echo "No coverage changes — skipping commit"
+            exit 0
+          fi
+          git commit -m "coverage: update history for ${{ github.sha }}" --quiet
+          git push origin coverage-history --force
