@@ -21,6 +21,9 @@ class Notification(models.Model):
         PAYMENT_SUCCESS = "payment_success", "Payment Success"
         PAYMENT_FAILED = "payment_failed", "Payment Failed"
         PAYMENT_REMINDER = "payment_reminder", "Payment Reminder"
+        ROOMMATE_REQUEST = "roommate_request", "Roommate Request"
+        ROOMMATE_APPROVED = "roommate_approved", "Roommate Approved"
+        FRAUD_FLAG = "fraud_flag", "Fraud Flag"
         SYSTEM = "system", "System"
 
     user = models.ForeignKey(
