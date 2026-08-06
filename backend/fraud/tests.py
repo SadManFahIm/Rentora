@@ -89,8 +89,6 @@ class DescriptionSimilarityTests(TestCase):
         text = "Bright modern studio close to the metro station, ideal for students."
         make_room(owner, description=text)
         dup = make_room(owner, description=text)
-        signal = _duplicate_listing  # reused: description detector is tested below
-        # The description detector lives in detectors.py; call it directly.
         from fraud.services.detectors import _description_similarity
 
         self.assertIsNotNone(_description_similarity(dup))
@@ -253,6 +251,21 @@ class RunScanTests(TestCase):
 
 
 class FraudSignalAutoScanTests(TestCase):
+    def test_updating_room_does_not_rescan_or_notify(self):
+        # Documented contract: the auto-scan runs on *create* only — updating a
+        # listing must not re-run the detector (noisy + expensive) or duplicate
+        # the landlord notification.
+        owner = make_user("o")
+        room = make_room(owner, title="Lonely Studio, Mirpur")
+        self.assertEqual(FraudReport.objects.filter(room=room).count(), 1)
+        notification_count = owner.notifications.count()
+
+        room.title = "Renamed Studio, Mirpur"
+        room.save()  # triggers post_save with created=False
+
+        self.assertEqual(FraudReport.objects.filter(room=room).count(), 1)
+        self.assertEqual(owner.notifications.count(), notification_count)
+
     def test_creating_room_auto_scans_and_notifies(self):
         owner = make_user("o")
         # An existing listing makes the new one an obvious duplicate → HIGH,
