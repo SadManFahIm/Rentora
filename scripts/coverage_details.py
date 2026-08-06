@@ -9,6 +9,7 @@ Usage:
     python3 scripts/coverage_details.py <report1.xml> [<report2.xml> ...] <summary.md>
 """
 
+import os
 import sys
 import xml.etree.ElementTree as ET
 
@@ -73,8 +74,18 @@ def main():
         "_Top 10 worst by line rate — good candidates for the next tests._\n"
     )
 
-    with open(summary_path, "a", encoding="utf-8") as fh:
-        fh.write(section)
+    # The summary file is written by CodeCoverageSummary's Docker step as
+    # root, so appending in place fails for the runner user. Recreate the
+    # file (delete + rewrite) — the directory is owned by the runner.
+    try:
+        with open(summary_path, "a", encoding="utf-8") as fh:
+            fh.write(section)
+    except PermissionError:
+        with open(summary_path, encoding="utf-8") as fh:
+            content = fh.read()
+        with open(summary_path + ".new", "w", encoding="utf-8") as fh:
+            fh.write(content + section)
+        os.replace(summary_path + ".new", summary_path)
 
     print(f"Appended {len(worst)} worst files to {summary_path}")
     return 0
