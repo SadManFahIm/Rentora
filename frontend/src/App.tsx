@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
@@ -11,15 +12,27 @@ import "./styles/global.css";
 // Layout
 import Layout from "./components/Layout/Layout";
 
-// Pages
-import Home from "./pages/Home/Home";
-import Rooms from "./pages/Rooms/Rooms";
-import Map from "./pages/Map/Map";
-import Chat from "./pages/Chat/Chat";
-import Dashboard from "./pages/Dashboard/Dashboard";
-import Auth from "./pages/Auth/Auth";
-import PaymentStatus from "./pages/PaymentStatus/PaymentStatus";
-import Roommates from "./pages/Roommates/Roommates";
+// Pages — code-split: each page is fetched only when its route is opened.
+const Home = lazy(() => import("./pages/Home/Home"));
+const Rooms = lazy(() => import("./pages/Rooms/Rooms"));
+const Map = lazy(() => import("./pages/Map/Map"));
+const Chat = lazy(() => import("./pages/Chat/Chat"));
+const Dashboard = lazy(() => import("./pages/Dashboard/Dashboard"));
+const Auth = lazy(() => import("./pages/Auth/Auth"));
+const PaymentStatus = lazy(() => import("./pages/PaymentStatus/PaymentStatus"));
+const Roommates = lazy(() => import("./pages/Roommates/Roommates"));
+
+/**
+ * Suspense boundary around routed content. The shell (nav/footer, query
+ * client, auth context) is always present; only the page chunk suspends.
+ */
+function PageLoader() {
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
+    </div>
+  );
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -36,18 +49,20 @@ export default function App() {
       <AppProvider>
         <ErrorBoundary>
           <BrowserRouter>
-            <Routes>
-              <Route element={<Layout />}>
-                <Route path="/" element={<Home />} />
-                <Route path="/rooms" element={<Rooms />} />
-                <Route path="/map" element={<Map />} />
-                <Route path="/chat" element={<Chat />} />
-                <Route path="/roommates" element={<Roommates />} />
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/payment/status" element={<PaymentStatus />} />
-                <Route path="/auth" element={<Auth />} />
-              </Route>
-            </Routes>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                <Route element={<Layout />}>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/rooms" element={<Rooms />} />
+                  <Route path="/map" element={<Map />} />
+                  <Route path="/chat" element={<Chat />} />
+                  <Route path="/roommates" element={<Roommates />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/payment/status" element={<PaymentStatus />} />
+                  <Route path="/auth" element={<Auth />} />
+                </Route>
+              </Routes>
+            </Suspense>
           </BrowserRouter>
         </ErrorBoundary>
         <Toaster richColors position="top-right" />
