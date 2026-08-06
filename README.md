@@ -366,6 +366,8 @@ Frontend runs at `http://localhost:3000`
 - `tanvir.islam` has listings — open **Dashboard → Fraud** to see the risk cards and try **Re-scan**.
 - All accounts use the shared demo password `demo12345`.
 
+> 💡 The screenshots above can be regenerated with [`docs/tools/capture-screenshots.mjs`](docs/tools/capture-screenshots.mjs) — it drives headless Chrome, mints demo tokens via Django, and saves fresh PNGs into `docs/screenshots/`.
+
 ---
 
 ## 👨‍💻 Developer

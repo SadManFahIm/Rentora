@@ -20,3 +20,6 @@ backend/staticfiles/
 CLAUDE.md
 
 .claude/
+
+# Local tooling
+.tmp-chrome-profile/
