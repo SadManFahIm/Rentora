@@ -56,6 +56,8 @@ INSTALLED_APPS = [
     "payments",
     "recommendations",
     "pricing",
+    "roommates",
+    "fraud",
 ]
 
 MIDDLEWARE = [

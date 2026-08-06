@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Star, ShieldCheck, MessageCircle, CalendarCheck } from "lucide-react";
+import { ShieldAlert, Star, ShieldCheck, MessageCircle, CalendarCheck } from "lucide-react";
+import { useRoomFraudStatus } from "../../hooks/useFraud";
 import type { Room } from "../../types";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -37,6 +38,8 @@ export default function RoomModal({ room, onClose }: RoomModalProps) {
   const { user } = useApp();
   const createBooking = useCreateBooking();
   const startChat = useStartDirectChat();
+  // Live fraud badge — fetched only when the modal is open for this room.
+  const { data: fraud } = useRoomFraudStatus(room?.id ?? null);
 
   const handleBook = () => {
     if (!room) return;
@@ -102,6 +105,12 @@ export default function RoomModal({ room, onClose }: RoomModalProps) {
                     {room.verified && (
                       <span className="flex items-center gap-1 text-xs font-semibold text-emerald-500">
                         <ShieldCheck className="size-3.5" /> KYC Verified
+                      </span>
+                    )}
+                    {fraud?.flagged && (
+                      <span className="flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-600 dark:bg-red-950/40 dark:text-red-400">
+                        <ShieldAlert className="size-3.5" />
+                        Under review{fraud.severity === "high" ? " (high risk)" : fraud.severity === "medium" ? " (medium risk)" : ""}
                       </span>
                     )}
                   </div>
