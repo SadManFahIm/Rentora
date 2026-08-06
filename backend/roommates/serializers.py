@@ -65,8 +65,8 @@ class RoommateProfilePublicSerializer(RoommateProfileSerializer):
     user = serializers.SerializerMethodField()
 
     class Meta(RoommateProfileSerializer.Meta):
-        fields = RoommateProfileSerializer.Meta.fields + ["user"]
-        read_only_fields = RoommateProfileSerializer.Meta.read_only_fields + ["user"]
+        fields = [*RoommateProfileSerializer.Meta.fields, "user"]
+        read_only_fields = [*RoommateProfileSerializer.Meta.read_only_fields, "user"]
 
     def get_user(self, obj):
         return RoomOwnerSerializer(obj.user, context=self.context).data

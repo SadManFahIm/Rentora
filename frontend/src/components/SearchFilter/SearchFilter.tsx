@@ -36,9 +36,7 @@ export default function SearchFilter({ filters, setFilters }: SearchFilterProps)
   const toggleAmenity = (a: string) =>
     setFilters((f) => ({
       ...f,
-      amenities: f.amenities.includes(a)
-        ? f.amenities.filter((x) => x !== a)
-        : [...f.amenities, a],
+      amenities: f.amenities.includes(a) ? f.amenities.filter((x) => x !== a) : [...f.amenities, a],
     }));
 
   const reset = () => {
@@ -73,12 +71,20 @@ export default function SearchFilter({ filters, setFilters }: SearchFilterProps)
 
           <div className="hidden flex-wrap gap-2 lg:flex">
             {AREAS.map((a) => (
-              <button key={a} className={pillClass(filters.area === a)} onClick={() => update("area", a)}>
+              <button
+                key={a}
+                className={pillClass(filters.area === a)}
+                onClick={() => update("area", a)}
+              >
                 {a === "All" ? "All Areas" : a}
               </button>
             ))}
             {ROOM_TYPES.map((t) => (
-              <button key={t} className={pillClass(filters.type === t)} onClick={() => update("type", t)}>
+              <button
+                key={t}
+                className={pillClass(filters.type === t)}
+                onClick={() => update("type", t)}
+              >
                 {t === "All" ? "All Types" : t}
               </button>
             ))}
@@ -105,10 +111,7 @@ export default function SearchFilter({ filters, setFilters }: SearchFilterProps)
 
       {/* Filter Panel */}
       {showPanel && (
-        <div
-          className="fixed inset-0 z-199 bg-black/40"
-          onClick={() => setShowPanel(false)}
-        />
+        <div className="fixed inset-0 z-199 bg-black/40" onClick={() => setShowPanel(false)} />
       )}
       <div
         className={cn(
@@ -118,7 +121,12 @@ export default function SearchFilter({ filters, setFilters }: SearchFilterProps)
       >
         <div className="mb-6 flex items-center justify-between">
           <h3 className="font-display text-lg font-bold text-foreground">Advanced Filters</h3>
-          <Button variant="outline" size="icon" className="rounded-full" onClick={() => setShowPanel(false)}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="rounded-full"
+            onClick={() => setShowPanel(false)}
+          >
             <X className="size-4" />
           </Button>
         </div>
@@ -130,7 +138,11 @@ export default function SearchFilter({ filters, setFilters }: SearchFilterProps)
           </label>
           <div className="flex flex-wrap gap-2">
             {AREAS.map((a) => (
-              <button key={a} className={pillClass(filters.area === a)} onClick={() => update("area", a)}>
+              <button
+                key={a}
+                className={pillClass(filters.area === a)}
+                onClick={() => update("area", a)}
+              >
                 {a === "All" ? "All Areas" : a}
               </button>
             ))}
@@ -140,7 +152,11 @@ export default function SearchFilter({ filters, setFilters }: SearchFilterProps)
           </label>
           <div className="flex flex-wrap gap-2">
             {ROOM_TYPES.map((t) => (
-              <button key={t} className={pillClass(filters.type === t)} onClick={() => update("type", t)}>
+              <button
+                key={t}
+                className={pillClass(filters.type === t)}
+                onClick={() => update("type", t)}
+              >
                 {t === "All" ? "All Types" : t}
               </button>
             ))}
@@ -173,7 +189,11 @@ export default function SearchFilter({ filters, setFilters }: SearchFilterProps)
           </label>
           <div className="flex flex-wrap gap-2">
             {AMENITIES_LIST.map((a) => (
-              <button key={a} className={pillClass(filters.amenities.includes(a))} onClick={() => toggleAmenity(a)}>
+              <button
+                key={a}
+                className={pillClass(filters.amenities.includes(a))}
+                onClick={() => toggleAmenity(a)}
+              >
                 {a}
               </button>
             ))}
@@ -186,7 +206,11 @@ export default function SearchFilter({ filters, setFilters }: SearchFilterProps)
           </label>
           <div className="flex flex-wrap gap-2">
             {(["Any", "Male", "Female"] as GenderPref[]).map((g) => (
-              <button key={g} className={pillClass(filters.gender === g)} onClick={() => update("gender", g)}>
+              <button
+                key={g}
+                className={pillClass(filters.gender === g)}
+                onClick={() => update("gender", g)}
+              >
                 {g}
               </button>
             ))}
@@ -198,16 +222,26 @@ export default function SearchFilter({ filters, setFilters }: SearchFilterProps)
             Availability
           </label>
           <div className="flex flex-wrap gap-2">
-            <button className={pillClass(filters.available === "any")} onClick={() => update("available", "any")}>
+            <button
+              className={pillClass(filters.available === "any")}
+              onClick={() => update("available", "any")}
+            >
               All
             </button>
-            <button className={pillClass(filters.available === "yes")} onClick={() => update("available", "yes")}>
+            <button
+              className={pillClass(filters.available === "yes")}
+              onClick={() => update("available", "yes")}
+            >
               Available Only
             </button>
           </div>
         </div>
 
-        <Button className="mt-2 w-full bg-orange-600 text-white hover:bg-orange-700" size="lg" onClick={() => setShowPanel(false)}>
+        <Button
+          className="mt-2 w-full bg-orange-600 text-white hover:bg-orange-700"
+          size="lg"
+          onClick={() => setShowPanel(false)}
+        >
           Apply Filters
         </Button>
         <Button variant="outline" className="mt-2 w-full" onClick={reset}>

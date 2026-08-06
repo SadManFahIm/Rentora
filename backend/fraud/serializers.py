@@ -12,7 +12,15 @@ class FraudSignalSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = FraudSignal
-        fields = ["id", "detector", "detector_display", "severity", "message", "detail", "created_at"]
+        fields = [
+            "id",
+            "detector",
+            "detector_display",
+            "severity",
+            "message",
+            "detail",
+            "created_at",
+        ]
         read_only_fields = fields
 
 

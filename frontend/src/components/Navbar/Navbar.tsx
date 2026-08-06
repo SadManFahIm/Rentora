@@ -97,14 +97,27 @@ export default function Navbar() {
 
         {/* Desktop actions */}
         <div className="hidden items-center gap-2 md:flex">
-          <Button variant="outline" size="icon" className="rounded-xl" onClick={() => toggleDarkMode()}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="rounded-xl"
+            onClick={() => toggleDarkMode()}
+          >
             {darkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </Button>
 
-          <Button variant="outline" size="icon" className="relative rounded-xl" onClick={() => navigate("/rooms")}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="relative rounded-xl"
+            onClick={() => navigate("/rooms")}
+          >
             <Heart className="size-4" />
             {wishlist.length > 0 && (
-              <Badge variant="brand" className="absolute -top-1.5 -right-1.5 h-[18px] min-w-[18px] justify-center rounded-full p-0 text-[10px]">
+              <Badge
+                variant="brand"
+                className="absolute -top-1.5 -right-1.5 h-[18px] min-w-[18px] justify-center rounded-full p-0 text-[10px]"
+              >
                 {wishlist.length}
               </Badge>
             )}
@@ -119,7 +132,10 @@ export default function Navbar() {
             >
               <Bell className="size-4" />
               {unreadCount > 0 && (
-                <Badge variant="brand" className="absolute -top-1.5 -right-1.5 h-[18px] min-w-[18px] justify-center rounded-full p-0 text-[10px]">
+                <Badge
+                  variant="brand"
+                  className="absolute -top-1.5 -right-1.5 h-[18px] min-w-[18px] justify-center rounded-full p-0 text-[10px]"
+                >
                   {unreadCount}
                 </Badge>
               )}
@@ -203,14 +219,23 @@ export default function Navbar() {
               </NavLink>
             ))}
             {user && (
-              <NavLink to="/dashboard" className={mobileNavLinkClass} onClick={() => setMobileOpen(false)}>
+              <NavLink
+                to="/dashboard"
+                className={mobileNavLinkClass}
+                onClick={() => setMobileOpen(false)}
+              >
                 Dashboard
               </NavLink>
             )}
           </div>
 
           <div className="mt-4 flex items-center gap-2 border-t border-gray-200 pt-4 dark:border-gray-800">
-            <Button variant="outline" size="icon" className="rounded-xl" onClick={() => toggleDarkMode()}>
+            <Button
+              variant="outline"
+              size="icon"
+              className="rounded-xl"
+              onClick={() => toggleDarkMode()}
+            >
               {darkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
             </Button>
             <Button
@@ -224,7 +249,10 @@ export default function Navbar() {
             >
               <Heart className="size-4" />
               {wishlist.length > 0 && (
-                <Badge variant="brand" className="absolute -top-1.5 -right-1.5 h-[18px] min-w-[18px] justify-center rounded-full p-0 text-[10px]">
+                <Badge
+                  variant="brand"
+                  className="absolute -top-1.5 -right-1.5 h-[18px] min-w-[18px] justify-center rounded-full p-0 text-[10px]"
+                >
                   {wishlist.length}
                 </Badge>
               )}
@@ -237,7 +265,10 @@ export default function Navbar() {
             >
               <Bell className="size-4" />
               {unreadCount > 0 && (
-                <Badge variant="brand" className="absolute -top-1.5 -right-1.5 h-[18px] min-w-[18px] justify-center rounded-full p-0 text-[10px]">
+                <Badge
+                  variant="brand"
+                  className="absolute -top-1.5 -right-1.5 h-[18px] min-w-[18px] justify-center rounded-full p-0 text-[10px]"
+                >
                   {unreadCount}
                 </Badge>
               )}
@@ -248,7 +279,10 @@ export default function Navbar() {
             <div className="mt-3 overflow-hidden rounded-2xl border border-gray-200 bg-popover dark:border-gray-800 shadow-lg">
               <div className="flex items-center justify-between border-b border-gray-200 p-4 font-display dark:border-gray-800 text-sm font-bold">
                 Notifications
-                <button className="text-xs font-medium text-brand hover:underline" onClick={markAllRead}>
+                <button
+                  className="text-xs font-medium text-brand hover:underline"
+                  onClick={markAllRead}
+                >
                   Mark all read
                 </button>
               </div>

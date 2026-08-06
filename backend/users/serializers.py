@@ -61,7 +61,9 @@ class CustomRegisterSerializer(RegisterSerializer):
 
     name = serializers.CharField(required=False, allow_blank=True, default="")
     phone = serializers.CharField(required=False, allow_blank=True, default="")
-    role = serializers.ChoiceField(choices=User.Role.choices, required=False, default=User.Role.TENANT)
+    role = serializers.ChoiceField(
+        choices=User.Role.choices, required=False, default=User.Role.TENANT
+    )
 
     def get_cleaned_data(self):
         data = super().get_cleaned_data()

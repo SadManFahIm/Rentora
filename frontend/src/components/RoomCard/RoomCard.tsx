@@ -45,7 +45,10 @@ export default function RoomCard({ room, onClick }: RoomCardProps) {
           aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
         >
           <Heart
-            className={cn("size-4", isWishlisted ? "fill-orange-600 text-orange-600" : "text-neutral-500")}
+            className={cn(
+              "size-4",
+              isWishlisted ? "fill-orange-600 text-orange-600" : "text-neutral-500"
+            )}
           />
         </button>
       </div>
@@ -73,7 +76,10 @@ export default function RoomCard({ room, onClick }: RoomCardProps) {
         {/* Amenities */}
         <div className="mb-3 flex flex-wrap gap-1.5">
           {room.amenities.slice(0, 3).map((a) => (
-            <span key={a} className="rounded-md bg-gray-50 px-2.5 py-1 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+            <span
+              key={a}
+              className="rounded-md bg-gray-50 px-2.5 py-1 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+            >
               {a}
             </span>
           ))}

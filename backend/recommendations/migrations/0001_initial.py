@@ -6,30 +6,67 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('rooms', '0001_initial'),
+        ("rooms", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='UserActivity',
+            name="UserActivity",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('activity_type', models.CharField(choices=[('view', 'View'), ('search', 'Search'), ('wishlist', 'Wishlist'), ('booking_request', 'Booking Request'), ('booking_approved', 'Booking Approved')], max_length=20)),
-                ('weight', models.IntegerField()),
-                ('metadata', models.JSONField(blank=True, default=dict)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('room', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='activities', to='rooms.room')),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='activities', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                (
+                    "activity_type",
+                    models.CharField(
+                        choices=[
+                            ("view", "View"),
+                            ("search", "Search"),
+                            ("wishlist", "Wishlist"),
+                            ("booking_request", "Booking Request"),
+                            ("booking_approved", "Booking Approved"),
+                        ],
+                        max_length=20,
+                    ),
+                ),
+                ("weight", models.IntegerField()),
+                ("metadata", models.JSONField(blank=True, default=dict)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "room",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="activities",
+                        to="rooms.room",
+                    ),
+                ),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="activities",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'verbose_name_plural': 'user activities',
-                'ordering': ['-created_at'],
-                'indexes': [models.Index(fields=['user', 'activity_type'], name='recommendat_user_id_c1cdba_idx'), models.Index(fields=['room'], name='recommendat_room_id_9b84b5_idx')],
+                "verbose_name_plural": "user activities",
+                "ordering": ["-created_at"],
+                "indexes": [
+                    models.Index(
+                        fields=["user", "activity_type"], name="recommendat_user_id_c1cdba_idx"
+                    ),
+                    models.Index(fields=["room"], name="recommendat_room_id_9b84b5_idx"),
+                ],
             },
         ),
     ]

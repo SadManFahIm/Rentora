@@ -68,7 +68,9 @@ export default function Rooms() {
   // Filtering + sorting happen in the service layer (mock server-side).
   const { data: rooms = [], isLoading } = useRooms(filters);
 
-  const gridClass = gridView ? "grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3" : "grid grid-cols-1 gap-6";
+  const gridClass = gridView
+    ? "grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
+    : "grid grid-cols-1 gap-6";
 
   return (
     <>
@@ -77,7 +79,9 @@ export default function Rooms() {
       <div className="mx-auto max-w-7xl px-4 py-12 md:px-6 md:py-16 lg:px-8">
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h2 className="font-display text-xl font-bold text-foreground sm:text-2xl">Available Rooms</h2>
+            <h2 className="font-display text-xl font-bold text-foreground sm:text-2xl">
+              Available Rooms
+            </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400">
               {isLoading ? "Loading…" : `${rooms.length} listings found`}
             </p>
@@ -87,7 +91,10 @@ export default function Rooms() {
               variant="outline"
               size="icon"
               aria-label="Grid view"
-              className={cn("rounded-lg", gridView && "border-orange-600 bg-orange-50 text-orange-600 dark:bg-orange-950/40")}
+              className={cn(
+                "rounded-lg",
+                gridView && "border-orange-600 bg-orange-50 text-orange-600 dark:bg-orange-950/40"
+              )}
               onClick={() => setGridView(true)}
             >
               <LayoutGrid className="size-4" />
@@ -96,7 +103,10 @@ export default function Rooms() {
               variant="outline"
               size="icon"
               aria-label="List view"
-              className={cn("rounded-lg", !gridView && "border-orange-600 bg-orange-50 text-orange-600 dark:bg-orange-950/40")}
+              className={cn(
+                "rounded-lg",
+                !gridView && "border-orange-600 bg-orange-50 text-orange-600 dark:bg-orange-950/40"
+              )}
               onClick={() => setGridView(false)}
             >
               <List className="size-4" />
@@ -120,7 +130,9 @@ export default function Rooms() {
           </div>
         ) : (
           <div className={gridClass}>
-            {rooms.map((r) => <RoomCard key={r.id} room={r} onClick={setSelectedRoom} />)}
+            {rooms.map((r) => (
+              <RoomCard key={r.id} room={r} onClick={setSelectedRoom} />
+            ))}
           </div>
         )}
       </div>

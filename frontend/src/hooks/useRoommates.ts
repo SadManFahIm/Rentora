@@ -87,7 +87,9 @@ export function useRespondRoommateRequest() {
       queryClient.invalidateQueries({ queryKey: roommateKeys.requests });
       queryClient.invalidateQueries({ queryKey: roommateKeys.matches });
       queryClient.invalidateQueries({ queryKey: roommateKeys.profile });
-      toast.success(variables.action === "approve" ? "You found a roommate! 🎉" : "Request rejected.");
+      toast.success(
+        variables.action === "approve" ? "You found a roommate! 🎉" : "Request rejected."
+      );
     },
   });
 }

@@ -19,11 +19,10 @@ duplicate) can never be hidden by "only one issue".
 from __future__ import annotations
 
 import difflib
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import Callable
 
-from django.db.models import Count
 from django.utils import timezone
 
 from rooms.models import Room
@@ -86,7 +85,12 @@ def _suspicious_price(room: Room) -> Signal | None:
                 f"{room.get_room_type_display()} market ({p25:,.0f} BDT 25th percentile) — "
                 "possibly a bait listing."
             ),
-            detail={"price": price, "percentile_25": p25, "market": stat.area, "room_type": stat.room_type},
+            detail={
+                "price": price,
+                "percentile_25": p25,
+                "market": stat.area,
+                "room_type": stat.room_type,
+            },
         )
     if price > p75 * PRICE_HIGH_FACTOR:
         return Signal(
@@ -96,7 +100,12 @@ def _suspicious_price(room: Room) -> Signal | None:
                 f"Price ({price:,.0f} BDT) is far above the {room.get_area_display()} "
                 f"{room.get_room_type_display()} market ({p75:,.0f} BDT 75th percentile)."
             ),
-            detail={"price": price, "percentile_75": p75, "market": stat.area, "room_type": stat.room_type},
+            detail={
+                "price": price,
+                "percentile_75": p75,
+                "market": stat.area,
+                "room_type": stat.room_type,
+            },
         )
     return None
 
@@ -104,11 +113,9 @@ def _suspicious_price(room: Room) -> Signal | None:
 def _duplicate_listing(room: Room) -> Signal | None:
     """Flag rooms whose title is near-identical to another listing in the same area."""
     candidates = (
-        Room.objects.filter(area=room.area)
-        .exclude(pk=room.pk)
-        .values_list("pk", "title", "price")
+        Room.objects.filter(area=room.area).exclude(pk=room.pk).values_list("pk", "title", "price")
     )
-    for other_id, other_title, other_price in candidates:
+    for other_id, other_title, _other_price in candidates:
         ratio = difflib.SequenceMatcher(None, room.title.lower(), other_title.lower()).ratio()
         if ratio >= DUPLICATE_TITLE_RATIO:
             return Signal(
@@ -118,7 +125,11 @@ def _duplicate_listing(room: Room) -> Signal | None:
                     f"Title is {ratio:.0%} similar to listing #{other_id} "
                     f"('{other_title}') in the same area."
                 ),
-                detail={"similar_room_id": other_id, "similar_room_title": other_title, "similarity": round(ratio, 3)},
+                detail={
+                    "similar_room_id": other_id,
+                    "similar_room_title": other_title,
+                    "similarity": round(ratio, 3),
+                },
             )
     return None
 
@@ -206,7 +217,10 @@ def _severity_of(signals: list[Signal]) -> str:
     if not signals:
         return FraudReport.Severity.CLEAN
     order = [FraudReport.Severity.HIGH, FraudReport.Severity.MEDIUM, FraudReport.Severity.LOW]
-    return next((sev for sev in order if any(s.severity == sev for s in signals)), FraudReport.Severity.CLEAN)
+    return next(
+        (sev for sev in order if any(s.severity == sev for s in signals)),
+        FraudReport.Severity.CLEAN,
+    )
 
 
 def _summary(signals: list[Signal], score: int) -> str:
@@ -238,7 +252,13 @@ def run_scan(room: Room) -> FraudReport:
 
     FraudSignal.objects.bulk_create(
         [
-            FraudSignal(report=report, detector=s.detector, severity=s.severity, message=s.message, detail=s.detail)
+            FraudSignal(
+                report=report,
+                detector=s.detector,
+                severity=s.severity,
+                message=s.message,
+                detail=s.detail,
+            )
             for s in signals
         ]
     )

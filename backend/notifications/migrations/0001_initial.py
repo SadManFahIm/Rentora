@@ -6,7 +6,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -15,20 +14,48 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='Notification',
+            name="Notification",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('notification_type', models.CharField(choices=[('booking_request', 'Booking Request'), ('booking_approved', 'Booking Approved'), ('booking_rejected', 'Booking Rejected'), ('booking_cancelled', 'Booking Cancelled'), ('new_review', 'New Review'), ('new_message', 'New Message'), ('system', 'System')], max_length=20)),
-                ('title', models.CharField(max_length=200)),
-                ('message', models.TextField()),
-                ('is_read', models.BooleanField(default=False)),
-                ('action_url', models.CharField(blank=True, max_length=500)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='notifications', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                (
+                    "notification_type",
+                    models.CharField(
+                        choices=[
+                            ("booking_request", "Booking Request"),
+                            ("booking_approved", "Booking Approved"),
+                            ("booking_rejected", "Booking Rejected"),
+                            ("booking_cancelled", "Booking Cancelled"),
+                            ("new_review", "New Review"),
+                            ("new_message", "New Message"),
+                            ("system", "System"),
+                        ],
+                        max_length=20,
+                    ),
+                ),
+                ("title", models.CharField(max_length=200)),
+                ("message", models.TextField()),
+                ("is_read", models.BooleanField(default=False)),
+                ("action_url", models.CharField(blank=True, max_length=500)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="notifications",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
-                'indexes': [models.Index(fields=['user', 'is_read'], name='notificatio_user_id_427e4b_idx')],
+                "ordering": ["-created_at"],
+                "indexes": [
+                    models.Index(fields=["user", "is_read"], name="notificatio_user_id_427e4b_idx")
+                ],
             },
         ),
     ]

@@ -16,7 +16,9 @@ class Booking(models.Model):
         CANCELLED = "cancelled", "Cancelled"
 
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="bookings")
-    tenant = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="bookings")
+    tenant = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="bookings"
+    )
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
     check_in = models.DateField()
     check_out = models.DateField(null=True, blank=True)
@@ -44,7 +46,9 @@ class Booking(models.Model):
 
 class Review(models.Model):
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="reviews")
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reviews")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reviews"
+    )
     rating = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
     comment = models.TextField()
     verified_stay = models.BooleanField(default=False)
@@ -53,7 +57,9 @@ class Review(models.Model):
     class Meta:
         ordering = ["-created_at"]
         constraints = [
-            models.UniqueConstraint(fields=["room", "user"], name="unique_review_per_user_per_room"),
+            models.UniqueConstraint(
+                fields=["room", "user"], name="unique_review_per_user_per_room"
+            ),
         ]
 
     def __str__(self):

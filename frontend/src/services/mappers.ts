@@ -146,11 +146,9 @@ export interface ApiUser {
 
 // ---- helpers ----
 
-const capitalize = (s: string): string =>
-  s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+const capitalize = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
-const roomTypeLabel = (value: string): RoomType =>
-  capitalize(value) as RoomType;
+const roomTypeLabel = (value: string): RoomType => capitalize(value) as RoomType;
 
 const genderLabel = (value: string): GenderPref => capitalize(value) as GenderPref;
 

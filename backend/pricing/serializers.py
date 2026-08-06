@@ -35,7 +35,9 @@ class PriceInsightSerializer(serializers.Serializer):
 
     avg_price = serializers.FloatField(help_text="Market segment average price.")
     your_price = serializers.FloatField()
-    percentage_diff = serializers.FloatField(help_text="Signed % difference from the segment average.")
+    percentage_diff = serializers.FloatField(
+        help_text="Signed % difference from the segment average."
+    )
     classification = serializers.ChoiceField(
         choices=["great_deal", "good_price", "fair_price", "above_average", "overpriced"]
     )
@@ -64,4 +66,6 @@ class PricePredictionSerializer(serializers.Serializer):
     price_range_low = serializers.FloatField(allow_null=True)
     price_range_high = serializers.FloatField(allow_null=True)
     model_confidence = serializers.ChoiceField(choices=["high", "low", "none"])
-    explanation = serializers.CharField(help_text="Plain-English reason for the estimate, for a non-technical landlord.")
+    explanation = serializers.CharField(
+        help_text="Plain-English reason for the estimate, for a non-technical landlord."
+    )

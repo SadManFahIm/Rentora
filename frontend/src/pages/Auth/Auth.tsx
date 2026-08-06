@@ -33,10 +33,7 @@ export default function Auth() {
       z
         .object({
           name: z.string(),
-          email: z
-            .string()
-            .min(1, "Email is required")
-            .email("Enter a valid email address"),
+          email: z.string().min(1, "Email is required").email("Enter a valid email address"),
           password: z
             .string()
             .min(1, "Password is required")
@@ -86,8 +83,7 @@ export default function Auth() {
             toast.success(`Welcome back, ${user.name}!`);
             navigate("/dashboard");
           },
-          onError: (error) =>
-            toast.error(getApiErrorMessage(error, "Invalid email or password.")),
+          onError: (error) => toast.error(getApiErrorMessage(error, "Invalid email or password.")),
         }
       );
     } else {
@@ -149,41 +145,57 @@ export default function Auth() {
 
           {!isLogin && (
             <div className="mb-4">
-              <label className="mb-1.5 block text-sm font-semibold text-muted-foreground">Full Name</label>
-              <Input
-                placeholder="Your name"
-                aria-invalid={!!errors.name}
-                {...field("name")}
-              />
-              {errors.name && <span className="mt-1.5 block text-xs font-medium text-red-600">{errors.name.message}</span>}
+              <label className="mb-1.5 block text-sm font-semibold text-muted-foreground">
+                Full Name
+              </label>
+              <Input placeholder="Your name" aria-invalid={!!errors.name} {...field("name")} />
+              {errors.name && (
+                <span className="mt-1.5 block text-xs font-medium text-red-600">
+                  {errors.name.message}
+                </span>
+              )}
             </div>
           )}
 
           <div className="mb-4">
-            <label className="mb-1.5 block text-sm font-semibold text-muted-foreground">Email Address</label>
+            <label className="mb-1.5 block text-sm font-semibold text-muted-foreground">
+              Email Address
+            </label>
             <Input
               type="email"
               placeholder="you@email.com"
               aria-invalid={!!errors.email}
               {...field("email")}
             />
-            {errors.email && <span className="mt-1.5 block text-xs font-medium text-red-600">{errors.email.message}</span>}
+            {errors.email && (
+              <span className="mt-1.5 block text-xs font-medium text-red-600">
+                {errors.email.message}
+              </span>
+            )}
           </div>
 
           <div className="mb-4">
-            <label className="mb-1.5 block text-sm font-semibold text-muted-foreground">Password</label>
+            <label className="mb-1.5 block text-sm font-semibold text-muted-foreground">
+              Password
+            </label>
             <Input
               type="password"
               placeholder="••••••••"
               aria-invalid={!!errors.password}
               {...field("password")}
             />
-            {errors.password && <span className="mt-1.5 block text-xs font-medium text-red-600">{errors.password.message}</span>}
+            {errors.password && (
+              <span className="mt-1.5 block text-xs font-medium text-red-600">
+                {errors.password.message}
+              </span>
+            )}
           </div>
 
           {!isLogin && (
             <div className="mb-4">
-              <label className="mb-1.5 block text-sm font-semibold text-muted-foreground">Confirm Password</label>
+              <label className="mb-1.5 block text-sm font-semibold text-muted-foreground">
+                Confirm Password
+              </label>
               <Input
                 type="password"
                 placeholder="••••••••"
@@ -191,7 +203,9 @@ export default function Auth() {
                 {...field("confirmPassword")}
               />
               {errors.confirmPassword && (
-                <span className="mt-1.5 block text-xs font-medium text-red-600">{errors.confirmPassword.message}</span>
+                <span className="mt-1.5 block text-xs font-medium text-red-600">
+                  {errors.confirmPassword.message}
+                </span>
               )}
             </div>
           )}

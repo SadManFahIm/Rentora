@@ -5,9 +5,9 @@ from .models import Booking, Review
 
 # Badge colour per booking status, used by BookingAdmin.status_colored.
 _STATUS_COLORS = {
-    Booking.Status.PENDING: "#d97706",    # amber-600
-    Booking.Status.APPROVED: "#16a34a",   # green-600
-    Booking.Status.REJECTED: "#dc2626",   # red-600
+    Booking.Status.PENDING: "#d97706",  # amber-600
+    Booking.Status.APPROVED: "#16a34a",  # green-600
+    Booking.Status.REJECTED: "#dc2626",  # red-600
     Booking.Status.CANCELLED: "#6b7280",  # gray-500
 }
 

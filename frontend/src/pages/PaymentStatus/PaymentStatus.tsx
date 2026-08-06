@@ -32,7 +32,8 @@ const outcomeConfig: Record<PaymentOutcome, OutcomeConfig> = {
     iconBg: "bg-red-500/10",
     iconColor: "text-red-500",
     title: "Payment Failed",
-    message: "Your payment didn't go through. No charge was made — you can try again from your dashboard.",
+    message:
+      "Your payment didn't go through. No charge was made — you can try again from your dashboard.",
   },
   cancel: {
     icon: CircleSlash,
@@ -72,7 +73,9 @@ export default function PaymentStatus() {
 
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-lg flex-col items-center justify-center px-4 py-16 text-center">
-      <div className={cn("mb-6 flex size-20 items-center justify-center rounded-full", config.iconBg)}>
+      <div
+        className={cn("mb-6 flex size-20 items-center justify-center rounded-full", config.iconBg)}
+      >
         <Icon className={cn("size-10", config.iconColor)} />
       </div>
       <h1 className="font-display text-2xl font-bold text-foreground">{config.title}</h1>

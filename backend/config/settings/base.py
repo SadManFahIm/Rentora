@@ -23,7 +23,6 @@ INSTALLED_APPS = [
     # Daphne must come before django.contrib.staticfiles so its ASGI-aware
     # runserver replaces the default (WSGI) one.
     "daphne",
-
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -31,7 +30,6 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.sites",
-
     # Third-party
     "channels",
     "rest_framework",
@@ -44,7 +42,6 @@ INSTALLED_APPS = [
     "allauth.socialaccount",
     "dj_rest_auth",
     "dj_rest_auth.registration",
-
     # Local apps
     "users",
     "rooms",
@@ -159,9 +156,7 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
-    "DEFAULT_PERMISSION_CLASSES": (
-        "rest_framework.permissions.IsAuthenticatedOrReadOnly",
-    ),
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticatedOrReadOnly",),
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 12,
     "DEFAULT_FILTER_BACKENDS": (
@@ -305,9 +300,9 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 # deposit attached. Off by default so platforms/rooms that don't require a
 # deposit are never blocked; flip on via env once deposit collection is a
 # hard requirement.
-REQUIRE_SECURITY_DEPOSIT_BEFORE_APPROVAL = os.getenv(
-    "REQUIRE_SECURITY_DEPOSIT_BEFORE_APPROVAL", "False"
-) == "True"
+REQUIRE_SECURITY_DEPOSIT_BEFORE_APPROVAL = (
+    os.getenv("REQUIRE_SECURITY_DEPOSIT_BEFORE_APPROVAL", "False") == "True"
+)
 
 # Number of monthly installments to generate for an approved booking whose
 # `check_out` is open-ended (no fixed lease end date).
