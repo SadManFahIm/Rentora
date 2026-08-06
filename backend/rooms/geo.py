@@ -57,7 +57,7 @@ class BoundingBox:
     max_lng: float
 
     @classmethod
-    def parse(cls, raw: str) -> "BoundingBox":
+    def parse(cls, raw: str) -> BoundingBox:
         """Parse a `bbox` query value in GeoJSON order:
         ``minLng,minLat,maxLng,maxLat`` (i.e. west,south,east,north) — the
         same order `L.latLngBounds.toBBoxString()` produces on the frontend.

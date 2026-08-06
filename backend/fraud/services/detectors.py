@@ -19,11 +19,10 @@ duplicate) can never be hidden by "only one issue".
 from __future__ import annotations
 
 import difflib
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import Callable
 
-from django.db.models import Count
 from django.utils import timezone
 
 from rooms.models import Room
@@ -108,7 +107,7 @@ def _duplicate_listing(room: Room) -> Signal | None:
         .exclude(pk=room.pk)
         .values_list("pk", "title", "price")
     )
-    for other_id, other_title, other_price in candidates:
+    for other_id, other_title, _other_price in candidates:
         ratio = difflib.SequenceMatcher(None, room.title.lower(), other_title.lower()).ratio()
         if ratio >= DUPLICATE_TITLE_RATIO:
             return Signal(

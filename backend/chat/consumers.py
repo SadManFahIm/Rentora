@@ -70,7 +70,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         if getattr(self, "user", None) is not None and self.user.is_authenticated:
             # Fire-and-forget: don't block the disconnect handler on the delay.
-            asyncio.create_task(self._delayed_mark_offline(self.user.pk))
+            # Keep the task reference so the event loop doesn't GC it mid-flight.
+            self._offline_task = asyncio.create_task(self._delayed_mark_offline(self.user.pk))
 
     async def receive(self, text_data: str | None = None, bytes_data=None) -> None:
         """Parse an inbound frame and dispatch it by ``type``."""

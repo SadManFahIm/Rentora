@@ -145,10 +145,10 @@ class RoommateRequestListCreateView(APIView):
                 receiver_id=receiver_id,
                 message=serializer.validated_data.get("message", ""),
             )
-        except IntegrityError:
+        except IntegrityError as exc:
             raise ValidationError(
                 {"receiver_id": "A roommate request between you and this user already exists."}
-            )
+            ) from exc
 
         create_notification(
             user=roommate_request.receiver,

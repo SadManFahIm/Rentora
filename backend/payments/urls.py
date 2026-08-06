@@ -28,4 +28,5 @@ urlpatterns = [
     # router last: provides "" (list), "<pk>/" (retrieve), "<pk>/refund/",
     # "<pk>/receipt/", and "<pk>/invoice/" (the last three via @action on
     # PaymentViewSet).
-] + router.urls
+    *router.urls,
+]

@@ -7,7 +7,6 @@ gating in the views. Uses Django's built-in ``TestCase`` like the rest of the
 project.
 """
 
-from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -19,8 +18,8 @@ from fraud.services.detectors import (
     _duplicate_listing,
     _missing_images,
     _rapid_listing,
-    _unverified_owner,
     _suspicious_price,
+    _unverified_owner,
     run_scan,
 )
 from pricing.models import MarketStat

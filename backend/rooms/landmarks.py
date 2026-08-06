@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 
-class LandmarkKind(str, Enum):
+class LandmarkKind(Enum):
     UNIVERSITY = "university"
     METRO = "metro"
 

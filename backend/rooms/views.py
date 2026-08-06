@@ -1,6 +1,11 @@
 import django_filters
 from django.db.models import Case, IntegerField, When
-from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiParameter,
+    extend_schema,
+    extend_schema_view,
+)
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -174,7 +179,7 @@ class RoomViewSet(viewsets.ModelViewSet):
         try:
             box = BoundingBox.parse(raw)
         except ValueError as exc:
-            raise ValidationError({"bbox": str(exc)})
+            raise ValidationError({"bbox": str(exc)}) from exc
         return queryset.filter(
             lat__gte=box.min_lat,
             lat__lte=box.max_lat,

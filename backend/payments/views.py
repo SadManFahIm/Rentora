@@ -13,8 +13,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from notifications.utils import create_notification
 from notifications.models import Notification
+from notifications.utils import create_notification
 
 from .filters import PaymentFilter
 from .models import Payment, PaymentSchedule

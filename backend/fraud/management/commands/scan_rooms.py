@@ -14,10 +14,8 @@ pattern), so run this from a cron/Task Scheduler entry, e.g.:
 
 from django.core.management.base import BaseCommand
 
-from rooms.models import Room
-
-from fraud.models import FraudReport
 from fraud.services.detectors import run_scan
+from rooms.models import Room
 
 
 class Command(BaseCommand):

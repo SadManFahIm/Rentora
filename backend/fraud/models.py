@@ -7,7 +7,6 @@ readable detail blob. Keeping signals as separate rows means a landlord can
 see "duplicate listing + suspicious price" rather than one opaque number.
 """
 
-from django.conf import settings
 from django.db import models
 
 from rooms.models import Room
