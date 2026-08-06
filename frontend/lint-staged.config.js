@@ -20,17 +20,11 @@ const relFiles = (files) => files.map((f) => path.relative(root, f)).join(" ");
 export default {
   "backend/**/*.py": (files) => {
     const rel = relFiles(files);
-    return [
-      `${python()} -m ruff check --fix ${rel}`,
-      `${python()} -m ruff format ${rel}`,
-    ];
+    return [`${python()} -m ruff check --fix ${rel}`, `${python()} -m ruff format ${rel}`];
   },
   "frontend/**/*.{ts,tsx}": (files) => {
     const rel = relFiles(files);
-    return [
-      `${bin("prettier")} --write ${rel}`,
-      `${bin("eslint")} ${rel}`,
-    ];
+    return [`${bin("prettier")} --write ${rel}`, `${bin("eslint")} ${rel}`];
   },
   "frontend/**/*.{css,json,md,html}": (files) => {
     const rel = relFiles(files);
