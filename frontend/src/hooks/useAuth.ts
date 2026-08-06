@@ -1,15 +1,25 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { authService } from "../services/authService";
 import { useApp } from "../context/AppContext";
+import { useWishlistStore } from "../stores/wishlistStore";
+import { useNotificationStore } from "../stores/notificationStore";
 import type { LoginCredentials, RegisterPayload, User } from "../types";
 
 // ============================================================
-// AUTH HOOKS
-// Bridge the auth service to the (temporary) AppContext user state.
-// When real API auth lands the context can be swapped for a query.
+// AUTH HOOKS — real dj-rest-auth endpoints, bridged to context
+// and the wishlist/notification stores.
 // ============================================================
 
-/** The current authenticated user (from context for now). */
+/** Pull the freshly-authenticated user's server-side data into the stores. */
+export async function syncUserData(): Promise<void> {
+  await Promise.all([
+    useWishlistStore.getState().syncFromServer(),
+    useNotificationStore.getState().fetch(),
+  ]);
+}
+
+/** The current authenticated user (from context). */
 export function useUser(): { user: User | null; isAuthenticated: boolean } {
   const { user } = useApp();
   return { user, isAuthenticated: user != null };
@@ -19,10 +29,10 @@ export function useLogin() {
   const { setUser } = useApp();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (credentials: LoginCredentials) =>
-      (await authService.login(credentials)).data,
-    onSuccess: (auth) => {
-      setUser(auth.user);
+    mutationFn: (credentials: LoginCredentials) => authService.login(credentials),
+    onSuccess: async (user) => {
+      setUser(user);
+      await syncUserData();
       queryClient.invalidateQueries();
     },
   });
@@ -32,10 +42,10 @@ export function useRegister() {
   const { setUser } = useApp();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: RegisterPayload) =>
-      (await authService.register(payload)).data,
-    onSuccess: (auth) => {
-      setUser(auth.user);
+    mutationFn: (payload: RegisterPayload) => authService.register(payload),
+    onSuccess: async (user) => {
+      setUser(user);
+      await syncUserData();
       queryClient.invalidateQueries();
     },
   });
@@ -44,11 +54,15 @@ export function useRegister() {
 export function useLogout() {
   const { setUser } = useApp();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   return useMutation({
-    mutationFn: async () => (await authService.logout()).data,
+    mutationFn: () => authService.logout(),
     onSuccess: () => {
       setUser(null);
+      useWishlistStore.getState().clearWishlist();
+      useNotificationStore.getState().clear();
       queryClient.clear();
+      navigate("/auth");
     },
   });
 }

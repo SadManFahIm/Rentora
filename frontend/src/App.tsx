@@ -18,6 +18,7 @@ import Map from "./pages/Map/Map";
 import Chat from "./pages/Chat/Chat";
 import Dashboard from "./pages/Dashboard/Dashboard";
 import Auth from "./pages/Auth/Auth";
+import PaymentStatus from "./pages/PaymentStatus/PaymentStatus";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -41,6 +42,7 @@ export default function App() {
                 <Route path="/map" element={<Map />} />
                 <Route path="/chat" element={<Chat />} />
                 <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/payment/status" element={<PaymentStatus />} />
                 <Route path="/auth" element={<Auth />} />
               </Route>
             </Routes>

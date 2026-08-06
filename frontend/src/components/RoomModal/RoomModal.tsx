@@ -1,8 +1,22 @@
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { Star, ShieldCheck, MessageCircle, CalendarCheck } from "lucide-react";
 import type { Room } from "../../types";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { VisuallyHidden } from "../ui/visually-hidden";
+import { useCreateBooking } from "../../hooks/useBookings";
+import { useStartDirectChat } from "../../hooks/useChat";
+import { useApp } from "../../context/AppContext";
+import { isAuthenticated } from "../../services/api";
+import { getApiErrorMessage } from "../../services/errors";
+
+/** Default check-in: one week out, as an ISO date (YYYY-MM-DD). */
+function defaultCheckIn(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 7);
+  return d.toISOString().slice(0, 10);
+}
 
 const amenityEmoji: Record<string, string> = {
   WiFi: "📶",
@@ -19,6 +33,53 @@ interface RoomModalProps {
 }
 
 export default function RoomModal({ room, onClose }: RoomModalProps) {
+  const navigate = useNavigate();
+  const { user } = useApp();
+  const createBooking = useCreateBooking();
+  const startChat = useStartDirectChat();
+
+  const handleBook = () => {
+    if (!room) return;
+    if (!isAuthenticated()) {
+      toast.info("Please sign in to book this room.");
+      onClose();
+      navigate("/auth");
+      return;
+    }
+    createBooking.mutate(
+      { roomId: room.id, checkIn: defaultCheckIn() },
+      { onSuccess: onClose }
+    );
+  };
+
+  const handleMessageOwner = () => {
+    if (!room) return;
+    if (!isAuthenticated()) {
+      toast.info("Please sign in to message the owner.");
+      onClose();
+      navigate("/auth");
+      return;
+    }
+    if (!room.ownerId) {
+      toast.error("This room's owner can't be messaged right now.");
+      return;
+    }
+    if (room.ownerId === user?.id) {
+      toast.info("This is your own listing.");
+      return;
+    }
+    startChat.mutate(
+      { userId: room.ownerId, listingId: room.id },
+      {
+        onSuccess: (chatRoom) => {
+          onClose();
+          navigate(`/chat?room=${chatRoom.id}`);
+        },
+        onError: (error) => toast.error(getApiErrorMessage(error, "Could not start a conversation.")),
+      }
+    );
+  };
+
   return (
     <Dialog open={!!room} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[90vh] max-w-3xl gap-0 overflow-y-auto rounded-xl p-0" showCloseButton>
@@ -104,11 +165,24 @@ export default function RoomModal({ room, onClose }: RoomModalProps) {
 
               {/* Actions */}
               <div className="mt-6 flex gap-3">
-                <Button variant="outline" className="flex-1" size="lg">
-                  <MessageCircle className="size-4" /> Message Owner
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  size="lg"
+                  onClick={handleMessageOwner}
+                  disabled={startChat.isPending}
+                >
+                  <MessageCircle className="size-4" />
+                  {startChat.isPending ? "Starting…" : "Message Owner"}
                 </Button>
-                <Button className="flex-1 bg-orange-600 text-white hover:bg-orange-700" size="lg">
-                  <CalendarCheck className="size-4" /> Book Now
+                <Button
+                  className="flex-1 bg-orange-600 text-white hover:bg-orange-700"
+                  size="lg"
+                  onClick={handleBook}
+                  disabled={createBooking.isPending}
+                >
+                  <CalendarCheck className="size-4" />
+                  {createBooking.isPending ? "Booking…" : "Book Now"}
                 </Button>
               </div>
             </div>

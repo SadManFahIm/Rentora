@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LayoutGrid, List, SearchX } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { useRooms } from "../../hooks/useRooms";
 import RoomCard from "../../components/RoomCard/RoomCard";
 import RoomCardSkeleton from "../../components/RoomCardSkeleton";
@@ -23,9 +24,46 @@ const DEFAULT_FILTERS: Filters = {
 };
 
 export default function Rooms() {
-  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [filters, setFilters] = useState<Filters>(() => ({
+    ...DEFAULT_FILTERS,
+    query: searchParams.get("q") ?? "",
+  }));
   const [gridView, setGridView] = useState(true);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  // Set when a URL-initiated change is applied to state, so the reverse sync
+  // skips that pass instead of clobbering the URL with stale state.
+  const fromUrlRef = useRef(false);
+
+  // Sync URL param -> state so back/forward and direct ?q= links update the list.
+  useEffect(() => {
+    const q = searchParams.get("q") ?? "";
+    setFilters((f) => (f.query === q ? f : { ...f, query: q }));
+    // Set synchronously (not inside the updater, which runs after effects):
+    // mark this pass so the reverse sync skips and doesn't clobber a URL
+    // change (e.g. clicking a plain "/rooms" link) with stale state.
+    // Unconditional set is deliberate: when state already matches, the skip
+    // is a no-op, and when it doesn't, the skip prevents the clobber. Keep
+    // this OUTSIDE the setFilters updater — inside it runs too late.
+    fromUrlRef.current = true;
+  }, [searchParams]);
+
+  // Sync state -> URL param so searches are shareable/bookmarkable.
+  useEffect(() => {
+    if (fromUrlRef.current) {
+      fromUrlRef.current = false;
+      return;
+    }
+    const q = searchParams.get("q") ?? "";
+    if (filters.query === q) return;
+    const params = new URLSearchParams(searchParams);
+    if (filters.query) {
+      params.set("q", filters.query);
+    } else {
+      params.delete("q");
+    }
+    setSearchParams(params, { replace: true });
+  }, [filters.query, searchParams, setSearchParams]);
 
   // Filtering + sorting happen in the service layer (mock server-side).
   const { data: rooms = [], isLoading } = useRooms(filters);
@@ -48,6 +86,7 @@ export default function Rooms() {
             <Button
               variant="outline"
               size="icon"
+              aria-label="Grid view"
               className={cn("rounded-lg", gridView && "border-orange-600 bg-orange-50 text-orange-600 dark:bg-orange-950/40")}
               onClick={() => setGridView(true)}
             >
@@ -56,6 +95,7 @@ export default function Rooms() {
             <Button
               variant="outline"
               size="icon"
+              aria-label="List view"
               className={cn("rounded-lg", !gridView && "border-orange-600 bg-orange-50 text-orange-600 dark:bg-orange-950/40")}
               onClick={() => setGridView(false)}
             >

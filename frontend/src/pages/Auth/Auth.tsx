@@ -3,7 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { toast } from "sonner";
 import { useLogin, useRegister } from "../../hooks/useAuth";
+import { getApiErrorMessage } from "../../services/errors";
 import { Dialog, DialogContent, DialogTitle } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -79,12 +81,26 @@ export default function Auth() {
     if (isLogin) {
       login.mutate(
         { email: values.email, password: values.password },
-        { onSuccess: () => navigate("/dashboard") }
+        {
+          onSuccess: (user) => {
+            toast.success(`Welcome back, ${user.name}!`);
+            navigate("/dashboard");
+          },
+          onError: (error) =>
+            toast.error(getApiErrorMessage(error, "Invalid email or password.")),
+        }
       );
     } else {
       register.mutate(
         { name: values.name, email: values.email, password: values.password },
-        { onSuccess: () => navigate("/dashboard") }
+        {
+          onSuccess: (user) => {
+            toast.success(`Welcome to Rentora, ${user.name}!`);
+            navigate("/dashboard");
+          },
+          onError: (error) =>
+            toast.error(getApiErrorMessage(error, "Could not create your account.")),
+        }
       );
     }
   });
