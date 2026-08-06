@@ -163,8 +163,8 @@ class ScorePairTests(TestCase):
 class FindMatchesTests(TestCase):
     def test_returns_best_first(self):
         me = make_profile(make_user("me"))
-        strong = make_profile(make_user("strong"), lifestyle=["non_smoker"])
-        weak = make_profile(
+        make_profile(make_user("strong"), lifestyle=["non_smoker"])
+        make_profile(
             make_user("weak"),
             budget_min=9000,
             budget_max=12000,
@@ -179,9 +179,7 @@ class FindMatchesTests(TestCase):
         me = make_profile(make_user("me"))
         candidate = make_profile(make_user("candidate"))
         already = make_profile(make_user("already"))
-        RoommateMatchRequest.objects.create(
-            sender=me.user, receiver=already.user, message="hi"
-        )
+        RoommateMatchRequest.objects.create(sender=me.user, receiver=already.user, message="hi")
         # The view builds exclude_users from the user's own id plus everyone
         # they have already sent a request to — replicate that here.
         exclude = {me.user_id, already.user_id, candidate.user_id}
@@ -205,7 +203,7 @@ class FindMatchesTests(TestCase):
         # Disjoint budget + different room type + no shared lifestyle tags,
         # but same area and compatible gender: the hard gates still admit the
         # candidate, so the score can never drop below area(25) + gender(15).
-        far = make_profile(
+        make_profile(
             make_user("far"),
             budget_min=50000,
             budget_max=60000,
@@ -231,13 +229,11 @@ class RoommateRequestTests(TestCase):
 
     def test_profile_ordering_by_updated(self):
         first = make_profile(make_user("first"))
-        second = make_profile(make_user("second"))
+        make_profile(make_user("second"))
         # Touch `first` so it becomes the newest.
         first.bio = "updated"
         first.save()
-        self.assertEqual(
-            list(RoommateProfile.objects.all())[0].user.username, "first"
-        )
+        self.assertEqual(RoommateProfile.objects.first().user.username, "first")
 
     def test_area_choices_match_room_model(self):
         self.assertEqual(

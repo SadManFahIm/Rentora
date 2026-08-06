@@ -27,9 +27,13 @@ class Payment(models.Model):
         REFUNDED = "refunded", "Refunded"
 
     booking = models.ForeignKey(Booking, on_delete=models.CASCADE, related_name="payments")
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="payments")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="payments"
+    )
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    payment_method = models.CharField(max_length=20, choices=Method.choices, default=Method.SSLCOMMERZ)
+    payment_method = models.CharField(
+        max_length=20, choices=Method.choices, default=Method.SSLCOMMERZ
+    )
     payment_type = models.CharField(max_length=20, choices=Type.choices)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.INITIATED)
 
@@ -59,7 +63,9 @@ class Payment(models.Model):
     def __str__(self):
         return f"{self.transaction_id} ({self.status}) - {self.amount} BDT"
 
-    def transition_status(self, new_status, *, changed_by="system", metadata=None, extra_update_fields=None):
+    def transition_status(
+        self, new_status, *, changed_by="system", metadata=None, extra_update_fields=None
+    ):
         """Move this payment to ``new_status`` and record a
         :class:`PaymentAuditLog` entry for it in the same call.
 

@@ -7,8 +7,6 @@ gating in the views. Uses Django's built-in ``TestCase`` like the rest of the
 project.
 """
 
-from unittest.mock import patch
-
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework import status
@@ -19,8 +17,8 @@ from fraud.services.detectors import (
     _duplicate_listing,
     _missing_images,
     _rapid_listing,
-    _unverified_owner,
     _suspicious_price,
+    _unverified_owner,
     run_scan,
 )
 from pricing.models import MarketStat
@@ -276,9 +274,7 @@ class FraudSignalAutoScanTests(TestCase):
         self.assertIsNotNone(report)
         self.assertEqual(report.severity, FraudReport.Severity.HIGH)
         # Landlord notification was created by the signal.
-        self.assertTrue(
-            owner.notifications.filter(notification_type="fraud_flag").exists()
-        )
+        self.assertTrue(owner.notifications.filter(notification_type="fraud_flag").exists())
 
     def test_low_severity_room_does_not_notify(self):
         # A brand-new listing with nothing to compare against only trips
@@ -286,9 +282,7 @@ class FraudSignalAutoScanTests(TestCase):
         # informational and must not interrupt the landlord.
         owner = make_user("o")
         make_room(owner, title="Lonely Studio, Mirpur")
-        self.assertFalse(
-            owner.notifications.filter(notification_type="fraud_flag").exists()
-        )
+        self.assertFalse(owner.notifications.filter(notification_type="fraud_flag").exists())
 
 
 class FraudViewPermissionTests(APITestCase):
@@ -343,9 +337,7 @@ class FraudViewPermissionTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_admin_can_review(self):
-        admin = User.objects.create_user(
-            username="boss", password="x", is_staff=True
-        )
+        admin = User.objects.create_user(username="boss", password="x", is_staff=True)
         self._auth(admin)
         report = FraudReport.objects.get(room=self.room)
         res = self.client.post(

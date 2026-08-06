@@ -91,7 +91,9 @@ class FraudReportListView(APIView):
         queryset = queryset.select_related("room__owner").prefetch_related(
             "signals", "room__images"
         )
-        return Response(FraudReportSerializer(queryset, many=True, context={"request": request}).data)
+        return Response(
+            FraudReportSerializer(queryset, many=True, context={"request": request}).data
+        )
 
 
 class FraudRoomScanView(APIView):
@@ -102,8 +104,7 @@ class FraudRoomScanView(APIView):
     @extend_schema(
         tags=["Fraud"],
         summary="Re-scan a room",
-        description="Reruns every detector and replaces the room's report. "
-        "Owner or admin only.",
+        description="Reruns every detector and replaces the room's report. Owner or admin only.",
         responses=FraudReportSerializer,
     )
     def post(self, request, room_id):

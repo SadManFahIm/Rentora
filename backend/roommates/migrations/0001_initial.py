@@ -6,7 +6,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -15,41 +14,116 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='RoommateProfile',
+            name="RoommateProfile",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('budget_min', models.DecimalField(decimal_places=2, max_digits=10)),
-                ('budget_max', models.DecimalField(decimal_places=2, max_digits=10)),
-                ('preferred_area', models.CharField(choices=[('Dhanmondi', 'Dhanmondi'), ('Mirpur', 'Mirpur'), ('Gulshan', 'Gulshan'), ('Banani', 'Banani'), ('Mohammadpur', 'Mohammadpur'), ('Azimpur', 'Azimpur')], max_length=50)),
-                ('room_type_pref', models.CharField(choices=[('single', 'Single'), ('shared', 'Shared'), ('studio', 'Studio')], max_length=10)),
-                ('gender_pref', models.CharField(choices=[('any', 'Any'), ('male', 'Male'), ('female', 'Female')], default='any', max_length=10)),
-                ('lifestyle', models.JSONField(blank=True, default=list)),
-                ('occupation', models.CharField(blank=True, max_length=120)),
-                ('bio', models.TextField(blank=True)),
-                ('move_in_date', models.DateField(blank=True, null=True)),
-                ('is_looking', models.BooleanField(default=True, help_text='Currently open to matches.')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('user', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='roommate_profile', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("budget_min", models.DecimalField(decimal_places=2, max_digits=10)),
+                ("budget_max", models.DecimalField(decimal_places=2, max_digits=10)),
+                (
+                    "preferred_area",
+                    models.CharField(
+                        choices=[
+                            ("Dhanmondi", "Dhanmondi"),
+                            ("Mirpur", "Mirpur"),
+                            ("Gulshan", "Gulshan"),
+                            ("Banani", "Banani"),
+                            ("Mohammadpur", "Mohammadpur"),
+                            ("Azimpur", "Azimpur"),
+                        ],
+                        max_length=50,
+                    ),
+                ),
+                (
+                    "room_type_pref",
+                    models.CharField(
+                        choices=[("single", "Single"), ("shared", "Shared"), ("studio", "Studio")],
+                        max_length=10,
+                    ),
+                ),
+                (
+                    "gender_pref",
+                    models.CharField(
+                        choices=[("any", "Any"), ("male", "Male"), ("female", "Female")],
+                        default="any",
+                        max_length=10,
+                    ),
+                ),
+                ("lifestyle", models.JSONField(blank=True, default=list)),
+                ("occupation", models.CharField(blank=True, max_length=120)),
+                ("bio", models.TextField(blank=True)),
+                ("move_in_date", models.DateField(blank=True, null=True)),
+                (
+                    "is_looking",
+                    models.BooleanField(default=True, help_text="Currently open to matches."),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "user",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="roommate_profile",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-updated_at'],
+                "ordering": ["-updated_at"],
             },
         ),
         migrations.CreateModel(
-            name='RoommateMatchRequest',
+            name="RoommateMatchRequest",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('message', models.TextField(blank=True)),
-                ('status', models.CharField(choices=[('pending', 'Pending'), ('approved', 'Approved'), ('rejected', 'Rejected')], default='pending', max_length=10)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('receiver', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='received_roommate_requests', to=settings.AUTH_USER_MODEL)),
-                ('sender', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='sent_roommate_requests', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("message", models.TextField(blank=True)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("pending", "Pending"),
+                            ("approved", "Approved"),
+                            ("rejected", "Rejected"),
+                        ],
+                        default="pending",
+                        max_length=10,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "receiver",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="received_roommate_requests",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "sender",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="sent_roommate_requests",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
-                'constraints': [models.UniqueConstraint(fields=('sender', 'receiver'), name='unique_roommate_request_pair')],
+                "ordering": ["-created_at"],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("sender", "receiver"), name="unique_roommate_request_pair"
+                    )
+                ],
             },
         ),
     ]

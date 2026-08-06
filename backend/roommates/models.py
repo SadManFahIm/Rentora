@@ -79,7 +79,9 @@ class RoommateMatchRequest(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="sent_roommate_requests"
     )
     receiver = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="received_roommate_requests"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="received_roommate_requests",
     )
     message = models.TextField(blank=True)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)

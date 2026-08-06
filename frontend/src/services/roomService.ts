@@ -12,8 +12,7 @@ function buildParams(filters: RoomFilters): Record<string, string> {
 
   if (filters.query) params.search = filters.query;
   if (filters.area && filters.area !== "All") params.area = filters.area;
-  if (filters.type && filters.type !== "All")
-    params.room_type = filters.type.toLowerCase();
+  if (filters.type && filters.type !== "All") params.room_type = filters.type.toLowerCase();
   if (filters.gender && filters.gender !== "Any")
     params.gender_preference = filters.gender.toLowerCase();
   if (filters.minPrice) params.price__gte = filters.minPrice;

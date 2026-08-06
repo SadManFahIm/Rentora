@@ -41,7 +41,8 @@ class RecommendationListView(APIView):
         scored_rooms = get_hybrid_recommendations(request.user, limit=limit)
 
         payload = [
-            {"room": sr.room, "match_score": sr.score, "match_reasons": sr.reasons} for sr in scored_rooms
+            {"room": sr.room, "match_score": sr.score, "match_reasons": sr.reasons}
+            for sr in scored_rooms
         ]
         data = RecommendationSerializer(payload, many=True, context={"request": request}).data
 

@@ -184,12 +184,7 @@ export type PaymentMethod = PaymentGateway | "nagad" | "manual";
 export type PaymentType = "booking_deposit" | "monthly_rent" | "security_deposit";
 
 export type PaymentStatus =
-  | "initiated"
-  | "pending"
-  | "success"
-  | "failed"
-  | "cancelled"
-  | "refunded";
+  "initiated" | "pending" | "success" | "failed" | "cancelled" | "refunded";
 
 export interface Payment {
   id: number;

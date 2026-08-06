@@ -26,11 +26,19 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
       return (
         <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-4 text-center">
           <AlertTriangle className="size-14 text-brand" />
-          <h1 className="font-display text-2xl font-extrabold text-foreground">Something went wrong</h1>
+          <h1 className="font-display text-2xl font-extrabold text-foreground">
+            Something went wrong
+          </h1>
           <p className="max-w-md text-sm text-muted-foreground">
-            We hit an unexpected error. Try going back home — if the problem persists, please refresh the page.
+            We hit an unexpected error. Try going back home — if the problem persists, please
+            refresh the page.
           </p>
-          <Button variant="brand" onClick={() => { window.location.href = "/"; }}>
+          <Button
+            variant="brand"
+            onClick={() => {
+              window.location.href = "/";
+            }}
+          >
             Go Home
           </Button>
         </div>

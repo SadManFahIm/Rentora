@@ -29,13 +29,16 @@ function HeroSection() {
     <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-10 px-4 py-12 md:gap-16 md:px-6 md:py-16 lg:grid-cols-2 lg:px-8">
       <div>
         <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-orange-50 px-3.5 py-1.5 text-sm font-semibold text-orange-600 dark:bg-orange-950/40 dark:text-orange-400">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-orange-600" /> 2,400+ Verified Listings in Dhaka
+          <span className="h-2 w-2 animate-pulse rounded-full bg-orange-600" /> 2,400+ Verified
+          Listings in Dhaka
         </div>
         <h1 className="mb-4 font-display text-[clamp(2.2rem,4vw,3.2rem)] font-bold leading-[1.15] tracking-tight text-foreground">
-          Find Your Perfect <em className="not-italic text-orange-600 dark:text-orange-400">Room</em> in Bangladesh
+          Find Your Perfect{" "}
+          <em className="not-italic text-orange-600 dark:text-orange-400">Room</em> in Bangladesh
         </h1>
         <p className="mb-8 text-base leading-relaxed text-gray-600 dark:text-gray-400 sm:text-lg">
-          AI-powered room search with verified landlords, secure payments, and real-time availability. The smarter way to rent in 2025.
+          AI-powered room search with verified landlords, secure payments, and real-time
+          availability. The smarter way to rent in 2025.
         </p>
         <div className="flex gap-2 rounded-2xl border border-gray-200 bg-card p-2 shadow-sm dark:border-gray-800">
           <Input
@@ -47,7 +50,10 @@ function HeroSection() {
               if (e.key === "Enter") handleSearch();
             }}
           />
-          <Button className="h-11 shrink-0 bg-orange-600 text-white hover:bg-orange-700" onClick={handleSearch}>
+          <Button
+            className="h-11 shrink-0 bg-orange-600 text-white hover:bg-orange-700"
+            onClick={handleSearch}
+          >
             Search Rooms
           </Button>
         </div>
@@ -111,10 +117,26 @@ function HeroSection() {
 
 function AISection() {
   const features: AIFeature[] = [
-    { icon: "🎯", title: "Smart Recommendations", desc: "Personalized room suggestions based on your budget, location history and preferences." },
-    { icon: "✍️", title: "AI Description Generator", desc: "Auto-generate professional listing descriptions with grammar correction." },
-    { icon: "🛡️", title: "Fraud Detection", desc: "Detects duplicate listings, suspicious pricing, and fake images automatically." },
-    { icon: "📈", title: "Price Prediction", desc: "Get optimal rent price suggestions based on market trends and area data." },
+    {
+      icon: "🎯",
+      title: "Smart Recommendations",
+      desc: "Personalized room suggestions based on your budget, location history and preferences.",
+    },
+    {
+      icon: "✍️",
+      title: "AI Description Generator",
+      desc: "Auto-generate professional listing descriptions with grammar correction.",
+    },
+    {
+      icon: "🛡️",
+      title: "Fraud Detection",
+      desc: "Detects duplicate listings, suspicious pricing, and fake images automatically.",
+    },
+    {
+      icon: "📈",
+      title: "Price Prediction",
+      desc: "Get optimal rent price suggestions based on market trends and area data.",
+    },
   ];
   return (
     <div className="my-10 bg-gray-900 px-4 py-12 text-white md:px-6 md:py-16 lg:px-8">
@@ -128,7 +150,8 @@ function AISection() {
           Artificial Intelligence
         </h2>
         <p className="mb-8 leading-relaxed text-white/70">
-          Our AI engine analyzes thousands of listings to give you the best recommendations, detect fraud, and predict fair market prices.
+          Our AI engine analyzes thousands of listings to give you the best recommendations, detect
+          fraud, and predict fair market prices.
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {features.map((f) => (
@@ -150,10 +173,15 @@ function AISection() {
 function ReviewSection() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 md:px-6 md:py-16 lg:px-8">
-      <h2 className="mb-6 font-display text-xl font-bold text-foreground sm:text-2xl">What Tenants Say ⭐</h2>
+      <h2 className="mb-6 font-display text-xl font-bold text-foreground sm:text-2xl">
+        What Tenants Say ⭐
+      </h2>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {mockReviews.map((r) => (
-          <div key={r.name} className="rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800">
+          <div
+            key={r.name}
+            className="rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800"
+          >
             <div className="mb-2.5 flex items-start justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-600 text-xs font-bold text-white">
@@ -164,7 +192,9 @@ function ReviewSection() {
                   <div className="text-xs text-gray-600 dark:text-gray-400">{r.date}</div>
                 </div>
               </div>
-              <span className="text-sm font-semibold text-amber-500">{"★".repeat(r.rating)} {r.rating}</span>
+              <span className="text-sm font-semibold text-amber-500">
+                {"★".repeat(r.rating)} {r.rating}
+              </span>
             </div>
             <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">{r.text}</p>
           </div>
@@ -189,7 +219,9 @@ export default function Home() {
       <div className="mx-auto max-w-7xl px-4 py-12 md:px-6 md:py-16 lg:px-8">
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h2 className="font-display text-xl font-bold text-foreground sm:text-2xl">Featured Rooms</h2>
+            <h2 className="font-display text-xl font-bold text-foreground sm:text-2xl">
+              Featured Rooms
+            </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400">Hand-picked by our team</p>
           </div>
           <Button variant="outline" onClick={() => navigate("/rooms")}>

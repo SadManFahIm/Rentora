@@ -92,7 +92,9 @@ def _auth_headers(token: str) -> dict[str, str]:
     }
 
 
-def _post(path: str, payload: dict[str, Any], *, retry_on_auth_error: bool = True) -> dict[str, Any]:
+def _post(
+    path: str, payload: dict[str, Any], *, retry_on_auth_error: bool = True
+) -> dict[str, Any]:
     token = get_grant_token()
     try:
         response = requests.post(
@@ -167,7 +169,14 @@ def query_payment(payment_id: str) -> dict[str, Any]:
         raise BkashError(f"Could not query bKash payment status: {exc}") from exc
 
 
-def refund_payment(payment_id: str, trx_id: str, amount: str, *, sku: str = "refund", reason: str = "requested by customer") -> dict[str, Any]:
+def refund_payment(
+    payment_id: str,
+    trx_id: str,
+    amount: str,
+    *,
+    sku: str = "refund",
+    reason: str = "requested by customer",
+) -> dict[str, Any]:
     """Refund a previously executed bKash transaction.
 
     Raises on any error response — a caller must never treat a bare "no

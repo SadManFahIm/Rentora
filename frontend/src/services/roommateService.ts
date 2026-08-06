@@ -149,11 +149,13 @@ export const roommateService = {
   },
 
   /** POST /roommates/requests/{id}/action/ — approve or reject. */
-  async respondToRequest(requestId: number, action: "approve" | "reject"): Promise<RoommateRequest> {
-    const { data } = await api.post<ApiRequest>(
-      `/roommates/requests/${requestId}/action/`,
-      { action }
-    );
+  async respondToRequest(
+    requestId: number,
+    action: "approve" | "reject"
+  ): Promise<RoommateRequest> {
+    const { data } = await api.post<ApiRequest>(`/roommates/requests/${requestId}/action/`, {
+      action,
+    });
     return mapRequest(data);
   },
 };

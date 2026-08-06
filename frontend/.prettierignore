@@ -1,0 +1,9 @@
+# Build artifacts
+dist
+build
+
+# Dependencies
+node_modules
+
+# Configs handled by other tools
+package-lock.json

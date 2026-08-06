@@ -79,15 +79,22 @@ function ProfileForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-2xl border border-gray-200 bg-card p-6 dark:border-gray-800">
-      <h2 className="mb-1 font-display text-lg font-bold text-foreground">Set up your roommate profile</h2>
+    <form
+      onSubmit={handleSubmit}
+      className="rounded-2xl border border-gray-200 bg-card p-6 dark:border-gray-800"
+    >
+      <h2 className="mb-1 font-display text-lg font-bold text-foreground">
+        Set up your roommate profile
+      </h2>
       <p className="mb-5 text-sm text-gray-600 dark:text-gray-400">
         Tell us your budget, preferred area and lifestyle so we can match you with the right person.
       </p>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-foreground">Budget (৳/month)</label>
+          <label className="mb-1.5 block text-sm font-medium text-foreground">
+            Budget (৳/month)
+          </label>
           <div className="flex items-center gap-2">
             <Input
               type="number"
@@ -115,7 +122,9 @@ function ProfileForm({
             className="h-10 w-full rounded-xl border border-gray-300 bg-transparent px-3 text-sm text-foreground outline-none focus:border-brand dark:border-gray-700"
           >
             {AREAS.map((a) => (
-              <option key={a} value={a}>{a}</option>
+              <option key={a} value={a}>
+                {a}
+              </option>
             ))}
           </select>
         </div>
@@ -142,7 +151,9 @@ function ProfileForm({
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-foreground">Roommate gender preference</label>
+          <label className="mb-1.5 block text-sm font-medium text-foreground">
+            Roommate gender preference
+          </label>
           <div className="flex gap-2">
             {GENDER_PREFS.map((g) => (
               <button
@@ -257,8 +268,15 @@ function MatchCard({
   disabled: boolean;
   onRequest: () => void;
 }) {
-  const name = [match.profile.user.first_name, match.profile.user.last_name].filter(Boolean).join(" ") || match.profile.username;
-  const initials = name.split(/\s+/).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
+  const name =
+    [match.profile.user.first_name, match.profile.user.last_name].filter(Boolean).join(" ") ||
+    match.profile.username;
+  const initials = name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0])
+    .join("")
+    .toUpperCase();
 
   return (
     <div className="flex flex-col rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800">
@@ -281,10 +299,15 @@ function MatchCard({
       <div className="mb-3">
         <div className="mb-1 flex items-center justify-between text-sm">
           <span className="text-gray-600 dark:text-gray-400">Match</span>
-          <span className="font-display font-bold text-orange-600 dark:text-orange-400">{match.score}%</span>
+          <span className="font-display font-bold text-orange-600 dark:text-orange-400">
+            {match.score}%
+          </span>
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-          <div className="h-full rounded-full bg-gradient-to-r from-orange-500 to-orange-600" style={{ width: `${match.score}%` }} />
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-orange-500 to-orange-600"
+            style={{ width: `${match.score}%` }}
+          />
         </div>
       </div>
 
@@ -293,13 +316,18 @@ function MatchCard({
       </p>
 
       {match.profile.bio && (
-        <p className="mb-3 text-sm leading-relaxed text-gray-700 dark:text-gray-300">“{match.profile.bio}”</p>
+        <p className="mb-3 text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+          “{match.profile.bio}”
+        </p>
       )}
 
       {match.profile.lifestyle.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-1.5">
           {match.profile.lifestyle.map((tag) => (
-            <span key={tag} className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+            <span
+              key={tag}
+              className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+            >
               {lifestyleLabel(tag)}
             </span>
           ))}
@@ -309,7 +337,10 @@ function MatchCard({
       {match.reasons.length > 0 && (
         <div className="mb-4 flex flex-wrap gap-1.5">
           {match.reasons.map((reason) => (
-            <span key={reason} className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
+            <span
+              key={reason}
+              className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
+            >
               {reason}
             </span>
           ))}
@@ -349,10 +380,17 @@ function RequestsSection() {
           <h3 className="mb-2 text-sm font-semibold text-gray-600 dark:text-gray-400">Incoming</h3>
           <div className="flex flex-col gap-2">
             {incoming.map((r) => (
-              <div key={r.id} className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50/40 p-4 dark:border-amber-900/40 dark:bg-amber-950/10 sm:flex-row sm:items-center sm:justify-between">
+              <div
+                key={r.id}
+                className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50/40 p-4 dark:border-amber-900/40 dark:bg-amber-950/10 sm:flex-row sm:items-center sm:justify-between"
+              >
                 <div>
-                  <div className="text-sm font-semibold text-foreground">{nameOf(r.sender)} wants to share a room</div>
-                  {r.message && <p className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">“{r.message}”</p>}
+                  <div className="text-sm font-semibold text-foreground">
+                    {nameOf(r.sender)} wants to share a room
+                  </div>
+                  {r.message && (
+                    <p className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">“{r.message}”</p>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -383,9 +421,13 @@ function RequestsSection() {
           <h3 className="mb-2 text-sm font-semibold text-gray-600 dark:text-gray-400">Outgoing</h3>
           <div className="flex flex-col gap-2">
             {outgoing.map((r) => (
-              <div key={r.id} className="flex items-center justify-between rounded-xl border border-gray-200 bg-card p-4 dark:border-gray-800">
+              <div
+                key={r.id}
+                className="flex items-center justify-between rounded-xl border border-gray-200 bg-card p-4 dark:border-gray-800"
+              >
                 <div className="text-sm text-gray-700 dark:text-gray-300">
-                  Requested <span className="font-semibold text-foreground">{nameOf(r.receiver)}</span>
+                  Requested{" "}
+                  <span className="font-semibold text-foreground">{nameOf(r.receiver)}</span>
                 </div>
                 <Badge
                   className={cn(
@@ -405,9 +447,13 @@ function RequestsSection() {
       {others.length > 0 && (
         <div className="flex flex-col gap-2">
           {others.map((r) => (
-            <div key={r.id} className="flex items-center justify-between rounded-xl border border-gray-200 bg-card p-4 dark:border-gray-800">
+            <div
+              key={r.id}
+              className="flex items-center justify-between rounded-xl border border-gray-200 bg-card p-4 dark:border-gray-800"
+            >
               <div className="text-sm text-gray-700 dark:text-gray-300">
-                {nameOf(r.sender)}'s request — <span className="font-semibold">{r.statusDisplay}</span>
+                {nameOf(r.sender)}'s request —{" "}
+                <span className="font-semibold">{r.statusDisplay}</span>
               </div>
             </div>
           ))}
@@ -456,10 +502,12 @@ export default function Roommates() {
         <span className="mb-4 text-6xl">👥</span>
         <h1 className="mb-2 font-display text-2xl font-bold text-foreground">Find a roommate</h1>
         <p className="mb-6 max-w-md text-gray-600 dark:text-gray-400">
-          Split the rent and find someone who matches your budget, area and lifestyle.
-          Sign in to get started.
+          Split the rent and find someone who matches your budget, area and lifestyle. Sign in to
+          get started.
         </p>
-        <Button className="bg-orange-600 text-white hover:bg-orange-700">Sign in to continue</Button>
+        <Button className="bg-orange-600 text-white hover:bg-orange-700">
+          Sign in to continue
+        </Button>
       </div>
     );
   }
@@ -493,7 +541,9 @@ export default function Roommates() {
       {hasProfile && !showForm && (
         <>
           {matches.isLoading ? (
-            <div className="py-15 text-center text-gray-600 dark:text-gray-400">Finding your best matches…</div>
+            <div className="py-15 text-center text-gray-600 dark:text-gray-400">
+              Finding your best matches…
+            </div>
           ) : matches.data && matches.data.length > 0 ? (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {matches.data.map((m) => (
@@ -503,7 +553,10 @@ export default function Roommates() {
                   disabled={selectedUserId === m.profile.user.id}
                   onRequest={() => {
                     setSelectedUserId(m.profile.user.id);
-                    sendRequest.mutate({ receiverId: m.profile.user.id, message: "Hi! Saw we're both looking in the same area. Want to share a room?" });
+                    sendRequest.mutate({
+                      receiverId: m.profile.user.id,
+                      message: "Hi! Saw we're both looking in the same area. Want to share a room?",
+                    });
                   }}
                 />
               ))}
@@ -511,9 +564,12 @@ export default function Roommates() {
           ) : (
             <div className="flex flex-col items-center px-5 py-15 text-center text-gray-600 dark:text-gray-400">
               <span className="mb-4 text-5xl">🔍</span>
-              <h3 className="mb-2 font-display text-lg font-bold text-foreground">No matches yet</h3>
+              <h3 className="mb-2 font-display text-lg font-bold text-foreground">
+                No matches yet
+              </h3>
               <p className="max-w-sm">
-                Try widening your budget or choosing a more common area. New profiles appear here as people join.
+                Try widening your budget or choosing a more common area. New profiles appear here as
+                people join.
               </p>
             </div>
           )}

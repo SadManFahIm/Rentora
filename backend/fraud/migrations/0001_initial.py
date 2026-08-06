@@ -5,43 +5,113 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('rooms', '0001_initial'),
+        ("rooms", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='FraudReport',
+            name="FraudReport",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('severity', models.CharField(choices=[('clean', 'Clean'), ('low', 'Low'), ('medium', 'Medium'), ('high', 'High')], default='clean', max_length=10)),
-                ('status', models.CharField(choices=[('open', 'Open'), ('reviewed', 'Reviewed'), ('dismissed', 'Dismissed')], default='open', max_length=10)),
-                ('score', models.IntegerField(default=0, help_text='0-100 aggregate risk score.')),
-                ('summary', models.TextField(blank=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('room', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='fraud_report', to='rooms.room')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                (
+                    "severity",
+                    models.CharField(
+                        choices=[
+                            ("clean", "Clean"),
+                            ("low", "Low"),
+                            ("medium", "Medium"),
+                            ("high", "High"),
+                        ],
+                        default="clean",
+                        max_length=10,
+                    ),
+                ),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("open", "Open"),
+                            ("reviewed", "Reviewed"),
+                            ("dismissed", "Dismissed"),
+                        ],
+                        default="open",
+                        max_length=10,
+                    ),
+                ),
+                ("score", models.IntegerField(default=0, help_text="0-100 aggregate risk score.")),
+                ("summary", models.TextField(blank=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "room",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="fraud_report",
+                        to="rooms.room",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-score'],
+                "ordering": ["-score"],
             },
         ),
         migrations.CreateModel(
-            name='FraudSignal',
+            name="FraudSignal",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('detector', models.CharField(choices=[('duplicate_listing', 'Duplicate Listing'), ('suspicious_price', 'Suspicious Price'), ('missing_images', 'Missing Images'), ('rapid_listing', 'Rapid Listing'), ('unverified_owner', 'Unverified Owner'), ('description_similarity', 'Description Similarity')], max_length=30)),
-                ('severity', models.CharField(choices=[('clean', 'Clean'), ('low', 'Low'), ('medium', 'Medium'), ('high', 'High')], max_length=10)),
-                ('message', models.TextField()),
-                ('detail', models.JSONField(blank=True, default=dict)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('report', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='signals', to='fraud.fraudreport')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                (
+                    "detector",
+                    models.CharField(
+                        choices=[
+                            ("duplicate_listing", "Duplicate Listing"),
+                            ("suspicious_price", "Suspicious Price"),
+                            ("missing_images", "Missing Images"),
+                            ("rapid_listing", "Rapid Listing"),
+                            ("unverified_owner", "Unverified Owner"),
+                            ("description_similarity", "Description Similarity"),
+                        ],
+                        max_length=30,
+                    ),
+                ),
+                (
+                    "severity",
+                    models.CharField(
+                        choices=[
+                            ("clean", "Clean"),
+                            ("low", "Low"),
+                            ("medium", "Medium"),
+                            ("high", "High"),
+                        ],
+                        max_length=10,
+                    ),
+                ),
+                ("message", models.TextField()),
+                ("detail", models.JSONField(blank=True, default=dict)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "report",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="signals",
+                        to="fraud.fraudreport",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-severity', 'detector'],
+                "ordering": ["-severity", "detector"],
             },
         ),
     ]

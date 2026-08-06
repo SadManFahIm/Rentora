@@ -3,16 +3,32 @@
    every Tailwind utility regardless of specificity, per the CSS cascade
    layers spec, silently zeroing out every spacing utility in the app. */
 @layer base {
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 
   body {
     font-family: var(--font-body);
     background: var(--background);
     color: var(--foreground);
-    transition: background 0.3s, color 0.3s;
+    transition:
+      background 0.3s,
+      color 0.3s;
   }
 
-  * { scrollbar-width: thin; scrollbar-color: var(--color-brand) transparent; }
-  *::-webkit-scrollbar { width: 4px; }
-  *::-webkit-scrollbar-thumb { background: var(--color-brand); border-radius: 2px; }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-brand) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 4px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--color-brand);
+    border-radius: 2px;
+  }
 }

@@ -44,7 +44,9 @@ class RoommateProfileView(APIView):
     def get(self, request):
         profile = RoommateProfile.objects.filter(user=request.user).first()
         if profile is None:
-            return Response({"detail": "No roommate profile yet."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "No roommate profile yet."}, status=status.HTTP_404_NOT_FOUND
+            )
         return Response(RoommateProfileSerializer(profile).data)
 
     @extend_schema(
@@ -87,14 +89,13 @@ class RoommateMatchesView(APIView):
             )
 
         already_requested = set(
-            RoommateMatchRequest.objects.filter(sender=request.user).values_list("receiver_id", flat=True)
+            RoommateMatchRequest.objects.filter(sender=request.user).values_list(
+                "receiver_id", flat=True
+            )
         )
         results = find_matches(profile, exclude_users=already_requested)
         data = RoommateMatchSerializer(
-            [
-                {"score": m.score, "reasons": m.reasons, "profile": m.profile}
-                for m in results
-            ],
+            [{"score": m.score, "reasons": m.reasons, "profile": m.profile} for m in results],
             many=True,
             context={"request": request},
         ).data
@@ -119,7 +120,9 @@ class RoommateRequestListCreateView(APIView):
         requests = RoommateMatchRequest.objects.filter(
             Q(sender=request.user) | Q(receiver=request.user)
         ).order_by("-created_at")
-        return Response(RoommateRequestSerializer(requests, many=True, context={"request": request}).data)
+        return Response(
+            RoommateRequestSerializer(requests, many=True, context={"request": request}).data
+        )
 
     @extend_schema(
         tags=["Roommates"],
@@ -135,7 +138,9 @@ class RoommateRequestListCreateView(APIView):
         receiver_id = serializer.validated_data["receiver_id"]
 
         if receiver_id == request.user.id:
-            raise ValidationError({"receiver_id": "You cannot send a roommate request to yourself."})
+            raise ValidationError(
+                {"receiver_id": "You cannot send a roommate request to yourself."}
+            )
         if not RoommateProfile.objects.filter(user_id=receiver_id, is_looking=True).exists():
             raise ValidationError({"receiver_id": "This user has no active roommate profile."})
 
@@ -145,10 +150,10 @@ class RoommateRequestListCreateView(APIView):
                 receiver_id=receiver_id,
                 message=serializer.validated_data.get("message", ""),
             )
-        except IntegrityError:
+        except IntegrityError as exc:
             raise ValidationError(
                 {"receiver_id": "A roommate request between you and this user already exists."}
-            )
+            ) from exc
 
         create_notification(
             user=roommate_request.receiver,
@@ -201,4 +206,6 @@ class RoommateRequestActionView(APIView):
             RoommateProfile.objects.filter(user=roommate_request.sender).update(is_looking=False)
             RoommateProfile.objects.filter(user=roommate_request.receiver).update(is_looking=False)
 
-        return Response(RoommateRequestSerializer(roommate_request, context={"request": request}).data)
+        return Response(
+            RoommateRequestSerializer(roommate_request, context={"request": request}).data
+        )

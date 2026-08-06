@@ -19,7 +19,7 @@ def notification_group_name(user_id: int) -> str:
 
 
 def create_notification(
-    user: "User",
+    user: User,
     notification_type: str,
     title: str,
     message: str,

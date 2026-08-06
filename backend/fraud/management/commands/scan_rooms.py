@@ -14,10 +14,8 @@ pattern), so run this from a cron/Task Scheduler entry, e.g.:
 
 from django.core.management.base import BaseCommand
 
-from rooms.models import Room
-
-from fraud.models import FraudReport
 from fraud.services.detectors import run_scan
+from rooms.models import Room
 
 
 class Command(BaseCommand):
@@ -50,7 +48,5 @@ class Command(BaseCommand):
                     self.stdout.write(f"  ✓ {room.title} (clean)")
 
         self.stdout.write(
-            self.style.SUCCESS(
-                f"Done. {total} scanned, {flagged} flagged, {clean} clean."
-            )
+            self.style.SUCCESS(f"Done. {total} scanned, {flagged} flagged, {clean} clean.")
         )

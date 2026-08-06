@@ -5,62 +5,140 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('bookings', '0002_booking_security_deposit_amount_and_more'),
-        ('payments', '0001_initial'),
+        ("bookings", "0002_booking_security_deposit_amount_and_more"),
+        ("payments", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Invoice',
+            name="Invoice",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('invoice_number', models.CharField(editable=False, max_length=32, unique=True)),
-                ('period_start', models.DateField()),
-                ('period_end', models.DateField()),
-                ('amount', models.DecimalField(decimal_places=2, max_digits=10)),
-                ('status', models.CharField(choices=[('draft', 'Draft'), ('sent', 'Sent'), ('paid', 'Paid')], default='draft', max_length=10)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('booking', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='invoices', to='bookings.booking')),
-                ('payment', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='invoice', to='payments.payment')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("invoice_number", models.CharField(editable=False, max_length=32, unique=True)),
+                ("period_start", models.DateField()),
+                ("period_end", models.DateField()),
+                ("amount", models.DecimalField(decimal_places=2, max_digits=10)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[("draft", "Draft"), ("sent", "Sent"), ("paid", "Paid")],
+                        default="draft",
+                        max_length=10,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "booking",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="invoices",
+                        to="bookings.booking",
+                    ),
+                ),
+                (
+                    "payment",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="invoice",
+                        to="payments.payment",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
+                "ordering": ["-created_at"],
             },
         ),
         migrations.CreateModel(
-            name='PaymentAuditLog',
+            name="PaymentAuditLog",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('old_status', models.CharField(blank=True, max_length=10)),
-                ('new_status', models.CharField(max_length=10)),
-                ('changed_by', models.CharField(default='system', max_length=32)),
-                ('metadata', models.JSONField(blank=True, default=dict)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('payment', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='audit_logs', to='payments.payment')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("old_status", models.CharField(blank=True, max_length=10)),
+                ("new_status", models.CharField(max_length=10)),
+                ("changed_by", models.CharField(default="system", max_length=32)),
+                ("metadata", models.JSONField(blank=True, default=dict)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "payment",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="audit_logs",
+                        to="payments.payment",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
-                'indexes': [models.Index(fields=['payment', 'created_at'], name='payments_pa_payment_62e511_idx')],
+                "ordering": ["-created_at"],
+                "indexes": [
+                    models.Index(
+                        fields=["payment", "created_at"], name="payments_pa_payment_62e511_idx"
+                    )
+                ],
             },
         ),
         migrations.CreateModel(
-            name='PaymentSchedule',
+            name="PaymentSchedule",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('due_date', models.DateField()),
-                ('amount', models.DecimalField(decimal_places=2, max_digits=10)),
-                ('status', models.CharField(choices=[('upcoming', 'Upcoming'), ('due', 'Due'), ('overdue', 'Overdue'), ('paid', 'Paid')], default='upcoming', max_length=10)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('booking', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='payment_schedules', to='bookings.booking')),
-                ('payment', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='schedule_entries', to='payments.payment')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("due_date", models.DateField()),
+                ("amount", models.DecimalField(decimal_places=2, max_digits=10)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("upcoming", "Upcoming"),
+                            ("due", "Due"),
+                            ("overdue", "Overdue"),
+                            ("paid", "Paid"),
+                        ],
+                        default="upcoming",
+                        max_length=10,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "booking",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="payment_schedules",
+                        to="bookings.booking",
+                    ),
+                ),
+                (
+                    "payment",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="schedule_entries",
+                        to="payments.payment",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['due_date'],
-                'indexes': [models.Index(fields=['booking', 'due_date'], name='payments_pa_booking_c5a9a0_idx')],
+                "ordering": ["due_date"],
+                "indexes": [
+                    models.Index(
+                        fields=["booking", "due_date"], name="payments_pa_booking_c5a9a0_idx"
+                    )
+                ],
             },
         ),
     ]

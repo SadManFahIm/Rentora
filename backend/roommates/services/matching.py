@@ -79,11 +79,9 @@ def _gender_compatible(a: RoommateProfile, b: RoommateProfile) -> bool:
     a_user_gender = a.user.gender or "any"
     b_user_gender = b.user.gender or "any"
 
-    if a.gender_pref != "any" and a.gender_pref != b_user_gender:
-        return False
-    if b.gender_pref != "any" and b.gender_pref != a_user_gender:
-        return False
-    return True
+    incompatible_a = a.gender_pref != "any" and a.gender_pref != b_user_gender
+    incompatible_b = b.gender_pref != "any" and b.gender_pref != a_user_gender
+    return not (incompatible_a or incompatible_b)
 
 
 def _score_pair(a: RoommateProfile, b: RoommateProfile) -> MatchResult | None:
