@@ -131,6 +131,9 @@ jobs:
           output: both
           thresholds: "50 75"
 
+      - name: Append file-level detail to summary
+        run: python3 scripts/coverage_details.py coverage/backend/coverage.xml coverage/frontend/cobertura-coverage.xml code-coverage-results.md
+
       - name: Add Coverage PR Comment
         # Fork PRs get a read-only GITHUB_TOKEN, so commenting can fail there
         # (e.g. office fork -> personal repo PRs). Never fail the check for it.
@@ -139,3 +142,48 @@ jobs:
         with:
           recreate: true
           path: code-coverage-results.md
+
+  coverage-history:
+    name: Coverage history (branch)
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download backend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-backend
+          path: coverage/backend
+
+      - name: Download frontend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-frontend
+          path: coverage/frontend
+
+      - name: Fetch existing history from coverage-history branch
+        run: |
+          git fetch origin coverage-history || true
+          if git ls-tree -r --name-only origin/coverage-history -- docs/coverage/history.csv 2>/dev/null | grep -q history.csv; then
+            mkdir -p docs/coverage
+            git show origin/coverage-history:docs/coverage/history.csv > docs/coverage/history.csv
+          fi
+
+      - name: Update coverage history
+        run: |
+          python3 scripts/coverage_history.py coverage/backend/coverage.xml coverage/frontend/cobertura-coverage.xml docs/coverage
+
+      - name: Deploy to coverage-history branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          publish_branch: coverage-history
+          publish_dir: docs/coverage
+          keep_files: true
+          force_orphan: false
+          user_name: github-actions[bot]
+          user_email: github-actions[bot]@users.noreply.github.com
+          commit_message: "coverage: update history for ${{ github.sha }}"
