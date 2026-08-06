@@ -23,6 +23,7 @@ const NAV_ITEMS: { label: string; to: string }[] = [
   { label: "Rooms", to: "/rooms" },
   { label: "Map", to: "/map" },
   { label: "Chat", to: "/chat" },
+  { label: "Roommates", to: "/roommates" },
 ];
 
 export default function Navbar() {
