@@ -38,7 +38,7 @@ interface ApiStatus {
   message: string;
 }
 
-function mapSignal(api: ApiSignal): FraudReport["signals"][number] {
+export function mapSignal(api: ApiSignal): FraudReport["signals"][number] {
   return {
     id: api.id,
     detector: api.detector,
@@ -50,7 +50,7 @@ function mapSignal(api: ApiSignal): FraudReport["signals"][number] {
   };
 }
 
-function mapReport(api: ApiReport): FraudReport {
+export function mapReport(api: ApiReport): FraudReport {
   return {
     id: api.id,
     room: mapRoom(api.room),
