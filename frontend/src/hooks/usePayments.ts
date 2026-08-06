@@ -24,8 +24,7 @@ export const paymentKeys = {
   detail: (id: number) => [...paymentKeys.all, "detail", id] as const,
   byTransaction: (transactionId: string) =>
     [...paymentKeys.all, "by-transaction", transactionId] as const,
-  depositStatus: (bookingId: number) =>
-    ["bookings", bookingId, "deposit-status"] as const,
+  depositStatus: (bookingId: number) => ["bookings", bookingId, "deposit-status"] as const,
 };
 
 /** The current user's payment history, optionally filtered by status/method/type/date range. */

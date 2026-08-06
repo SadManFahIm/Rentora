@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Download, Heart, Loader2, ShieldCheck } from "lucide-react";
+import { Download, Heart, Loader2, ShieldAlert, ShieldCheck } from "lucide-react";
 import { useDashboard } from "../../hooks/useDashboard";
 import { useBookings } from "../../hooks/useBookings";
+import { useFraudReports, useReviewFraudReport, useScanRoom } from "../../hooks/useFraud";
 import {
   useDepositStatus,
   useDownloadReceipt,
@@ -11,6 +12,7 @@ import {
   usePaymentSummary,
 } from "../../hooks/usePayments";
 import { wishlistService } from "../../services/wishlistService";
+import { useApp } from "../../context/AppContext";
 import RoomCard from "../../components/RoomCard/RoomCard";
 import RoomModal from "../../components/RoomModal/RoomModal";
 import PaymentMethodModal, {
@@ -29,8 +31,8 @@ import {
 import type { Booking, PaymentStatus, Room } from "../../types";
 import { cn } from "../../lib/utils";
 
-type DashboardTab = "overview" | "bookings" | "payments" | "wishlist";
-const TABS: DashboardTab[] = ["overview", "bookings", "payments", "wishlist"];
+type DashboardTab = "overview" | "bookings" | "payments" | "wishlist" | "fraud";
+const TABS: DashboardTab[] = ["overview", "bookings", "payments", "wishlist", "fraud"];
 
 interface StatCard {
   icon: string;
@@ -137,7 +139,10 @@ function BookingListItem({
       <div className="flex flex-col gap-2">
         {booking.status === "approved" && (
           <>
-            <Button className="bg-orange-600 text-white hover:bg-orange-700" onClick={() => onPayNow(booking)}>
+            <Button
+              className="bg-orange-600 text-white hover:bg-orange-700"
+              onClick={() => onPayNow(booking)}
+            >
               Pay Now
             </Button>
             <Button variant="outline">Sign Agreement 📝</Button>
@@ -216,10 +221,30 @@ export default function Dashboard() {
   const landlordCards: StatCard[] | null =
     stats?.landlord != null
       ? [
-          { icon: "🏢", label: "My Listings", value: String(stats.landlord.total_listings), change: "" },
-          { icon: "📨", label: "Bookings Received", value: String(stats.landlord.total_bookings_received), change: "" },
-          { icon: "⭐", label: "Avg Rating", value: stats.landlord.avg_rating.toFixed(1), change: "" },
-          { icon: "💰", label: "Revenue", value: takaFmt(stats.landlord.total_revenue), change: "approved bookings" },
+          {
+            icon: "🏢",
+            label: "My Listings",
+            value: String(stats.landlord.total_listings),
+            change: "",
+          },
+          {
+            icon: "📨",
+            label: "Bookings Received",
+            value: String(stats.landlord.total_bookings_received),
+            change: "",
+          },
+          {
+            icon: "⭐",
+            label: "Avg Rating",
+            value: stats.landlord.avg_rating.toFixed(1),
+            change: "",
+          },
+          {
+            icon: "💰",
+            label: "Revenue",
+            value: takaFmt(stats.landlord.total_revenue),
+            change: "approved bookings",
+          },
         ]
       : null;
 
@@ -246,9 +271,14 @@ export default function Dashboard() {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground">My Dashboard</h1>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Welcome back! Here's your activity.</p>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            Welcome back! Here's your activity.
+          </p>
         </div>
-        <Button className="bg-orange-600 text-white hover:bg-orange-700" onClick={() => navigate("/rooms")}>
+        <Button
+          className="bg-orange-600 text-white hover:bg-orange-700"
+          onClick={() => navigate("/rooms")}
+        >
           + List a Room
         </Button>
       </div>
@@ -274,25 +304,37 @@ export default function Dashboard() {
         <>
           <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {statCards.map((s) => (
-              <div key={s.label} className="rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800">
+              <div
+                key={s.label}
+                className="rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800"
+              >
                 <div className="mb-2.5 text-2xl">{s.icon}</div>
                 <h3 className="font-display text-2xl font-bold text-foreground">{s.value}</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400">{s.label}</p>
-                {s.change && <div className="text-sm font-semibold text-emerald-500">{s.change}</div>}
+                {s.change && (
+                  <div className="text-sm font-semibold text-emerald-500">{s.change}</div>
+                )}
               </div>
             ))}
           </div>
 
           {landlordCards && (
             <div className="mb-6">
-              <h2 className="mb-3 font-display text-lg font-bold text-foreground">Landlord Overview</h2>
+              <h2 className="mb-3 font-display text-lg font-bold text-foreground">
+                Landlord Overview
+              </h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {landlordCards.map((s) => (
-                  <div key={s.label} className="rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800">
+                  <div
+                    key={s.label}
+                    className="rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800"
+                  >
                     <div className="mb-2.5 text-2xl">{s.icon}</div>
                     <h3 className="font-display text-2xl font-bold text-foreground">{s.value}</h3>
                     <p className="text-sm text-gray-600 dark:text-gray-400">{s.label}</p>
-                    {s.change && <div className="text-sm font-semibold text-emerald-500">{s.change}</div>}
+                    {s.change && (
+                      <div className="text-sm font-semibold text-emerald-500">{s.change}</div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -300,19 +342,25 @@ export default function Dashboard() {
           )}
 
           <div className="rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800">
-            <h3 className="mb-2.5 font-display font-bold text-foreground">🤖 AI Profile Insights</h3>
+            <h3 className="mb-2.5 font-display font-bold text-foreground">
+              🤖 AI Profile Insights
+            </h3>
             <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-              Based on your search history, you prefer <strong className="text-foreground">Studio rooms in Dhanmondi/Banani</strong> within
-              ৳10K-20K budget. Complete your <strong className="text-foreground">KYC verification</strong> to get priority access to premium
-              listings.
+              Based on your search history, you prefer{" "}
+              <strong className="text-foreground">Studio rooms in Dhanmondi/Banani</strong> within
+              ৳10K-20K budget. Complete your{" "}
+              <strong className="text-foreground">KYC verification</strong> to get priority access
+              to premium listings.
             </p>
           </div>
         </>
       )}
 
-      {activeTab === "bookings" && (
-        bookingsLoading ? (
-          <div className="py-15 text-center text-gray-600 dark:text-gray-400">Loading bookings…</div>
+      {activeTab === "bookings" &&
+        (bookingsLoading ? (
+          <div className="py-15 text-center text-gray-600 dark:text-gray-400">
+            Loading bookings…
+          </div>
         ) : bookings.length === 0 ? (
           <div className="flex flex-col items-center px-5 py-15 text-center text-gray-600 dark:text-gray-400">
             <span className="mb-4 text-5xl">📅</span>
@@ -330,8 +378,7 @@ export default function Dashboard() {
               />
             ))}
           </div>
-        )
-      )}
+        ))}
 
       {activeTab === "payments" && (
         <>
@@ -414,25 +461,33 @@ export default function Dashboard() {
           ) : payments.length === 0 ? (
             <div className="flex flex-col items-center px-5 py-15 text-center text-gray-600 dark:text-gray-400">
               <span className="mb-4 text-5xl">💳</span>
-              <h3 className="mb-2 font-display text-lg font-bold text-foreground">No payments yet</h3>
+              <h3 className="mb-2 font-display text-lg font-bold text-foreground">
+                No payments yet
+              </h3>
               <p>Your payment history will show up here.</p>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
               {payments.map((p) => {
-                const isDownloading = downloadReceipt.isPending && downloadReceipt.variables === p.id;
+                const isDownloading =
+                  downloadReceipt.isPending && downloadReceipt.variables === p.id;
                 return (
                   <div
                     key={p.id}
                     className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-card p-4 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="flex-1">
-                      <div className="text-sm font-semibold text-foreground">{formatPaymentDate(p.createdAt)}</div>
+                      <div className="text-sm font-semibold text-foreground">
+                        {formatPaymentDate(p.createdAt)}
+                      </div>
                       <div className="text-xs text-gray-600 dark:text-gray-400">
-                        {paymentMethodLabels[p.method] ?? p.method} • {paymentTypeLabels[p.type] ?? p.type}
+                        {paymentMethodLabels[p.method] ?? p.method} •{" "}
+                        {paymentTypeLabels[p.type] ?? p.type}
                       </div>
                     </div>
-                    <div className="font-display font-bold text-foreground">{takaFmt(p.amount)}</div>
+                    <div className="font-display font-bold text-foreground">
+                      {takaFmt(p.amount)}
+                    </div>
                     <span
                       className={cn(
                         "inline-flex w-fit rounded-full px-2.5 py-0.5 text-xs font-semibold",
@@ -464,24 +519,188 @@ export default function Dashboard() {
         </>
       )}
 
-      {activeTab === "wishlist" && (
-        wishlistLoading ? (
-          <div className="py-15 text-center text-gray-600 dark:text-gray-400">Loading saved rooms…</div>
+      {activeTab === "wishlist" &&
+        (wishlistLoading ? (
+          <div className="py-15 text-center text-gray-600 dark:text-gray-400">
+            Loading saved rooms…
+          </div>
         ) : wishlistedRooms.length === 0 ? (
           <div className="flex flex-col items-center px-5 py-15 text-center text-gray-600 dark:text-gray-400">
             <Heart className="mb-4 size-12" />
-            <h3 className="mb-2 font-display text-lg font-bold text-foreground">No saved rooms yet</h3>
+            <h3 className="mb-2 font-display text-lg font-bold text-foreground">
+              No saved rooms yet
+            </h3>
             <p>Tap the heart icon on any room to save it here.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {wishlistedRooms.map((r) => <RoomCard key={r.id} room={r} onClick={setSelectedRoom} />)}
+            {wishlistedRooms.map((r) => (
+              <RoomCard key={r.id} room={r} onClick={setSelectedRoom} />
+            ))}
           </div>
-        )
-      )}
+        ))}
+
+      {activeTab === "fraud" && <FraudTab />}
 
       {selectedRoom && <RoomModal room={selectedRoom} onClose={() => setSelectedRoom(null)} />}
       <PaymentMethodModal request={payRequest} onClose={() => setPayRequest(null)} />
+    </div>
+  );
+}
+
+/** Fraud-alert tab: reports on the landlord's own listings (admin sees all). */
+function FraudTab() {
+  const { data: reports = [], isLoading } = useFraudReports();
+  const scanRoom = useScanRoom();
+  const review = useReviewFraudReport();
+  const { user } = useApp();
+  const isAdmin = user?.role === "admin";
+
+  const severityClasses: Record<string, string> = {
+    clean: "bg-emerald-500/10 text-emerald-500",
+    low: "bg-yellow-500/10 text-yellow-500",
+    medium: "bg-orange-500/10 text-orange-500",
+    high: "bg-red-500/10 text-red-500",
+  };
+  const statusClasses: Record<string, string> = {
+    open: "bg-red-500/10 text-red-500",
+    reviewed: "bg-blue-500/10 text-blue-500",
+    dismissed: "bg-gray-500/10 text-gray-500",
+  };
+
+  if (isLoading) {
+    return (
+      <div className="py-15 text-center text-gray-600 dark:text-gray-400">
+        Loading fraud reports…
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-5 flex items-center gap-2">
+        <ShieldAlert className="size-5 text-orange-600" />
+        <div>
+          <h2 className="font-display text-lg font-bold text-foreground">Fraud &amp; Safety</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {isAdmin
+              ? "All listings flagged by the fraud detector."
+              : "Auto-detected risk signals on your listings."}
+          </p>
+        </div>
+      </div>
+
+      {reports.length === 0 ? (
+        <div className="flex flex-col items-center px-5 py-15 text-center text-gray-600 dark:text-gray-400">
+          <ShieldCheck className="mb-4 size-12 text-emerald-500" />
+          <h3 className="mb-2 font-display text-lg font-bold text-foreground">
+            No flagged listings
+          </h3>
+          <p>Your listings passed the fraud scan. New rooms are checked automatically.</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {reports.map((report) => {
+            const isScanning = scanRoom.isPending && scanRoom.variables === report.room.id;
+            return (
+              <div
+                key={report.id}
+                className="rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={report.room.img}
+                      alt={report.room.name}
+                      className="h-16 w-24 shrink-0 rounded-lg object-cover"
+                    />
+                    <div>
+                      <div className="font-display text-sm font-bold text-foreground">
+                        {report.room.name}
+                      </div>
+                      <div className="text-xs text-gray-600 dark:text-gray-400">
+                        {report.room.area} • {report.room.type}
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        <span
+                          className={cn(
+                            "inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                            severityClasses[report.severity]
+                          )}
+                        >
+                          {report.severityDisplay} risk · {report.score}/100
+                        </span>
+                        <span
+                          className={cn(
+                            "inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                            statusClasses[report.status]
+                          )}
+                        >
+                          {report.statusDisplay}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => scanRoom.mutate(report.room.id)}
+                      disabled={isScanning}
+                    >
+                      {isScanning ? <Loader2 className="size-3.5 animate-spin" /> : "Re-scan"}
+                    </Button>
+                    {isAdmin && report.status === "open" && (
+                      <>
+                        <Button
+                          size="sm"
+                          onClick={() => review.mutate({ reportId: report.id, action: "reviewed" })}
+                        >
+                          Mark reviewed
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            review.mutate({ reportId: report.id, action: "dismissed" })
+                          }
+                        >
+                          Dismiss
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {report.signals.length > 0 && (
+                  <div className="mt-4 flex flex-col gap-2 border-t border-gray-100 pt-4 dark:border-gray-800">
+                    {report.signals.map((signal) => (
+                      <div key={signal.id} className="flex items-start gap-2 text-sm">
+                        <span
+                          className={cn(
+                            "mt-1 size-2 shrink-0 rounded-full",
+                            signal.severity === "high"
+                              ? "bg-red-500"
+                              : signal.severity === "medium"
+                                ? "bg-orange-500"
+                                : "bg-yellow-500"
+                          )}
+                        />
+                        <div>
+                          <span className="font-semibold text-foreground">
+                            {signal.detectorDisplay}:
+                          </span>{" "}
+                          <span className="text-gray-600 dark:text-gray-400">{signal.message}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

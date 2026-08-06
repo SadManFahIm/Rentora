@@ -30,11 +30,15 @@ class Room(models.Model):
     lat = models.DecimalField(max_digits=9, decimal_places=6)
     lng = models.DecimalField(max_digits=9, decimal_places=6)
     amenities = models.JSONField(default=list)
-    gender_preference = models.CharField(max_length=10, choices=GenderPreference.choices, default=GenderPreference.ANY)
+    gender_preference = models.CharField(
+        max_length=10, choices=GenderPreference.choices, default=GenderPreference.ANY
+    )
     size_sqft = models.IntegerField()
     is_available = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False)
-    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="rooms")
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="rooms"
+    )
     rating = models.DecimalField(max_digits=3, decimal_places=2, default=0)
     total_reviews = models.IntegerField(default=0)
     verified = models.BooleanField(default=False)

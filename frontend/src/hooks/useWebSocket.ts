@@ -102,10 +102,7 @@ export function useWebSocket<T = unknown>(
         if (!shouldReconnectRef.current) return;
 
         const attempt = reconnectAttemptRef.current;
-        const delay = Math.min(
-          INITIAL_RECONNECT_DELAY_MS * 2 ** attempt,
-          MAX_RECONNECT_DELAY_MS
-        );
+        const delay = Math.min(INITIAL_RECONNECT_DELAY_MS * 2 ** attempt, MAX_RECONNECT_DELAY_MS);
         reconnectAttemptRef.current = attempt + 1;
         clearReconnectTimer();
         reconnectTimeoutRef.current = setTimeout(() => {

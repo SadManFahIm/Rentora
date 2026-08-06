@@ -116,7 +116,9 @@ export default function PaymentMethodModal({ request, onClose }: PaymentMethodMo
                     >
                       <Icon className="size-5 text-foreground" />
                       <div className="font-display font-bold text-foreground">{option.label}</div>
-                      <div className="text-xs text-gray-600 dark:text-gray-400">{option.description}</div>
+                      <div className="text-xs text-gray-600 dark:text-gray-400">
+                        {option.description}
+                      </div>
                     </button>
                   );
                 })}

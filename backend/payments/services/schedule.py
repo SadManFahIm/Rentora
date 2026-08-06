@@ -28,7 +28,7 @@ def _add_one_month(d: datetime.date) -> datetime.date:
     return d.replace(year=year, month=month, day=day)
 
 
-def _lease_end(booking: "Booking") -> datetime.date:
+def _lease_end(booking: Booking) -> datetime.date:
     if booking.check_out:
         return booking.check_out
 
@@ -39,7 +39,7 @@ def _lease_end(booking: "Booking") -> datetime.date:
     return booking.check_in.replace(year=year, month=month, day=day)
 
 
-def generate_payment_schedule(booking: "Booking") -> list["PaymentSchedule"]:
+def generate_payment_schedule(booking: Booking) -> list[PaymentSchedule]:
     """Create the monthly installment schedule for an approved booking.
 
     Idempotent: a booking that already has schedule rows is left untouched,

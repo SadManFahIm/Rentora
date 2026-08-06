@@ -6,7 +6,8 @@ from .views import ChatRoomViewSet, ChatUploadView, MessageViewSet, OnlineStatus
 router = DefaultRouter()
 router.register("rooms", ChatRoomViewSet, basename="chatroom")
 
-urlpatterns = router.urls + [
+urlpatterns = [
+    *router.urls,
     path(
         "rooms/<int:room_id>/messages/",
         MessageViewSet.as_view({"get": "list", "post": "create"}),

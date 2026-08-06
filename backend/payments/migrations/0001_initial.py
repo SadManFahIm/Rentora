@@ -6,35 +6,92 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('bookings', '0001_initial'),
+        ("bookings", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Payment',
+            name="Payment",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('amount', models.DecimalField(decimal_places=2, max_digits=10)),
-                ('payment_method', models.CharField(choices=[('sslcommerz', 'SSLCommerz'), ('bkash', 'bKash'), ('nagad', 'Nagad'), ('manual', 'Manual')], default='sslcommerz', max_length=20)),
-                ('payment_type', models.CharField(choices=[('booking_deposit', 'Booking Deposit'), ('monthly_rent', 'Monthly Rent'), ('security_deposit', 'Security Deposit')], max_length=20)),
-                ('status', models.CharField(choices=[('initiated', 'Initiated'), ('pending', 'Pending'), ('success', 'Success'), ('failed', 'Failed'), ('cancelled', 'Cancelled'), ('refunded', 'Refunded')], default='initiated', max_length=10)),
-                ('transaction_id', models.CharField(blank=True, max_length=64, unique=True)),
-                ('gateway_transaction_id', models.CharField(blank=True, max_length=128)),
-                ('gateway_response', models.JSONField(blank=True, default=dict)),
-                ('failure_reason', models.TextField(blank=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('booking', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='payments', to='bookings.booking')),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='payments', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("amount", models.DecimalField(decimal_places=2, max_digits=10)),
+                (
+                    "payment_method",
+                    models.CharField(
+                        choices=[
+                            ("sslcommerz", "SSLCommerz"),
+                            ("bkash", "bKash"),
+                            ("nagad", "Nagad"),
+                            ("manual", "Manual"),
+                        ],
+                        default="sslcommerz",
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "payment_type",
+                    models.CharField(
+                        choices=[
+                            ("booking_deposit", "Booking Deposit"),
+                            ("monthly_rent", "Monthly Rent"),
+                            ("security_deposit", "Security Deposit"),
+                        ],
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("initiated", "Initiated"),
+                            ("pending", "Pending"),
+                            ("success", "Success"),
+                            ("failed", "Failed"),
+                            ("cancelled", "Cancelled"),
+                            ("refunded", "Refunded"),
+                        ],
+                        default="initiated",
+                        max_length=10,
+                    ),
+                ),
+                ("transaction_id", models.CharField(blank=True, max_length=64, unique=True)),
+                ("gateway_transaction_id", models.CharField(blank=True, max_length=128)),
+                ("gateway_response", models.JSONField(blank=True, default=dict)),
+                ("failure_reason", models.TextField(blank=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "booking",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="payments",
+                        to="bookings.booking",
+                    ),
+                ),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="payments",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
-                'indexes': [models.Index(fields=['transaction_id'], name='payments_pa_transac_8e9d99_idx'), models.Index(fields=['status'], name='payments_pa_status_7ad4af_idx')],
+                "ordering": ["-created_at"],
+                "indexes": [
+                    models.Index(fields=["transaction_id"], name="payments_pa_transac_8e9d99_idx"),
+                    models.Index(fields=["status"], name="payments_pa_status_7ad4af_idx"),
+                ],
             },
         ),
     ]

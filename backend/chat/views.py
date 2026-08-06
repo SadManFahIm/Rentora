@@ -109,9 +109,7 @@ class ChatRoomViewSet(
                 existing.save(update_fields=["listing"])
             return existing
 
-        room = ChatRoom.objects.create(
-            room_type=ChatRoom.RoomType.DIRECT, listing=listing
-        )
+        room = ChatRoom.objects.create(room_type=ChatRoom.RoomType.DIRECT, listing=listing)
         ChatRoomMembership.objects.bulk_create(
             [
                 ChatRoomMembership(chat_room=room, user=user),
@@ -153,9 +151,7 @@ class MessageViewSet(
 
     def get_chat_room(self) -> ChatRoom:
         """Resolve the room from the URL, enforcing membership (404 otherwise)."""
-        return get_object_or_404(
-            ChatRoom, pk=self.kwargs["room_id"], members=self.request.user
-        )
+        return get_object_or_404(ChatRoom, pk=self.kwargs["room_id"], members=self.request.user)
 
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
@@ -284,7 +280,9 @@ class ChatUploadView(APIView):
 
         if uploaded.size > _MAX_UPLOAD_SIZE:
             return Response(
-                {"detail": f"File too large. Maximum size is {_MAX_UPLOAD_SIZE // (1024 * 1024)}MB."},
+                {
+                    "detail": f"File too large. Maximum size is {_MAX_UPLOAD_SIZE // (1024 * 1024)}MB."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

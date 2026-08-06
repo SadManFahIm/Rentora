@@ -29,7 +29,9 @@ def compute_hmac_signature(payload: bytes, secret: str, *, algorithm: str = "sha
     return hmac.new(secret.encode("utf-8"), payload, digestmod).hexdigest()
 
 
-def verify_hmac_signature(payload: bytes, signature: str, secret: str, *, algorithm: str = "sha256") -> bool:
+def verify_hmac_signature(
+    payload: bytes, signature: str, secret: str, *, algorithm: str = "sha256"
+) -> bool:
     """Constant-time check that ``signature`` matches ``payload`` under ``secret``.
 
     Always use this (never ``==``) to compare signatures — a naive string

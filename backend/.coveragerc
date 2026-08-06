@@ -1,0 +1,18 @@
+[run]
+source = .
+branch = True
+omit =
+    */migrations/*
+    */tests/*
+    */settings/*
+    venv/*
+    */asgi.py
+    */wsgi.py
+    */manage.py
+    */apps.py
+    */admin.py
+
+[report]
+show_missing = True
+skip_covered = True
+fail_under = 50

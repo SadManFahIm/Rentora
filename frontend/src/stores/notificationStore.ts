@@ -23,8 +23,7 @@ interface NotificationState {
   clear: () => void;
 }
 
-const countUnread = (items: Notification[]): number =>
-  items.filter((n) => !n.read).length;
+const countUnread = (items: Notification[]): number => items.filter((n) => !n.read).length;
 
 export const useNotificationStore = create<NotificationState>()((set, get) => ({
   notifications: [],

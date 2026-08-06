@@ -1,6 +1,11 @@
 import django_filters
 from django.db.models import Case, IntegerField, When
-from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiParameter,
+    extend_schema,
+    extend_schema_view,
+)
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -43,8 +48,12 @@ _GEO_PARAMS = [
         description="Map viewport filter, GeoJSON order: `minLng,minLat,maxLng,maxLat`. "
         "Returns only rooms inside the box.",
     ),
-    OpenApiParameter("near_lat", float, description="Reference-point latitude (pair with near_lng)."),
-    OpenApiParameter("near_lng", float, description="Reference-point longitude (pair with near_lat)."),
+    OpenApiParameter(
+        "near_lat", float, description="Reference-point latitude (pair with near_lng)."
+    ),
+    OpenApiParameter(
+        "near_lng", float, description="Reference-point longitude (pair with near_lat)."
+    ),
     OpenApiParameter(
         "near_landmark",
         str,
@@ -120,7 +129,11 @@ class RoomViewSet(viewsets.ModelViewSet):
 
     queryset = Room.objects.select_related("owner").prefetch_related("images").all()
     filterset_class = RoomFilter
-    filter_backends = [django_filters.rest_framework.DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filter_backends = [
+        django_filters.rest_framework.DjangoFilterBackend,
+        SearchFilter,
+        OrderingFilter,
+    ]
     search_fields = ["title", "description", "area"]
     ordering_fields = ["price", "rating", "created_at"]
     ordering = ["-created_at"]
@@ -174,7 +187,7 @@ class RoomViewSet(viewsets.ModelViewSet):
         try:
             box = BoundingBox.parse(raw)
         except ValueError as exc:
-            raise ValidationError({"bbox": str(exc)})
+            raise ValidationError({"bbox": str(exc)}) from exc
         return queryset.filter(
             lat__gte=box.min_lat,
             lat__lte=box.max_lat,

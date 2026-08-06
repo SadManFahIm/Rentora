@@ -135,7 +135,9 @@ class BookingViewSet(viewsets.ModelViewSet):
         ],
     ),
     update=extend_schema(tags=["Reviews"], summary="Update a review (author only)"),
-    partial_update=extend_schema(tags=["Reviews"], summary="Partially update a review (author only)"),
+    partial_update=extend_schema(
+        tags=["Reviews"], summary="Partially update a review (author only)"
+    ),
     destroy=extend_schema(tags=["Reviews"], summary="Delete a review (author only)"),
 )
 class ReviewViewSet(viewsets.ModelViewSet):

@@ -25,8 +25,7 @@ export function useBookings() {
 export function useCreateBooking() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: CreateBookingPayload) =>
-      bookingService.createBooking(payload),
+    mutationFn: (payload: CreateBookingPayload) => bookingService.createBooking(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: bookingKeys.mine() });
       toast.success("Booking request sent!");

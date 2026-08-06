@@ -15,13 +15,15 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.dev")
 # touches models — the routing/consumer imports below rely on this.
 django_asgi_app = get_asgi_application()
 
-from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
+from channels.routing import ProtocolTypeRouter, URLRouter
 
-import chat.routing  # noqa: E402
-import notifications.routing  # noqa: E402
-from config.middleware import JWTAuthMiddlewareStack  # noqa: E402
+import chat.routing
+import notifications.routing
+from config.middleware import JWTAuthMiddlewareStack
 
-websocket_urlpatterns = chat.routing.websocket_urlpatterns + notifications.routing.websocket_urlpatterns
+websocket_urlpatterns = (
+    chat.routing.websocket_urlpatterns + notifications.routing.websocket_urlpatterns
+)
 
 application = ProtocolTypeRouter(
     {

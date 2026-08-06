@@ -44,7 +44,7 @@ class MessageSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_status(self, obj: Message) -> str:
-        """"read" once every other member has read past this message's
+        """ "read" once every other member has read past this message's
         timestamp; else "delivered" if any of them is currently online;
         else "sent". For a direct chat "every other member" is just the one
         other participant, so this reduces to the usual 1:1 semantics."""
@@ -134,9 +134,7 @@ class ChatRoomSerializer(serializers.ModelSerializer):
         user = self._request_user()
         if user is None or not user.is_authenticated:
             return 0
-        membership = next(
-            (m for m in obj.memberships.all() if m.user_id == user.pk), None
-        )
+        membership = next((m for m in obj.memberships.all() if m.user_id == user.pk), None)
         if membership is None:
             return 0
         qs = obj.messages.exclude(sender_id=user.pk)
