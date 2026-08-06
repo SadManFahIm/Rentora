@@ -31,7 +31,9 @@ class PaymentInitiateSerializer(serializers.Serializer):
     """Used to start a payment. `amount` is deliberately not accepted here —
     it is always derived server-side from the booking's `monthly_rent`."""
 
-    booking_id = serializers.PrimaryKeyRelatedField(queryset=Booking.objects.all(), source="booking")
+    booking_id = serializers.PrimaryKeyRelatedField(
+        queryset=Booking.objects.all(), source="booking"
+    )
     payment_type = serializers.ChoiceField(choices=Payment.Type.choices)
 
     def validate(self, attrs):

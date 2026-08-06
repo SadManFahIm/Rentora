@@ -29,7 +29,7 @@ PAYMENT_TERMS_DAYS = 15
 _MAX_ALLOCATION_ATTEMPTS = 3
 
 
-def _billing_period(payment: "Payment") -> tuple[date, date]:
+def _billing_period(payment: Payment) -> tuple[date, date]:
     """The calendar month a rent/deposit payment is understood to cover.
 
     Payment doesn't carry an explicit billing-period field today, so the
@@ -71,7 +71,7 @@ def _allocate_invoice_number(year: int) -> str:
     return f"{prefix}{next_seq:04d}"
 
 
-def get_or_create_invoice_for_payment(payment: "Payment") -> "Invoice":
+def get_or_create_invoice_for_payment(payment: Payment) -> Invoice:
     """Fetch this payment's invoice, creating it on first request.
 
     Idempotent and safe to call on every GET. A payment gets at most one
@@ -79,7 +79,6 @@ def get_or_create_invoice_for_payment(payment: "Payment") -> "Invoice":
     is only ever allocated once, the first time an invoice is requested.
     """
     from payments.models import Invoice
-    from payments.models import Payment as PaymentModel
 
     try:
         return _sync_invoice_status(payment.invoice, payment)
@@ -88,7 +87,7 @@ def get_or_create_invoice_for_payment(payment: "Payment") -> "Invoice":
 
     period_start, period_end = _billing_period(payment)
 
-    for attempt in range(_MAX_ALLOCATION_ATTEMPTS):
+    for _attempt in range(_MAX_ALLOCATION_ATTEMPTS):
         try:
             with transaction.atomic():
                 year = timezone.now().year
@@ -115,11 +114,15 @@ def get_or_create_invoice_for_payment(payment: "Payment") -> "Invoice":
     raise RuntimeError("Could not allocate a unique invoice number after retrying.")
 
 
-def _sync_invoice_status(invoice: "Invoice", payment: "Payment") -> "Invoice":
+def _sync_invoice_status(invoice: Invoice, payment: Payment) -> Invoice:
     from payments.models import Invoice
     from payments.models import Payment as PaymentModel
 
-    target_status = Invoice.Status.PAID if payment.status == PaymentModel.Status.SUCCESS else Invoice.Status.SENT
+    target_status = (
+        Invoice.Status.PAID
+        if payment.status == PaymentModel.Status.SUCCESS
+        else Invoice.Status.SENT
+    )
     # Never downgrade a paid invoice — a later refund doesn't retroactively
     # make it "not yet paid".
     if invoice.status != target_status and invoice.status != Invoice.Status.PAID:
@@ -128,7 +131,7 @@ def _sync_invoice_status(invoice: "Invoice", payment: "Payment") -> "Invoice":
     return invoice
 
 
-def generate_invoice_pdf(payment: "Payment") -> bytes:
+def generate_invoice_pdf(payment: Payment) -> bytes:
     """Render a one-page PDF invoice for ``payment``, allocating its
     sequential invoice number on first call."""
     invoice = get_or_create_invoice_for_payment(payment)
@@ -223,7 +226,9 @@ def generate_invoice_pdf(payment: "Payment") -> bytes:
     elements.append(items_table)
     elements.append(Spacer(1, 4 * mm))
 
-    total_table = Table([["Total Due", f"BDT {payment.amount:,.2f}"]], colWidths=[120 * mm, 40 * mm])
+    total_table = Table(
+        [["Total Due", f"BDT {payment.amount:,.2f}"]], colWidths=[120 * mm, 40 * mm]
+    )
     total_table.setStyle(
         TableStyle(
             [

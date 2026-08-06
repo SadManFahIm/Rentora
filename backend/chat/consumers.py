@@ -70,7 +70,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         if getattr(self, "user", None) is not None and self.user.is_authenticated:
             # Fire-and-forget: don't block the disconnect handler on the delay.
-            asyncio.create_task(self._delayed_mark_offline(self.user.pk))
+            # Keep the task reference so the event loop doesn't GC it mid-flight.
+            self._offline_task = asyncio.create_task(self._delayed_mark_offline(self.user.pk))
 
     async def receive(self, text_data: str | None = None, bytes_data=None) -> None:
         """Parse an inbound frame and dispatch it by ``type``."""
@@ -136,9 +137,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def chat_message(self, event: dict[str, Any]) -> None:
         """Group handler → forward a broadcast message to this client."""
-        await self.send(
-            text_data=json.dumps({"type": "chat_message", "message": event["message"]})
-        )
+        await self.send(text_data=json.dumps({"type": "chat_message", "message": event["message"]}))
 
     async def typing_indicator(self, event: dict[str, Any]) -> None:
         if event.get("sender_channel") == self.channel_name:
@@ -190,16 +189,14 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def _is_member(self, room_id: int | str, user_id: int) -> bool:
-        return ChatRoomMembership.objects.filter(
-            chat_room_id=room_id, user_id=user_id
-        ).exists()
+        return ChatRoomMembership.objects.filter(chat_room_id=room_id, user_id=user_id).exists()
 
     @database_sync_to_async
     def _mark_read(self):
         now = timezone.now()
-        ChatRoomMembership.objects.filter(
-            chat_room_id=self.room_id, user_id=self.user.pk
-        ).update(last_read_at=now)
+        ChatRoomMembership.objects.filter(chat_room_id=self.room_id, user_id=self.user.pk).update(
+            last_read_at=now
+        )
         return now
 
     @database_sync_to_async

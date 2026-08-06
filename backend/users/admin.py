@@ -9,7 +9,8 @@ class UserAdmin(DjangoUserAdmin):
     """Admin for the custom user model, extending Django's built-in UserAdmin
     with Rentora profile fields and rental-domain list/search controls."""
 
-    fieldsets = DjangoUserAdmin.fieldsets + (
+    fieldsets = [
+        *DjangoUserAdmin.fieldsets,
         (
             "Rentora profile",
             {
@@ -24,7 +25,7 @@ class UserAdmin(DjangoUserAdmin):
                 )
             },
         ),
-    )
+    ]
     list_display = ("email", "name", "role", "nid_verified", "date_joined")
     list_filter = ("role", "nid_verified", "gender")
     search_fields = ("email", "first_name", "last_name", "phone")

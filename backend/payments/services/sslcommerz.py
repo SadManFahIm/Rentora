@@ -54,7 +54,9 @@ def _refund_url() -> str:
     return SANDBOX_REFUND_URL if settings.SSLCOMMERZ_IS_SANDBOX else LIVE_REFUND_URL
 
 
-def initiate_payment(payment: Payment, success_url: str, fail_url: str, cancel_url: str) -> dict[str, Any]:
+def initiate_payment(
+    payment: Payment, success_url: str, fail_url: str, cancel_url: str
+) -> dict[str, Any]:
     """Open a payment session for ``payment`` and return the gateway redirect URL.
 
     ``payment.amount`` is used verbatim — callers must have already derived
@@ -97,7 +99,9 @@ def initiate_payment(payment: Payment, success_url: str, fail_url: str, cancel_u
             payment.transaction_id,
             data.get("failedreason") or data,
         )
-        raise SSLCommerzError(data.get("failedreason") or "SSLCommerz rejected the payment session.")
+        raise SSLCommerzError(
+            data.get("failedreason") or "SSLCommerz rejected the payment session."
+        )
 
     return data
 
@@ -124,7 +128,9 @@ def validate_payment(val_id: str) -> dict[str, Any]:
         raise SSLCommerzError(f"Could not validate payment with SSLCommerz: {exc}") from exc
 
 
-def refund_payment(bank_tran_id: str, refund_amount: str, refund_remarks: str = "Refund requested by landlord") -> dict[str, Any]:
+def refund_payment(
+    bank_tran_id: str, refund_amount: str, refund_remarks: str = "Refund requested by landlord"
+) -> dict[str, Any]:
     """Request a refund for a previously validated transaction.
 
     ``bank_tran_id`` is SSLCommerz's own transaction reference (stored on the

@@ -177,9 +177,7 @@ export const paymentService = {
 
   /** GET /bookings/:id/deposit-status/ */
   async getDepositStatus(bookingId: number): Promise<DepositStatus> {
-    const { data } = await api.get<ApiDepositStatus>(
-      `/bookings/${bookingId}/deposit-status/`
-    );
+    const { data } = await api.get<ApiDepositStatus>(`/bookings/${bookingId}/deposit-status/`);
     return {
       bookingId: data.booking_id,
       securityDepositAmount: Number(data.security_deposit_amount),

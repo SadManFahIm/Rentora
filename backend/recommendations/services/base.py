@@ -3,8 +3,8 @@ recommendation strategy (content-based, collaborative, hybrid)."""
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Iterable
 
 from django.db.models import Count
 

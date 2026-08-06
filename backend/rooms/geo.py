@@ -57,7 +57,7 @@ class BoundingBox:
     max_lng: float
 
     @classmethod
-    def parse(cls, raw: str) -> "BoundingBox":
+    def parse(cls, raw: str) -> BoundingBox:
         """Parse a `bbox` query value in GeoJSON order:
         ``minLng,minLat,maxLng,maxLat`` (i.e. west,south,east,north) — the
         same order `L.latLngBounds.toBBoxString()` produces on the frontend.
@@ -67,7 +67,9 @@ class BoundingBox:
         """
         parts = [p.strip() for p in raw.split(",")]
         if len(parts) != 4:
-            raise ValueError("bbox must be four comma-separated numbers: minLng,minLat,maxLng,maxLat")
+            raise ValueError(
+                "bbox must be four comma-separated numbers: minLng,minLat,maxLng,maxLat"
+            )
         try:
             min_lng, min_lat, max_lng, max_lat = (float(p) for p in parts)
         except ValueError as exc:
@@ -77,7 +79,9 @@ class BoundingBox:
         return cls(min_lat=min_lat, min_lng=min_lng, max_lat=max_lat, max_lng=max_lng)
 
 
-def _measure(lat: float, lng: float, landmarks: tuple[Landmark, ...]) -> list[tuple[Landmark, float]]:
+def _measure(
+    lat: float, lng: float, landmarks: tuple[Landmark, ...]
+) -> list[tuple[Landmark, float]]:
     return [(lm, haversine_km(lat, lng, lm.lat, lm.lng)) for lm in landmarks]
 
 

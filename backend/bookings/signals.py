@@ -28,11 +28,7 @@ def _capture_previous_booking_status(sender, instance: Booking, **kwargs) -> Non
     it on the in-memory instance as ``_previous_status``.
     """
     if instance.pk:
-        previous = (
-            Booking.objects.filter(pk=instance.pk)
-            .values_list("status", flat=True)
-            .first()
-        )
+        previous = Booking.objects.filter(pk=instance.pk).values_list("status", flat=True).first()
         instance._previous_status = previous
     else:
         instance._previous_status = None

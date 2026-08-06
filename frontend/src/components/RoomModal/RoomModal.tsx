@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Star, ShieldCheck, MessageCircle, CalendarCheck } from "lucide-react";
+import { ShieldAlert, Star, ShieldCheck, MessageCircle, CalendarCheck } from "lucide-react";
+import { useRoomFraudStatus } from "../../hooks/useFraud";
 import type { Room } from "../../types";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -37,6 +38,8 @@ export default function RoomModal({ room, onClose }: RoomModalProps) {
   const { user } = useApp();
   const createBooking = useCreateBooking();
   const startChat = useStartDirectChat();
+  // Live fraud badge — fetched only when the modal is open for this room.
+  const { data: fraud } = useRoomFraudStatus(room?.id ?? null);
 
   const handleBook = () => {
     if (!room) return;
@@ -46,10 +49,7 @@ export default function RoomModal({ room, onClose }: RoomModalProps) {
       navigate("/auth");
       return;
     }
-    createBooking.mutate(
-      { roomId: room.id, checkIn: defaultCheckIn() },
-      { onSuccess: onClose }
-    );
+    createBooking.mutate({ roomId: room.id, checkIn: defaultCheckIn() }, { onSuccess: onClose });
   };
 
   const handleMessageOwner = () => {
@@ -75,14 +75,18 @@ export default function RoomModal({ room, onClose }: RoomModalProps) {
           onClose();
           navigate(`/chat?room=${chatRoom.id}`);
         },
-        onError: (error) => toast.error(getApiErrorMessage(error, "Could not start a conversation.")),
+        onError: (error) =>
+          toast.error(getApiErrorMessage(error, "Could not start a conversation.")),
       }
     );
   };
 
   return (
     <Dialog open={!!room} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-3xl gap-0 overflow-y-auto rounded-xl p-0" showCloseButton>
+      <DialogContent
+        className="max-h-[90vh] max-w-3xl gap-0 overflow-y-auto rounded-xl p-0"
+        showCloseButton
+      >
         {room && (
           <>
             <VisuallyHidden>
@@ -98,10 +102,23 @@ export default function RoomModal({ room, onClose }: RoomModalProps) {
                     <span className="flex items-center gap-1 text-sm font-semibold text-amber-500">
                       <Star className="size-4 fill-amber-500" /> {room.rating}
                     </span>
-                    <span className="text-sm text-gray-600 dark:text-gray-400">({room.reviews} reviews)</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      ({room.reviews} reviews)
+                    </span>
                     {room.verified && (
                       <span className="flex items-center gap-1 text-xs font-semibold text-emerald-500">
                         <ShieldCheck className="size-3.5" /> KYC Verified
+                      </span>
+                    )}
+                    {fraud?.flagged && (
+                      <span className="flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-600 dark:bg-red-950/40 dark:text-red-400">
+                        <ShieldAlert className="size-3.5" />
+                        Under review
+                        {fraud.severity === "high"
+                          ? " (high risk)"
+                          : fraud.severity === "medium"
+                            ? " (medium risk)"
+                            : ""}
                       </span>
                     )}
                   </div>
@@ -111,30 +128,42 @@ export default function RoomModal({ room, onClose }: RoomModalProps) {
               {/* Price */}
               <div className="font-display text-3xl font-bold text-orange-600">
                 ৳{room.price.toLocaleString()}
-                <span className="ml-1 text-base font-normal text-gray-600 dark:text-gray-400">/month</span>
+                <span className="ml-1 text-base font-normal text-gray-600 dark:text-gray-400">
+                  /month
+                </span>
               </div>
               <div className="mt-3 rounded-r-xl border-l-4 border-orange-600 bg-orange-50 px-4 py-3 text-sm text-gray-600 dark:bg-orange-950/20 dark:text-gray-400">
-                🤖 AI Price Insight: This listing is <strong className="text-foreground">8% below market average</strong> for {room.area}. Great deal!
+                🤖 AI Price Insight: This listing is{" "}
+                <strong className="text-foreground">8% below market average</strong> for {room.area}
+                . Great deal!
               </div>
 
               {/* Info Grid */}
               <div className="my-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <div className="rounded-xl bg-gray-50 p-3.5 text-center dark:bg-gray-800">
-                  <strong className="block font-display font-bold text-foreground">{room.type}</strong>
+                  <strong className="block font-display font-bold text-foreground">
+                    {room.type}
+                  </strong>
                   <span className="text-xs text-gray-600 dark:text-gray-400">Room Type</span>
                 </div>
                 <div className="rounded-xl bg-gray-50 p-3.5 text-center dark:bg-gray-800">
-                  <strong className="block font-display font-bold text-foreground">{room.size} sqft</strong>
+                  <strong className="block font-display font-bold text-foreground">
+                    {room.size} sqft
+                  </strong>
                   <span className="text-xs text-gray-600 dark:text-gray-400">Size</span>
                 </div>
                 <div className="rounded-xl bg-gray-50 p-3.5 text-center dark:bg-gray-800">
-                  <strong className="block font-display font-bold text-foreground">{room.gender}</strong>
+                  <strong className="block font-display font-bold text-foreground">
+                    {room.gender}
+                  </strong>
                   <span className="text-xs text-gray-600 dark:text-gray-400">Gender Pref.</span>
                 </div>
               </div>
 
               {/* Description */}
-              <p className="mb-4 text-sm leading-relaxed text-gray-600 dark:text-gray-400">{room.description}</p>
+              <p className="mb-4 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+                {room.description}
+              </p>
 
               {/* Amenities */}
               <div className="my-4 flex flex-wrap gap-2">

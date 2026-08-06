@@ -42,7 +42,15 @@ class PaymentAdmin(admin.ModelAdmin):
 
 @admin.register(Invoice)
 class InvoiceAdmin(admin.ModelAdmin):
-    list_display = ["invoice_number", "booking", "amount", "status", "period_start", "period_end", "created_at"]
+    list_display = [
+        "invoice_number",
+        "booking",
+        "amount",
+        "status",
+        "period_start",
+        "period_end",
+        "created_at",
+    ]
     list_filter = ["status"]
     search_fields = ["invoice_number", "booking__tenant__username", "booking__room__title"]
     autocomplete_fields = ["booking", "payment"]
@@ -61,7 +69,14 @@ class PaymentAuditLogAdmin(admin.ModelAdmin):
     list_display = ["payment", "old_status", "new_status", "changed_by", "created_at"]
     list_filter = ["new_status", "changed_by"]
     search_fields = ["payment__transaction_id"]
-    readonly_fields = ["payment", "old_status", "new_status", "changed_by", "metadata", "created_at"]
+    readonly_fields = [
+        "payment",
+        "old_status",
+        "new_status",
+        "changed_by",
+        "metadata",
+        "created_at",
+    ]
 
     def has_add_permission(self, request):
         return False

@@ -1,0 +1,29 @@
+[tool.ruff]
+# Django projects generate a lot of intentional noise (long ORM lines,
+# permission_classes lists, etc.) — keep the default rule set but tune the
+# noisy ones rather than silencing everything.
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "SIM",  # simplify
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "E501",  # line length — ORM chains read better long
+    "RUF012",  # mutable class attributes are the Django idiom (permission_classes)
+    "E402",  # module-level imports after settings wiring
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Migrations are Django-generated; don't fight them.
+"*/migrations/*.py" = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF"]
+# Tests are allowed some leniency.
+"*/tests.py" = ["E501"]

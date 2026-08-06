@@ -197,7 +197,9 @@ class Command(BaseCommand):
             response = requests.get(image_url, timeout=10)
             response.raise_for_status()
         except requests.RequestException as exc:
-            self.stdout.write(self.style.WARNING(f"  could not download image for '{room.title}': {exc}"))
+            self.stdout.write(
+                self.style.WARNING(f"  could not download image for '{room.title}': {exc}")
+            )
             return
         filename = f"{room.pk}-primary.jpg"
         RoomImage.objects.create(
@@ -221,4 +223,6 @@ class Command(BaseCommand):
             self.attach_primary_image(room, image_url)
             self.stdout.write(self.style.SUCCESS(f"Created room '{room.title}'"))
 
-        self.stdout.write(self.style.SUCCESS(f"Done. {Room.objects.count()} room(s) total in the database."))
+        self.stdout.write(
+            self.style.SUCCESS(f"Done. {Room.objects.count()} room(s) total in the database.")
+        )

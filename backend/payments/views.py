@@ -13,8 +13,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from notifications.utils import create_notification
 from notifications.models import Notification
+from notifications.utils import create_notification
 
 from .filters import PaymentFilter
 from .models import Payment, PaymentSchedule
@@ -123,7 +123,9 @@ class PaymentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return Payment.objects.none()
-        base = Payment.objects.select_related("booking", "booking__room", "booking__room__owner", "user")
+        base = Payment.objects.select_related(
+            "booking", "booking__room", "booking__room__owner", "user"
+        )
         if self.action in ("refund", "invoice"):
             # Refund and invoice are also actionable/viewable by the room's
             # landlord, not just the payment's own `user` (the tenant who
@@ -151,7 +153,9 @@ class PaymentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.
 
         pdf_bytes = generate_receipt_pdf(payment)
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
-        response["Content-Disposition"] = f'attachment; filename="receipt-{payment.transaction_id}.pdf"'
+        response["Content-Disposition"] = (
+            f'attachment; filename="receipt-{payment.transaction_id}.pdf"'
+        )
         return response
 
     @extend_schema(tags=["Payments"], summary="Download a PDF invoice (owner or landlord)")
@@ -177,9 +181,13 @@ class PaymentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.
 
         requested_amount = request.data.get("amount")
         try:
-            refund_amount = float(requested_amount) if requested_amount is not None else float(payment.amount)
+            refund_amount = (
+                float(requested_amount) if requested_amount is not None else float(payment.amount)
+            )
         except (TypeError, ValueError):
-            return Response({"detail": "Invalid refund amount."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Invalid refund amount."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         # Never trust a client-supplied refund amount beyond capping it at
         # what was actually paid — no partial-refund-turned-overpayment.
@@ -209,7 +217,9 @@ class PaymentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.
                     )
                 else:
                     return Response(
-                        {"detail": f"Refunds are not supported for payment method '{payment.payment_method}'."},
+                        {
+                            "detail": f"Refunds are not supported for payment method '{payment.payment_method}'."
+                        },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
             except (BkashError, SSLCommerzError) as exc:
@@ -274,7 +284,11 @@ class PaymentInitiateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [PaymentInitiateRateThrottle]
 
-    @extend_schema(tags=["Payments"], request=PaymentInitiateSerializer, summary="Initiate an SSLCommerz payment")
+    @extend_schema(
+        tags=["Payments"],
+        request=PaymentInitiateSerializer,
+        summary="Initiate an SSLCommerz payment",
+    )
     def post(self, request):
         serializer = PaymentInitiateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
@@ -295,11 +309,15 @@ class PaymentInitiateView(APIView):
         cancel_url = request.build_absolute_uri(reverse("payment-sslcommerz-cancel"))
 
         try:
-            session = sslcommerz_service.initiate_payment(payment, success_url, fail_url, cancel_url)
+            session = sslcommerz_service.initiate_payment(
+                payment, success_url, fail_url, cancel_url
+            )
         except SSLCommerzError as exc:
             payment.failure_reason = str(exc)
             payment.transition_status(
-                Payment.Status.FAILED, changed_by="system", metadata={"error": str(exc)},
+                Payment.Status.FAILED,
+                changed_by="system",
+                metadata={"error": str(exc)},
                 extra_update_fields=["failure_reason"],
             )
             return Response(
@@ -309,7 +327,9 @@ class PaymentInitiateView(APIView):
 
         payment.gateway_response = session
         payment.transition_status(
-            Payment.Status.PENDING, changed_by="system", extra_update_fields=["gateway_response"],
+            Payment.Status.PENDING,
+            changed_by="system",
+            extra_update_fields=["gateway_response"],
         )
 
         return Response(
@@ -325,7 +345,9 @@ class BkashInitiateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [PaymentInitiateRateThrottle]
 
-    @extend_schema(tags=["Payments"], request=PaymentInitiateSerializer, summary="Initiate a bKash payment")
+    @extend_schema(
+        tags=["Payments"], request=PaymentInitiateSerializer, summary="Initiate a bKash payment"
+    )
     def post(self, request):
         serializer = PaymentInitiateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
@@ -354,7 +376,9 @@ class BkashInitiateView(APIView):
         except BkashError as exc:
             payment.failure_reason = str(exc)
             payment.transition_status(
-                Payment.Status.FAILED, changed_by="system", metadata={"error": str(exc)},
+                Payment.Status.FAILED,
+                changed_by="system",
+                metadata={"error": str(exc)},
                 extra_update_fields=["failure_reason"],
             )
             return Response(
@@ -364,7 +388,9 @@ class BkashInitiateView(APIView):
 
         payment.gateway_response = session
         payment.transition_status(
-            Payment.Status.PENDING, changed_by="system", extra_update_fields=["gateway_response"],
+            Payment.Status.PENDING,
+            changed_by="system",
+            extra_update_fields=["gateway_response"],
         )
 
         return Response(
@@ -492,7 +518,9 @@ class PaymentSuccessCallbackView(APIView):
                 except Payment.DoesNotExist:
                     return _frontend_redirect("fail", tran_id)
                 if payment.status not in TERMINAL_STATUSES:
-                    payment.failure_reason = f"Validation returned status={validation.get('status')}"
+                    payment.failure_reason = (
+                        f"Validation returned status={validation.get('status')}"
+                    )
                     payment.gateway_response = validation
                     payment.transition_status(
                         Payment.Status.FAILED,
@@ -517,10 +545,11 @@ class PaymentSuccessCallbackView(APIView):
                 return _frontend_redirect(_frontend_outcome(payment.status), tran_id)
 
             validated_amount = validation.get("amount") or validation.get("currency_amount")
-            if validated_amount is not None and abs(float(validated_amount) - float(payment.amount)) > 0.01:
-                payment.failure_reason = (
-                    f"Amount mismatch: expected {payment.amount}, gateway validated {validated_amount}"
-                )
+            if (
+                validated_amount is not None
+                and abs(float(validated_amount) - float(payment.amount)) > 0.01
+            ):
+                payment.failure_reason = f"Amount mismatch: expected {payment.amount}, gateway validated {validated_amount}"
                 payment.gateway_response = validation
                 payment.transition_status(
                     Payment.Status.FAILED,
@@ -582,7 +611,8 @@ class PaymentFailCallbackView(APIView):
             payment.failure_reason = "Gateway reported payment failure."
             payment.gateway_response = dict(request.data)
             payment.transition_status(
-                Payment.Status.FAILED, changed_by="system",
+                Payment.Status.FAILED,
+                changed_by="system",
                 extra_update_fields=["failure_reason", "gateway_response"],
             )
 
@@ -627,7 +657,9 @@ class PaymentCancelCallbackView(APIView):
 
             payment.gateway_response = dict(request.data)
             payment.transition_status(
-                Payment.Status.CANCELLED, changed_by="system", extra_update_fields=["gateway_response"],
+                Payment.Status.CANCELLED,
+                changed_by="system",
+                extra_update_fields=["gateway_response"],
             )
 
         return _frontend_redirect("cancel", tran_id)
@@ -697,7 +729,8 @@ class BkashCallbackView(APIView):
                     payment.failure_reason = f"bKash transactionStatus={transaction_status}"
                     payment.gateway_response = {**payment.gateway_response, "query": query_result}
                     payment.transition_status(
-                        Payment.Status.FAILED, changed_by="system",
+                        Payment.Status.FAILED,
+                        changed_by="system",
                         extra_update_fields=["failure_reason", "gateway_response"],
                     )
                     mutated = True
@@ -721,10 +754,16 @@ class BkashCallbackView(APIView):
                 except Payment.DoesNotExist:
                     return _frontend_redirect("fail", tran_id)
                 if payment.status not in TERMINAL_STATUSES:
-                    payment.failure_reason = execute_result.get("statusMessage") or "bKash execute did not complete."
-                    payment.gateway_response = {**payment.gateway_response, "execute": execute_result}
+                    payment.failure_reason = (
+                        execute_result.get("statusMessage") or "bKash execute did not complete."
+                    )
+                    payment.gateway_response = {
+                        **payment.gateway_response,
+                        "execute": execute_result,
+                    }
                     payment.transition_status(
-                        Payment.Status.FAILED, changed_by="system",
+                        Payment.Status.FAILED,
+                        changed_by="system",
                         extra_update_fields=["failure_reason", "gateway_response"],
                     )
                     mutated = True
@@ -744,13 +783,17 @@ class BkashCallbackView(APIView):
                 return _frontend_redirect(_frontend_outcome(payment.status), tran_id)
 
             executed_amount = execute_result.get("amount")
-            if executed_amount is not None and abs(float(executed_amount) - float(payment.amount)) > 0.01:
+            if (
+                executed_amount is not None
+                and abs(float(executed_amount) - float(payment.amount)) > 0.01
+            ):
                 payment.failure_reason = (
                     f"Amount mismatch: expected {payment.amount}, bKash executed {executed_amount}"
                 )
                 payment.gateway_response = {**payment.gateway_response, "execute": execute_result}
                 payment.transition_status(
-                    Payment.Status.FAILED, changed_by="system",
+                    Payment.Status.FAILED,
+                    changed_by="system",
                     extra_update_fields=["failure_reason", "gateway_response"],
                 )
                 logger.error("bKash amount mismatch on tran_id=%s", tran_id)
@@ -760,7 +803,8 @@ class BkashCallbackView(APIView):
             payment.gateway_transaction_id = execute_result.get("trxID", "")
             payment.gateway_response = {**payment.gateway_response, "execute": execute_result}
             payment.transition_status(
-                Payment.Status.SUCCESS, changed_by="system",
+                Payment.Status.SUCCESS,
+                changed_by="system",
                 extra_update_fields=["gateway_transaction_id", "gateway_response"],
             )
             _apply_success_side_effects(payment)
