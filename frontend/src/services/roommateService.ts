@@ -56,7 +56,7 @@ interface ApiRequest {
   updated_at: string;
 }
 
-function mapProfile(api: ApiRoommateProfile): RoommateProfile {
+export function mapProfile(api: ApiRoommateProfile): RoommateProfile {
   return {
     id: api.id,
     username: api.username,
@@ -75,12 +75,12 @@ function mapProfile(api: ApiRoommateProfile): RoommateProfile {
   };
 }
 
-function mapMatch(api: ApiMatch): RoommateMatch {
+export function mapMatch(api: ApiMatch): RoommateMatch {
   const profile = { ...mapProfile(api.profile), user: api.profile.user! };
   return { score: api.score, reasons: api.reasons, profile };
 }
 
-function mapRequest(api: ApiRequest): RoommateRequest {
+export function mapRequest(api: ApiRequest): RoommateRequest {
   return {
     id: api.id,
     sender: api.sender,
