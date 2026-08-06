@@ -44,13 +44,13 @@ jobs:
         run: |
           coverage run manage.py test
           coverage report
-          coverage xml -o coverage.xml
+          coverage lcov -o lcov.info
 
       - name: Upload backend coverage report
         uses: actions/upload-artifact@v4
         with:
           name: coverage-backend
-          path: backend/coverage.xml
+          path: backend/lcov.info
           if-no-files-found: error
 
   frontend:
@@ -117,9 +117,10 @@ jobs:
           path: coverage/frontend
 
       - name: Post coverage summary to PR
+        # Both reports are lcov; one glob merges them.
         uses: irongut/CodeCoverageSummary@v1.3.0
         with:
-          filename: coverage/backend/coverage.xml coverage/frontend/lcov.info
+          filename: coverage/**/lcov.info
           badge: true
           format: markdown
           output: both
