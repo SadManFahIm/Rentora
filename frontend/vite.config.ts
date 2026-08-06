@@ -19,6 +19,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       exclude: ["**/*.test.{ts,tsx}"],
+      reporter: ["text", "lcov"],
       thresholds: {
         lines: 55,
         statements: 50,
