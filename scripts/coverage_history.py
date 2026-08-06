@@ -125,6 +125,8 @@ def main():
         return 2
 
     backend_xml, frontend_xml, out_dir = sys.argv[1:]
+    os.makedirs(out_dir, exist_ok=True)
+
     sha = os.environ.get("GITHUB_SHA", "local")[:7]
     date = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M")
 
