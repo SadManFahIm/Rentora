@@ -148,6 +148,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: [backend, frontend]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # The deploy force-pushes a single-carry commit; serialize runs so
+    # concurrent main pushes can't overwrite each other's history rows.
+    concurrency:
+      group: coverage-history
+      cancel-in-progress: true
     permissions:
       contents: write
     steps:
@@ -169,10 +174,14 @@ jobs:
 
       - name: Fetch previous history
         run: |
-          git fetch origin coverage-history || true
           mkdir -p coverage-site
-          if git cat-file -e origin/coverage-history:history.csv 2>/dev/null; then
+          # Distinguish "branch doesn't exist yet" (fresh start is fine) from a
+          # genuine fetch failure (must abort — a stale seed would wipe history).
+          if git ls-remote --exit-code origin coverage-history >/dev/null 2>&1; then
+            git fetch origin coverage-history
             git show origin/coverage-history:history.csv > coverage-site/history.csv
+          else
+            echo "coverage-history branch does not exist yet — will create it"
           fi
 
       - name: Update coverage history
