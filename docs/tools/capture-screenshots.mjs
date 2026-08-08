@@ -50,11 +50,21 @@ const CAPTURES = [
     waitMs: 4500,
   },
   {
-    // Public: no token needed — MapLibre map with room markers + landmarks.
+    // Public: no token needed — MapLibre map with room markers + landmarks,
+    // street-search autocomplete open to show the new Phase 7 search box.
     user: null,
     route: "/map",
     out: "map-view.png",
     waitMs: 6000,
+    afterLoad: `(() => {
+      const input = document.querySelector('input[aria-label="Search for a street, area or station"]');
+      if (!input) return 'no-input';
+      input.focus();
+      input.value = 'gulshan';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      return 'typed';
+    })()`,
+    afterLoadMs: 1400,
   },
   {
     // Dark theme variant — prefs stored under the same key the UI store uses.
@@ -309,6 +319,11 @@ async function main() {
       await evaluate(cap.beforeCapture);
     }
     await navigate(`${FRONTEND}${cap.route}`, cap.waitMs ?? 4000);
+
+    if (cap.afterLoad) {
+      await evaluate(cap.afterLoad);
+      await sleep(cap.afterLoadMs ?? 1200);
+    }
 
     if (cap.click) {
       const label = cap.click;
