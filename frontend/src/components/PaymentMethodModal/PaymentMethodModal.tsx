@@ -18,6 +18,8 @@ const paymentTypeLabels: Record<PaymentType, string> = {
   monthly_rent: "Monthly Rent",
   security_deposit: "Security Deposit",
   booking_deposit: "Booking Deposit",
+  listing_feature: "Listing Promotion (Featured)",
+  listing_premium: "Listing Promotion (Premium)",
 };
 
 interface GatewayOption {

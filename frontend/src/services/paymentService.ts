@@ -3,6 +3,7 @@ import type { Paginated } from "./mappers";
 import type {
   DepositStatus,
   InitiatePaymentResult,
+  ListingTier,
   Payment,
   PaymentFilters,
   PaymentGateway,
@@ -115,6 +116,28 @@ export const paymentService = {
     }>(path, {
       booking_id: bookingId,
       payment_type: paymentType,
+    });
+    return {
+      paymentUrl: data.payment_url ?? data.bkash_url ?? "",
+      transactionId: data.transaction_id,
+    };
+  },
+
+  /** POST /payments/tier-upgrade/initiate/ — promote a listing (Featured/Premium).
+   * Amount is derived server-side from the tier pricing table. */
+  async initiateTierUpgrade(
+    roomId: number,
+    tier: Exclude<ListingTier, "free">,
+    method: PaymentGateway
+  ): Promise<InitiatePaymentResult> {
+    const { data } = await api.post<{
+      payment_url?: string;
+      bkash_url?: string;
+      transaction_id: string;
+    }>("/payments/tier-upgrade/initiate/", {
+      room_id: roomId,
+      tier,
+      method,
     });
     return {
       paymentUrl: data.payment_url ?? data.bkash_url ?? "",

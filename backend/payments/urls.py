@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     BkashCallbackView,
     BkashInitiateView,
+    ListingTierUpgradeInitiateView,
     PaymentCancelCallbackView,
     PaymentFailCallbackView,
     PaymentInitiateView,
@@ -18,6 +19,11 @@ router.register("", PaymentViewSet, basename="payment")
 urlpatterns = [
     # Explicit paths first — the router's `<pk>/` pattern below would
     # otherwise swallow these as a (nonexistent) payment id.
+    path(
+        "tier-upgrade/initiate/",
+        ListingTierUpgradeInitiateView.as_view(),
+        name="payment-tier-upgrade-initiate",
+    ),
     path("initiate/", PaymentInitiateView.as_view(), name="payment-initiate"),
     path("summary/", PaymentSummaryView.as_view(), name="payment-summary"),
     path(

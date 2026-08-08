@@ -130,7 +130,13 @@ export default function PaymentStatus() {
         {outcome !== "success" && (
           <Button
             className="flex-1 bg-orange-600 text-white hover:bg-orange-700"
-            onClick={() => navigate("/dashboard?tab=bookings")}
+            onClick={() =>
+              navigate(
+                payment?.type === "listing_feature" || payment?.type === "listing_premium"
+                  ? "/dashboard?tab=listings"
+                  : "/dashboard?tab=bookings"
+              )
+            }
           >
             Try Again
           </Button>

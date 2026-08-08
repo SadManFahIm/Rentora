@@ -64,6 +64,13 @@ def initiate_payment(
     """
     tenant = payment.user
 
+    # Listing-promotion payments have no booking — name the product after the
+    # promoted room so the gateway receipt shows something meaningful.
+    if payment.booking_id is not None:
+        product_name = f"Booking #{payment.booking_id} - {payment.get_payment_type_display()}"
+    else:
+        product_name = f"Listing Promotion: {payment.room.title}"
+
     payload = {
         "store_id": settings.SSLCOMMERZ_STORE_ID,
         "store_passwd": settings.SSLCOMMERZ_STORE_PASSWORD,
@@ -80,7 +87,7 @@ def initiate_payment(
         "cus_city": "Dhaka",
         "cus_country": "Bangladesh",
         "shipping_method": "NO",
-        "product_name": f"Booking #{payment.booking_id} - {payment.get_payment_type_display()}",
+        "product_name": product_name,
         "product_category": "Rent",
         "product_profile": "general",
     }

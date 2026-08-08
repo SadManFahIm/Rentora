@@ -5,6 +5,10 @@
 export type RoomType = "Single" | "Shared" | "Studio";
 export type GenderPref = "Any" | "Male" | "Female";
 
+/** Paid listing tier (monetization): free is the default; featured/premium
+ * are unlocked via a promotion payment and expire. */
+export type ListingTier = "free" | "featured" | "premium";
+
 export interface Room {
   id: number;
   name: string;
@@ -20,12 +24,28 @@ export interface Room {
   gender: GenderPref;
   available: boolean;
   featured: boolean;
+  tier: ListingTier;
+  tierExpiresAt: string | null;
   description: string;
   size: number;
   owner: string;
   ownerId: number | null;
   ownerAvatar: string;
   verified: boolean;
+}
+
+/** Public tier catalog from GET /rooms/tier-catalog/. */
+export interface TierInfo {
+  tier: ListingTier;
+  label: string;
+  price: number;
+  benefits: string[];
+}
+
+export interface TierCatalog {
+  tiers: TierInfo[];
+  durationDays: number;
+  currency: string;
 }
 
 export type UserRole = "tenant" | "landlord" | "admin";
@@ -128,7 +148,7 @@ export interface Filters {
 }
 
 // Filters as sent to the service layer — every field optional.
-export type RoomFilters = Partial<Filters>;
+export type RoomFilters = Partial<Filters> & { owner?: number };
 
 // ---- API payloads ----
 export type CreateRoomPayload = Omit<Room, "id" | "rating" | "reviews">;
@@ -181,7 +201,8 @@ export type PaymentGateway = "sslcommerz" | "bkash";
 
 export type PaymentMethod = PaymentGateway | "nagad" | "manual";
 
-export type PaymentType = "booking_deposit" | "monthly_rent" | "security_deposit";
+export type PaymentType =
+  "booking_deposit" | "monthly_rent" | "security_deposit" | "listing_feature" | "listing_premium";
 
 export type PaymentStatus =
   "initiated" | "pending" | "success" | "failed" | "cancelled" | "refunded";
