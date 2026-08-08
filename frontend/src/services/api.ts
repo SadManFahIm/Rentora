@@ -1,8 +1,4 @@
-import axios, {
-  type AxiosInstance,
-  type AxiosError,
-  type InternalAxiosRequestConfig,
-} from "axios";
+import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { toast } from "sonner";
 import { env } from "../config/env";
 
@@ -13,10 +9,8 @@ import { env } from "../config/env";
 export const ACCESS_TOKEN_KEY = "rentora_access";
 export const REFRESH_TOKEN_KEY = "rentora_refresh";
 
-export const getAccessToken = (): string | null =>
-  localStorage.getItem(ACCESS_TOKEN_KEY);
-export const getRefreshToken = (): string | null =>
-  localStorage.getItem(REFRESH_TOKEN_KEY);
+export const getAccessToken = (): string | null => localStorage.getItem(ACCESS_TOKEN_KEY);
+export const getRefreshToken = (): string | null => localStorage.getItem(REFRESH_TOKEN_KEY);
 
 export const setTokens = (access: string, refresh?: string): void => {
   localStorage.setItem(ACCESS_TOKEN_KEY, access);
@@ -52,8 +46,7 @@ api.interceptors.request.use(
 
 /** Endpoints that must never trigger a refresh-retry (they *are* auth). */
 const AUTH_PATHS = ["/auth/login/", "/auth/register/", "/auth/token/refresh/"];
-const isAuthPath = (url?: string): boolean =>
-  !!url && AUTH_PATHS.some((p) => url.includes(p));
+const isAuthPath = (url?: string): boolean => !!url && AUTH_PATHS.some((p) => url.includes(p));
 
 const redirectToAuth = (): void => {
   clearTokens();

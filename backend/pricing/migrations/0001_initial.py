@@ -4,31 +4,53 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='MarketStat',
+            name="MarketStat",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('area', models.CharField(choices=[('Dhanmondi', 'Dhanmondi'), ('Mirpur', 'Mirpur'), ('Gulshan', 'Gulshan'), ('Banani', 'Banani'), ('Mohammadpur', 'Mohammadpur'), ('Azimpur', 'Azimpur')], max_length=50)),
-                ('room_type', models.CharField(choices=[('single', 'Single'), ('shared', 'Shared'), ('studio', 'Studio')], max_length=10)),
-                ('avg_price', models.DecimalField(decimal_places=2, max_digits=10)),
-                ('median_price', models.DecimalField(decimal_places=2, max_digits=10)),
-                ('min_price', models.DecimalField(decimal_places=2, max_digits=10)),
-                ('max_price', models.DecimalField(decimal_places=2, max_digits=10)),
-                ('percentile_25', models.DecimalField(decimal_places=2, max_digits=10)),
-                ('percentile_75', models.DecimalField(decimal_places=2, max_digits=10)),
-                ('sample_size', models.IntegerField()),
-                ('calculated_at', models.DateTimeField(auto_now=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                (
+                    "area",
+                    models.CharField(
+                        choices=[
+                            ("Dhanmondi", "Dhanmondi"),
+                            ("Mirpur", "Mirpur"),
+                            ("Gulshan", "Gulshan"),
+                            ("Banani", "Banani"),
+                            ("Mohammadpur", "Mohammadpur"),
+                            ("Azimpur", "Azimpur"),
+                        ],
+                        max_length=50,
+                    ),
+                ),
+                (
+                    "room_type",
+                    models.CharField(
+                        choices=[("single", "Single"), ("shared", "Shared"), ("studio", "Studio")],
+                        max_length=10,
+                    ),
+                ),
+                ("avg_price", models.DecimalField(decimal_places=2, max_digits=10)),
+                ("median_price", models.DecimalField(decimal_places=2, max_digits=10)),
+                ("min_price", models.DecimalField(decimal_places=2, max_digits=10)),
+                ("max_price", models.DecimalField(decimal_places=2, max_digits=10)),
+                ("percentile_25", models.DecimalField(decimal_places=2, max_digits=10)),
+                ("percentile_75", models.DecimalField(decimal_places=2, max_digits=10)),
+                ("sample_size", models.IntegerField()),
+                ("calculated_at", models.DateTimeField(auto_now=True)),
             ],
             options={
-                'ordering': ['area', 'room_type'],
-                'unique_together': {('area', 'room_type')},
+                "ordering": ["area", "room_type"],
+                "unique_together": {("area", "room_type")},
             },
         ),
     ]

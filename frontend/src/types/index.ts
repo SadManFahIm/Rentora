@@ -5,6 +5,7 @@
 export type RoomType = "Single" | "Shared" | "Studio";
 export type GenderPref = "Any" | "Male" | "Female";
 
+<<<<<<< HEAD
 export type LandmarkKind = "university" | "metro";
 
 /** A single nearby landmark with its distance from a room (Phase 7 geo). */
@@ -20,6 +21,11 @@ export interface RoomProximity {
   nearestUniversity: LandmarkProximity | null;
   nearestMetro: LandmarkProximity | null;
 }
+=======
+/** Paid listing tier (monetization): free is the default; featured/premium
+ * are unlocked via a promotion payment and expire. */
+export type ListingTier = "free" | "featured" | "premium";
+>>>>>>> origin/main
 
 export interface Room {
   id: number;
@@ -36,16 +42,42 @@ export interface Room {
   gender: GenderPref;
   available: boolean;
   featured: boolean;
+  tier: ListingTier;
+  tierExpiresAt: string | null;
   description: string;
   size: number;
   owner: string;
   ownerId: number | null;
   ownerAvatar: string;
   verified: boolean;
+<<<<<<< HEAD
   /** Nearest university/metro (present when the API includes it). */
   proximity?: RoomProximity;
   /** Distance (km) from a geo query's reference point; null unless the request supplied one. */
   distanceKm?: number | null;
+=======
+  /** Distance (km) from the query's reference point — set on radius/map queries. */
+  distanceKm?: number | null;
+  /** Nearest university + metro to this listing, each with distance in km. */
+  proximity?: {
+    nearestUniversity: { key: string; name: string; distanceKm: number } | null;
+    nearestMetro: { key: string; name: string; distanceKm: number } | null;
+  } | null;
+}
+
+/** Public tier catalog from GET /rooms/tier-catalog/. */
+export interface TierInfo {
+  tier: ListingTier;
+  label: string;
+  price: number;
+  benefits: string[];
+}
+
+export interface TierCatalog {
+  tiers: TierInfo[];
+  durationDays: number;
+  currency: string;
+>>>>>>> origin/main
 }
 
 export type UserRole = "tenant" | "landlord" | "admin";
@@ -62,6 +94,17 @@ export interface User {
   phone?: string;
   bio?: string;
   nidVerified?: boolean;
+  /** Email-OTP two-factor authentication is enabled for this account. */
+  otpEnabled?: boolean;
+  /** Registered WebAuthn passkeys (from the user detail payload). */
+  passkeys?: PasskeyInfo[];
+}
+
+export interface PasskeyInfo {
+  id: string;
+  name: string;
+  created_at: string;
+  last_used_at: string | null;
 }
 
 export interface Notification {
@@ -148,7 +191,51 @@ export interface Filters {
 }
 
 // Filters as sent to the service layer — every field optional.
-export type RoomFilters = Partial<Filters>;
+export type RoomFilters = Partial<Filters> & {
+  owner?: number;
+  /** Map viewport, GeoJSON order: minLng,minLat,maxLng,maxLat. */
+  bbox?: string;
+  /** Reference-point latitude (pair with nearLng). */
+  nearLat?: number;
+  /** Reference-point longitude (pair with nearLat). */
+  nearLng?: number;
+  /** Keep only rooms within this many km of the reference point. */
+  radiusKm?: number;
+};
+
+/** A university or metro station from GET /rooms/landmarks/. */
+export interface Landmark {
+  key: string;
+  name: string;
+  kind: "university" | "metro";
+  lat: number;
+  lng: number;
+}
+
+/** A place suggestion from the map's street-search autocomplete. */
+export interface GeocodeSuggestion {
+  key: string;
+  label: string;
+  kind: "street" | "area" | "university" | "metro";
+  lat: number;
+  lng: number;
+}
+
+/** Aggregate room counts from GET /rooms/summary/ (map badge + area chips). */
+export interface MapSummary {
+  total: number;
+  available: number;
+  avg_price: number | null;
+  min_price: number | null;
+  max_price: number | null;
+  by_area: {
+    area: string;
+    count: number;
+    /** Fly-to point for the area chip, when the gazetteer knows the area. */
+    lat?: number;
+    lng?: number;
+  }[];
+}
 
 // ---- API payloads ----
 export type CreateRoomPayload = Omit<Room, "id" | "rating" | "reviews">;
@@ -169,6 +256,22 @@ export interface AuthResult {
   user: User;
   access: string;
   refresh: string;
+}
+
+/** Response from login when the account has email-OTP 2FA enabled. */
+export interface OtpPending {
+  otpRequired: true;
+  challenge: string;
+  destinationMasked: string;
+  expiresIn: number;
+  user: User;
+}
+
+/** Login either completes with JWTs or demands a one-time code. */
+export type LoginResult = AuthResult | OtpPending;
+
+export function isOtpPending(result: LoginResult): result is OtpPending {
+  return "otpRequired" in result && result.otpRequired === true;
 }
 
 export interface CreateBookingPayload {
@@ -201,15 +304,11 @@ export type PaymentGateway = "sslcommerz" | "bkash";
 
 export type PaymentMethod = PaymentGateway | "nagad" | "manual";
 
-export type PaymentType = "booking_deposit" | "monthly_rent" | "security_deposit";
+export type PaymentType =
+  "booking_deposit" | "monthly_rent" | "security_deposit" | "listing_feature" | "listing_premium";
 
 export type PaymentStatus =
-  | "initiated"
-  | "pending"
-  | "success"
-  | "failed"
-  | "cancelled"
-  | "refunded";
+  "initiated" | "pending" | "success" | "failed" | "cancelled" | "refunded";
 
 export interface Payment {
   id: number;
@@ -260,3 +359,119 @@ export interface InitiatePaymentResult {
 
 /** The outcome the backend redirects the browser back with after a gateway callback. */
 export type PaymentOutcome = "success" | "fail" | "cancel";
+
+// ---- Roommate matching (Phase: roommate matching) ----
+
+export type LifestyleTag =
+  | "early_bird"
+  | "night_owl"
+  | "non_smoker"
+  | "smoker"
+  | "student"
+  | "working_professional"
+  | "quiet"
+  | "social"
+  | "veggie"
+  | "pet_friendly"
+  | "clean"
+  | "guest_friendly";
+
+export interface RoommateProfile {
+  id: number;
+  username: string;
+  budgetMin: number;
+  budgetMax: number;
+  preferredArea: string;
+  roomTypePref: string;
+  genderPref: string;
+  lifestyle: LifestyleTag[];
+  occupation: string;
+  bio: string;
+  moveInDate: string | null;
+  isLooking: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The public view of another user's profile, embedded in a match. */
+export interface RoommateProfilePublic extends RoommateProfile {
+  user: {
+    id: number;
+    username: string;
+    first_name: string;
+    last_name: string;
+    avatar: string | null;
+    phone: string;
+    nid_verified: boolean;
+  };
+}
+
+export interface RoommateMatch {
+  score: number;
+  reasons: string[];
+  profile: RoommateProfilePublic;
+}
+
+export type RoommateRequestStatus = "pending" | "approved" | "rejected";
+
+export interface RoommateRequest {
+  id: number;
+  sender: RoommateProfilePublic["user"];
+  receiver: RoommateProfilePublic["user"];
+  message: string;
+  status: RoommateRequestStatus;
+  statusDisplay: string;
+  direction: "incoming" | "outgoing" | "";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RoommateProfilePayload {
+  budgetMin: number;
+  budgetMax: number;
+  preferredArea: string;
+  roomTypePref: string;
+  genderPref: string;
+  lifestyle: LifestyleTag[];
+  occupation: string;
+  bio: string;
+  moveInDate: string | null;
+  isLooking: boolean;
+}
+
+// ---- Fraud detection ----
+
+export type FraudSeverity = "clean" | "low" | "medium" | "high";
+export type FraudReportStatus = "open" | "reviewed" | "dismissed";
+
+export interface FraudStatus {
+  roomId: number;
+  severity: FraudSeverity;
+  score: number;
+  flagged: boolean;
+  message: string;
+}
+
+export interface FraudSignal {
+  id: number;
+  detector: string;
+  detectorDisplay: string;
+  severity: FraudSeverity;
+  message: string;
+  detail: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface FraudReport {
+  id: number;
+  room: Room;
+  severity: FraudSeverity;
+  severityDisplay: string;
+  status: FraudReportStatus;
+  statusDisplay: string;
+  score: number;
+  summary: string;
+  signals: FraudSignal[];
+  createdAt: string;
+  updatedAt: string;
+}

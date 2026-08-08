@@ -13,4 +13,17 @@ export default defineConfig({
   build: {
     outDir: "build",
   },
+  test: {
+    environment: "node",
+    include: ["src/**/*.test.{ts,tsx}"],
+    coverage: {
+      provider: "v8",
+      exclude: ["**/*.test.{ts,tsx}"],
+      reporter: ["text", "cobertura"],
+      thresholds: {
+        lines: 55,
+        statements: 50,
+      },
+    },
+  },
 });

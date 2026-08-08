@@ -86,6 +86,13 @@ def custom_exception_handler(exc: Exception, context: dict) -> Response:
     if message is None:
         # Use the first concrete error as the summary when we have no default.
         message = errors[0] if errors else "Request failed."
+    elif response.status_code == status.HTTP_400_BAD_REQUEST and len(errors) == 1:
+        # A single validation error is almost always more useful than the
+        # generic "Invalid request." — surface the real reason (with its
+        # "field: " prefix stripped) as the summary, e.g. the duplicate-email
+        # message on register. Multi-error bodies keep the generic summary.
+        parts = errors[0].split(": ", 1)
+        message = parts[1] if len(parts) == 2 and parts[1] else errors[0]
 
     response.data = {
         "success": False,

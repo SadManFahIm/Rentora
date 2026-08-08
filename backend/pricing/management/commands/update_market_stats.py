@@ -36,7 +36,9 @@ class Command(BaseCommand):
         stats = calculate_market_stats()
 
         if not stats:
-            self.stdout.write(self.style.WARNING("No available rooms found — no market segments to compute."))
+            self.stdout.write(
+                self.style.WARNING("No available rooms found — no market segments to compute.")
+            )
             return
 
         for stat in stats:
@@ -46,4 +48,6 @@ class Command(BaseCommand):
                 f"range=[BDT {stat.min_price}, BDT {stat.max_price}] n={stat.sample_size}"
             )
 
-        self.stdout.write(self.style.SUCCESS(f"Recalculated market stats for {len(stats)} segment(s)."))
+        self.stdout.write(
+            self.style.SUCCESS(f"Recalculated market stats for {len(stats)} segment(s).")
+        )

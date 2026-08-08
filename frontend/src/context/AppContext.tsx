@@ -1,10 +1,4 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { isAuthenticated, clearTokens } from "../services/api";
 import { authService } from "../services/authService";
 import { useWishlistStore } from "../stores/wishlistStore";
@@ -68,9 +62,7 @@ export function AppProvider({ children }: AppProviderProps) {
   }, []);
 
   return (
-    <AppContext.Provider value={{ user, setUser, authLoading }}>
-      {children}
-    </AppContext.Provider>
+    <AppContext.Provider value={{ user, setUser, authLoading }}>{children}</AppContext.Provider>
   );
 }
 

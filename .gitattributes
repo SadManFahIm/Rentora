@@ -1,0 +1,6 @@
+# Shell scripts must stay LF — CRLF breaks shebangs on fresh Windows clones.
+*.sh text eol=lf
+.husky/** text eol=lf
+
+# Normalize everything else to LF for consistency.
+* text=auto

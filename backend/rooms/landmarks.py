@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 
-class LandmarkKind(str, Enum):
+class LandmarkKind(Enum):
     UNIVERSITY = "university"
     METRO = "metro"
 
@@ -36,13 +36,27 @@ class Landmark:
 
 UNIVERSITIES: tuple[Landmark, ...] = (
     Landmark("du", "University of Dhaka", LandmarkKind.UNIVERSITY, 23.7340, 90.3929),
-    Landmark("buet", "Bangladesh University of Engineering & Technology (BUET)", LandmarkKind.UNIVERSITY, 23.7265, 90.3925),
+    Landmark(
+        "buet",
+        "Bangladesh University of Engineering & Technology (BUET)",
+        LandmarkKind.UNIVERSITY,
+        23.7265,
+        90.3925,
+    ),
     Landmark("dhaka_college", "Dhaka College", LandmarkKind.UNIVERSITY, 23.7389, 90.3846),
     Landmark("nsu", "North South University", LandmarkKind.UNIVERSITY, 23.8153, 90.4256),
     Landmark("brac", "BRAC University", LandmarkKind.UNIVERSITY, 23.7726, 90.4246),
-    Landmark("iub", "Independent University, Bangladesh (IUB)", LandmarkKind.UNIVERSITY, 23.8110, 90.4270),
+    Landmark(
+        "iub", "Independent University, Bangladesh (IUB)", LandmarkKind.UNIVERSITY, 23.8110, 90.4270
+    ),
     Landmark("ewu", "East West University", LandmarkKind.UNIVERSITY, 23.7690, 90.4260),
-    Landmark("bubt", "Bangladesh University of Business & Technology (BUBT)", LandmarkKind.UNIVERSITY, 23.8223, 90.3644),
+    Landmark(
+        "bubt",
+        "Bangladesh University of Business & Technology (BUBT)",
+        LandmarkKind.UNIVERSITY,
+        23.8223,
+        90.3644,
+    ),
 )
 
 # MRT Line 6, south from Uttara toward Motijheel — the stretch that actually

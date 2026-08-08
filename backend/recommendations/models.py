@@ -29,10 +29,14 @@ class UserActivity(models.Model):
         ActivityType.BOOKING_APPROVED: 10,
     }
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="activities")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="activities"
+    )
     # Nullable: a `search` activity isn't about one room, it's a query across
     # many — `metadata` carries the query text instead.
-    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="activities", null=True, blank=True)
+    room = models.ForeignKey(
+        Room, on_delete=models.CASCADE, related_name="activities", null=True, blank=True
+    )
     activity_type = models.CharField(max_length=20, choices=ActivityType.choices)
     weight = models.IntegerField()
     metadata = models.JSONField(default=dict, blank=True)

@@ -93,4 +93,6 @@ class Command(BaseCommand):
             )
             sent += 1
 
-        self.stdout.write(self.style.SUCCESS(f"Sent {sent} payment reminder(s) for {target_due_date}."))
+        self.stdout.write(
+            self.style.SUCCESS(f"Sent {sent} payment reminder(s) for {target_due_date}.")
+        )

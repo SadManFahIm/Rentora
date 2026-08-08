@@ -6,7 +6,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -15,44 +14,94 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='Room',
+            name="Room",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('title', models.CharField(max_length=200)),
-                ('description', models.TextField()),
-                ('room_type', models.CharField(choices=[('single', 'Single'), ('shared', 'Shared'), ('studio', 'Studio')], max_length=10)),
-                ('price', models.DecimalField(decimal_places=2, max_digits=10)),
-                ('area', models.CharField(choices=[('Dhanmondi', 'Dhanmondi'), ('Mirpur', 'Mirpur'), ('Gulshan', 'Gulshan'), ('Banani', 'Banani'), ('Mohammadpur', 'Mohammadpur'), ('Azimpur', 'Azimpur')], max_length=50)),
-                ('address', models.TextField()),
-                ('lat', models.DecimalField(decimal_places=6, max_digits=9)),
-                ('lng', models.DecimalField(decimal_places=6, max_digits=9)),
-                ('amenities', models.JSONField(default=list)),
-                ('gender_preference', models.CharField(choices=[('any', 'Any'), ('male', 'Male'), ('female', 'Female')], default='any', max_length=10)),
-                ('size_sqft', models.IntegerField()),
-                ('is_available', models.BooleanField(default=True)),
-                ('is_featured', models.BooleanField(default=False)),
-                ('rating', models.DecimalField(decimal_places=2, default=0, max_digits=3)),
-                ('total_reviews', models.IntegerField(default=0)),
-                ('verified', models.BooleanField(default=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('owner', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='rooms', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("title", models.CharField(max_length=200)),
+                ("description", models.TextField()),
+                (
+                    "room_type",
+                    models.CharField(
+                        choices=[("single", "Single"), ("shared", "Shared"), ("studio", "Studio")],
+                        max_length=10,
+                    ),
+                ),
+                ("price", models.DecimalField(decimal_places=2, max_digits=10)),
+                (
+                    "area",
+                    models.CharField(
+                        choices=[
+                            ("Dhanmondi", "Dhanmondi"),
+                            ("Mirpur", "Mirpur"),
+                            ("Gulshan", "Gulshan"),
+                            ("Banani", "Banani"),
+                            ("Mohammadpur", "Mohammadpur"),
+                            ("Azimpur", "Azimpur"),
+                        ],
+                        max_length=50,
+                    ),
+                ),
+                ("address", models.TextField()),
+                ("lat", models.DecimalField(decimal_places=6, max_digits=9)),
+                ("lng", models.DecimalField(decimal_places=6, max_digits=9)),
+                ("amenities", models.JSONField(default=list)),
+                (
+                    "gender_preference",
+                    models.CharField(
+                        choices=[("any", "Any"), ("male", "Male"), ("female", "Female")],
+                        default="any",
+                        max_length=10,
+                    ),
+                ),
+                ("size_sqft", models.IntegerField()),
+                ("is_available", models.BooleanField(default=True)),
+                ("is_featured", models.BooleanField(default=False)),
+                ("rating", models.DecimalField(decimal_places=2, default=0, max_digits=3)),
+                ("total_reviews", models.IntegerField(default=0)),
+                ("verified", models.BooleanField(default=False)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "owner",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="rooms",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
+                "ordering": ["-created_at"],
             },
         ),
         migrations.CreateModel(
-            name='RoomImage',
+            name="RoomImage",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('image', models.ImageField(upload_to='rooms/')),
-                ('is_primary', models.BooleanField(default=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('room', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='images', to='rooms.room')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("image", models.ImageField(upload_to="rooms/")),
+                ("is_primary", models.BooleanField(default=False)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "room",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="images",
+                        to="rooms.room",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-is_primary', 'created_at'],
+                "ordering": ["-is_primary", "created_at"],
             },
         ),
     ]

@@ -96,8 +96,7 @@ export default function ChatWindow() {
   const uploadFile = useUploadChatFile();
 
   const rooms = roomsQuery.data ?? [];
-  const selectedRoom: ChatRoom | null =
-    rooms.find((r) => r.id === selectedRoomId) ?? null;
+  const selectedRoom: ChatRoom | null = rooms.find((r) => r.id === selectedRoomId) ?? null;
 
   // A room opened via a deep link (?room=5, e.g. from "Message Owner" on a
   // listing) should take effect even before the rooms list has loaded.
@@ -125,9 +124,7 @@ export default function ChatWindow() {
 
     if (lastMessage.type === "chat_message") {
       const incoming = mapChatMessage(lastMessage.message);
-      setMessages((prev) =>
-        prev.some((m) => m.id === incoming.id) ? prev : [...prev, incoming]
-      );
+      setMessages((prev) => (prev.some((m) => m.id === incoming.id) ? prev : [...prev, incoming]));
       if (incoming.sender.id !== user?.id) {
         // Someone else's message, and we're actively looking at this room
         // right now — tell the server we've read it immediately.
@@ -138,10 +135,7 @@ export default function ChatWindow() {
       if (typingClearTimer.current) clearTimeout(typingClearTimer.current);
       if (lastMessage.is_typing) {
         setTypingUserName(lastMessage.user_name);
-        typingClearTimer.current = setTimeout(
-          () => setTypingUserName(null),
-          TYPING_CLEAR_DELAY_MS
-        );
+        typingClearTimer.current = setTimeout(() => setTypingUserName(null), TYPING_CLEAR_DELAY_MS);
       } else {
         setTypingUserName(null);
       }
@@ -211,7 +205,9 @@ export default function ChatWindow() {
         </div>
         <div className="flex-1 overflow-y-auto">
           {roomsQuery.isLoading ? (
-            <div className="p-5 text-sm text-gray-600 dark:text-gray-400">Loading conversations…</div>
+            <div className="p-5 text-sm text-gray-600 dark:text-gray-400">
+              Loading conversations…
+            </div>
           ) : rooms.length === 0 ? (
             <div className="p-5 text-sm text-gray-600 dark:text-gray-400">
               No conversations yet. Open a room listing and tap "Message Owner" to start one.
@@ -257,8 +253,12 @@ export default function ChatWindow() {
       <div className="flex h-130 flex-col rounded-2xl border border-gray-200 bg-card dark:border-gray-800">
         {!selectedRoom ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-gray-600 dark:text-gray-400">
-            <p className="font-display text-base font-bold text-foreground">Select a conversation</p>
-            <p className="text-sm">Choose a chat on the left, or message a room owner to start one.</p>
+            <p className="font-display text-base font-bold text-foreground">
+              Select a conversation
+            </p>
+            <p className="text-sm">
+              Choose a chat on the left, or message a room owner to start one.
+            </p>
           </div>
         ) : (
           <>

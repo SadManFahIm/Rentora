@@ -9,7 +9,9 @@ export default function AIRecommendations() {
       <div className="mb-4 flex items-center gap-2.5">
         <span className="text-2xl">🤖</span>
         <div>
-          <div className="font-display text-base font-bold text-foreground">AI Best Matches For You</div>
+          <div className="font-display text-base font-bold text-foreground">
+            AI Best Matches For You
+          </div>
           <div className="text-sm text-gray-600 dark:text-gray-400">
             Based on Dhanmondi area • ৳10K-20K budget • Studio preference
           </div>
@@ -21,7 +23,11 @@ export default function AIRecommendations() {
             key={r.id}
             className="flex items-center gap-3 rounded-2xl border border-orange-200 bg-orange-50/30 p-4 dark:border-orange-900/40 dark:bg-orange-950/10"
           >
-            <img src={r.img} alt={r.name} className="h-15 w-17.5 shrink-0 rounded-lg object-cover" />
+            <img
+              src={r.img}
+              alt={r.name}
+              className="h-15 w-17.5 shrink-0 rounded-lg object-cover"
+            />
             <div>
               <h4 className="font-display text-sm font-bold text-foreground">{r.name}</h4>
               <p className="mb-1.5 text-sm text-gray-600 dark:text-gray-400">
