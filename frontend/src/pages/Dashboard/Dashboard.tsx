@@ -1,9 +1,19 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { Download, Heart, Loader2, ShieldCheck } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Download,
+  Heart,
+  Loader2,
+  Megaphone,
+  ShieldAlert,
+  ShieldCheck,
+  KeyRound,
+} from "lucide-react";
 import { useDashboard } from "../../hooks/useDashboard";
+import { useRooms } from "../../hooks/useRooms";
 import { useBookings } from "../../hooks/useBookings";
+import { useFraudReports, useReviewFraudReport, useScanRoom } from "../../hooks/useFraud";
 import {
   useDepositStatus,
   useDownloadReceipt,
@@ -11,14 +21,23 @@ import {
   usePaymentSummary,
 } from "../../hooks/usePayments";
 import { wishlistService } from "../../services/wishlistService";
+import { useApp } from "../../context/AppContext";
 import RoomCard from "../../components/RoomCard/RoomCard";
 import RoomModal from "../../components/RoomModal/RoomModal";
+import RoomForm from "../../components/RoomForm/RoomForm";
+import TierBadge from "../../components/TierBadge/TierBadge";
+import PromoteModal from "../../components/PromoteModal/PromoteModal";
 import PaymentMethodModal, {
   type PaymentRequest,
 } from "../../components/PaymentMethodModal/PaymentMethodModal";
 import { Button } from "../../components/ui/button";
 import { Skeleton } from "../../components/ui/skeleton";
 import { Input } from "../../components/ui/input";
+import { toast } from "sonner";
+import { startRegistration } from "@simplewebauthn/browser";
+import { authService } from "../../services/authService";
+import { getApiErrorMessage } from "../../services/errors";
+import type { PasskeyInfo } from "../../types";
 import {
   Select,
   SelectContent,
@@ -29,8 +48,8 @@ import {
 import type { Booking, PaymentStatus, Room } from "../../types";
 import { cn } from "../../lib/utils";
 
-type DashboardTab = "overview" | "bookings" | "payments" | "wishlist";
-const TABS: DashboardTab[] = ["overview", "bookings", "payments", "wishlist"];
+type DashboardTab = "overview" | "listings" | "bookings" | "payments" | "wishlist" | "fraud";
+const TABS: DashboardTab[] = ["overview", "listings", "bookings", "payments", "wishlist", "fraud"];
 
 interface StatCard {
   icon: string;
@@ -66,6 +85,8 @@ const paymentTypeLabels: Record<string, string> = {
   monthly_rent: "Monthly Rent",
   security_deposit: "Security Deposit",
   booking_deposit: "Booking Deposit",
+  listing_feature: "Listing Promotion (Featured)",
+  listing_premium: "Listing Promotion (Premium)",
 };
 
 const takaFmt = (n: number) => `৳${n.toLocaleString()}`;
@@ -137,7 +158,10 @@ function BookingListItem({
       <div className="flex flex-col gap-2">
         {booking.status === "approved" && (
           <>
-            <Button className="bg-orange-600 text-white hover:bg-orange-700" onClick={() => onPayNow(booking)}>
+            <Button
+              className="bg-orange-600 text-white hover:bg-orange-700"
+              onClick={() => onPayNow(booking)}
+            >
               Pay Now
             </Button>
             <Button variant="outline">Sign Agreement 📝</Button>
@@ -155,14 +179,16 @@ function BookingListItem({
 }
 
 export default function Dashboard() {
-  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const [activeTab, setActiveTab] = useState<DashboardTab>(
     (TABS as string[]).includes(requestedTab ?? "") ? (requestedTab as DashboardTab) : "overview"
   );
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  const [showRoomForm, setShowRoomForm] = useState(false);
   const [payRequest, setPayRequest] = useState<PaymentRequest | null>(null);
+  const [promoteRoom, setPromoteRoom] = useState<Room | null>(null);
 
   const [statusFilter, setStatusFilter] = useState<PaymentStatus | "all">("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -216,10 +242,30 @@ export default function Dashboard() {
   const landlordCards: StatCard[] | null =
     stats?.landlord != null
       ? [
-          { icon: "🏢", label: "My Listings", value: String(stats.landlord.total_listings), change: "" },
-          { icon: "📨", label: "Bookings Received", value: String(stats.landlord.total_bookings_received), change: "" },
-          { icon: "⭐", label: "Avg Rating", value: stats.landlord.avg_rating.toFixed(1), change: "" },
-          { icon: "💰", label: "Revenue", value: takaFmt(stats.landlord.total_revenue), change: "approved bookings" },
+          {
+            icon: "🏢",
+            label: "My Listings",
+            value: String(stats.landlord.total_listings),
+            change: "",
+          },
+          {
+            icon: "📨",
+            label: "Bookings Received",
+            value: String(stats.landlord.total_bookings_received),
+            change: "",
+          },
+          {
+            icon: "⭐",
+            label: "Avg Rating",
+            value: stats.landlord.avg_rating.toFixed(1),
+            change: "",
+          },
+          {
+            icon: "💰",
+            label: "Revenue",
+            value: takaFmt(stats.landlord.total_revenue),
+            change: "approved bookings",
+          },
         ]
       : null;
 
@@ -246,9 +292,14 @@ export default function Dashboard() {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground">My Dashboard</h1>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Welcome back! Here's your activity.</p>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            Welcome back! Here's your activity.
+          </p>
         </div>
-        <Button className="bg-orange-600 text-white hover:bg-orange-700" onClick={() => navigate("/rooms")}>
+        <Button
+          className="bg-orange-600 text-white hover:bg-orange-700"
+          onClick={() => setShowRoomForm(true)}
+        >
           + List a Room
         </Button>
       </div>
@@ -274,25 +325,37 @@ export default function Dashboard() {
         <>
           <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {statCards.map((s) => (
-              <div key={s.label} className="rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800">
+              <div
+                key={s.label}
+                className="rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800"
+              >
                 <div className="mb-2.5 text-2xl">{s.icon}</div>
                 <h3 className="font-display text-2xl font-bold text-foreground">{s.value}</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400">{s.label}</p>
-                {s.change && <div className="text-sm font-semibold text-emerald-500">{s.change}</div>}
+                {s.change && (
+                  <div className="text-sm font-semibold text-emerald-500">{s.change}</div>
+                )}
               </div>
             ))}
           </div>
 
           {landlordCards && (
             <div className="mb-6">
-              <h2 className="mb-3 font-display text-lg font-bold text-foreground">Landlord Overview</h2>
+              <h2 className="mb-3 font-display text-lg font-bold text-foreground">
+                Landlord Overview
+              </h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {landlordCards.map((s) => (
-                  <div key={s.label} className="rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800">
+                  <div
+                    key={s.label}
+                    className="rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800"
+                  >
                     <div className="mb-2.5 text-2xl">{s.icon}</div>
                     <h3 className="font-display text-2xl font-bold text-foreground">{s.value}</h3>
                     <p className="text-sm text-gray-600 dark:text-gray-400">{s.label}</p>
-                    {s.change && <div className="text-sm font-semibold text-emerald-500">{s.change}</div>}
+                    {s.change && (
+                      <div className="text-sm font-semibold text-emerald-500">{s.change}</div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -300,19 +363,31 @@ export default function Dashboard() {
           )}
 
           <div className="rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800">
-            <h3 className="mb-2.5 font-display font-bold text-foreground">🤖 AI Profile Insights</h3>
+            <h3 className="mb-2.5 font-display font-bold text-foreground">
+              🤖 AI Profile Insights
+            </h3>
             <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-              Based on your search history, you prefer <strong className="text-foreground">Studio rooms in Dhanmondi/Banani</strong> within
-              ৳10K-20K budget. Complete your <strong className="text-foreground">KYC verification</strong> to get priority access to premium
-              listings.
+              Based on your search history, you prefer{" "}
+              <strong className="text-foreground">Studio rooms in Dhanmondi/Banani</strong> within
+              ৳10K-20K budget. Complete your{" "}
+              <strong className="text-foreground">KYC verification</strong> to get priority access
+              to premium listings.
             </p>
+          </div>
+
+          <div className="mt-6">
+            <TwoFactorCard />
           </div>
         </>
       )}
 
-      {activeTab === "bookings" && (
-        bookingsLoading ? (
-          <div className="py-15 text-center text-gray-600 dark:text-gray-400">Loading bookings…</div>
+      {activeTab === "listings" && <ListingsTab onPromote={setPromoteRoom} />}
+
+      {activeTab === "bookings" &&
+        (bookingsLoading ? (
+          <div className="py-15 text-center text-gray-600 dark:text-gray-400">
+            Loading bookings…
+          </div>
         ) : bookings.length === 0 ? (
           <div className="flex flex-col items-center px-5 py-15 text-center text-gray-600 dark:text-gray-400">
             <span className="mb-4 text-5xl">📅</span>
@@ -330,8 +405,7 @@ export default function Dashboard() {
               />
             ))}
           </div>
-        )
-      )}
+        ))}
 
       {activeTab === "payments" && (
         <>
@@ -414,25 +488,33 @@ export default function Dashboard() {
           ) : payments.length === 0 ? (
             <div className="flex flex-col items-center px-5 py-15 text-center text-gray-600 dark:text-gray-400">
               <span className="mb-4 text-5xl">💳</span>
-              <h3 className="mb-2 font-display text-lg font-bold text-foreground">No payments yet</h3>
+              <h3 className="mb-2 font-display text-lg font-bold text-foreground">
+                No payments yet
+              </h3>
               <p>Your payment history will show up here.</p>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
               {payments.map((p) => {
-                const isDownloading = downloadReceipt.isPending && downloadReceipt.variables === p.id;
+                const isDownloading =
+                  downloadReceipt.isPending && downloadReceipt.variables === p.id;
                 return (
                   <div
                     key={p.id}
                     className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-card p-4 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="flex-1">
-                      <div className="text-sm font-semibold text-foreground">{formatPaymentDate(p.createdAt)}</div>
+                      <div className="text-sm font-semibold text-foreground">
+                        {formatPaymentDate(p.createdAt)}
+                      </div>
                       <div className="text-xs text-gray-600 dark:text-gray-400">
-                        {paymentMethodLabels[p.method] ?? p.method} • {paymentTypeLabels[p.type] ?? p.type}
+                        {paymentMethodLabels[p.method] ?? p.method} •{" "}
+                        {paymentTypeLabels[p.type] ?? p.type}
                       </div>
                     </div>
-                    <div className="font-display font-bold text-foreground">{takaFmt(p.amount)}</div>
+                    <div className="font-display font-bold text-foreground">
+                      {takaFmt(p.amount)}
+                    </div>
                     <span
                       className={cn(
                         "inline-flex w-fit rounded-full px-2.5 py-0.5 text-xs font-semibold",
@@ -464,24 +546,551 @@ export default function Dashboard() {
         </>
       )}
 
-      {activeTab === "wishlist" && (
-        wishlistLoading ? (
-          <div className="py-15 text-center text-gray-600 dark:text-gray-400">Loading saved rooms…</div>
+      {activeTab === "wishlist" &&
+        (wishlistLoading ? (
+          <div className="py-15 text-center text-gray-600 dark:text-gray-400">
+            Loading saved rooms…
+          </div>
         ) : wishlistedRooms.length === 0 ? (
           <div className="flex flex-col items-center px-5 py-15 text-center text-gray-600 dark:text-gray-400">
             <Heart className="mb-4 size-12" />
-            <h3 className="mb-2 font-display text-lg font-bold text-foreground">No saved rooms yet</h3>
+            <h3 className="mb-2 font-display text-lg font-bold text-foreground">
+              No saved rooms yet
+            </h3>
             <p>Tap the heart icon on any room to save it here.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {wishlistedRooms.map((r) => <RoomCard key={r.id} room={r} onClick={setSelectedRoom} />)}
+            {wishlistedRooms.map((r) => (
+              <RoomCard key={r.id} room={r} onClick={setSelectedRoom} />
+            ))}
           </div>
-        )
-      )}
+        ))}
+
+      {activeTab === "fraud" && <FraudTab />}
 
       {selectedRoom && <RoomModal room={selectedRoom} onClose={() => setSelectedRoom(null)} />}
+
+      <RoomForm open={showRoomForm} onClose={() => setShowRoomForm(false)} />
       <PaymentMethodModal request={payRequest} onClose={() => setPayRequest(null)} />
+      <PromoteModal
+        room={promoteRoom}
+        onClose={() => setPromoteRoom(null)}
+        onPromoted={(roomId) => {
+          // Room tier changed server-side after a successful payment; refresh
+          // the landlord's listings list.
+          queryClient.invalidateQueries({ queryKey: ["rooms"] });
+          void roomId;
+        }}
+      />
+    </div>
+  );
+} /** Account security: enable/disable email-OTP 2FA (two-step: password →
+ * emailed code → one-time recovery codes) and manage WebAuthn passkeys. */
+function TwoFactorCard() {
+  const { user, setUser } = useApp();
+  const [step, setStep] = useState<"idle" | "password" | "email" | "codes">("idle");
+  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [challenge, setChallenge] = useState("");
+  const [destination, setDestination] = useState("");
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [registeringPasskey, setRegisteringPasskey] = useState(false);
+
+  const enabled = user?.otpEnabled === true;
+  const passkeys = user?.passkeys ?? [];
+
+  const beginEnable = async () => {
+    setBusy(true);
+    try {
+      const result = await authService.toggle2fa(true, password);
+      if (result.pendingEnable && result.challenge) {
+        setChallenge(result.challenge);
+        setDestination(result.destinationMasked ?? "your inbox");
+        setStep("email");
+      } else {
+        setUser({ ...user!, otpEnabled: result.otpEnabled });
+        setStep("idle");
+        setPassword("");
+      }
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Could not enable 2FA. Check your current password."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmEnable = async () => {
+    setBusy(true);
+    try {
+      const result = await authService.confirmEnable2fa(challenge, code.trim());
+      setUser({ ...user!, otpEnabled: result.otpEnabled });
+      setRecoveryCodes(result.recoveryCodes);
+      setStep("codes");
+      setCode("");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "That code was not accepted. Try again."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disable = async () => {
+    setBusy(true);
+    try {
+      const result = await authService.toggle2fa(false);
+      setUser({ ...user!, otpEnabled: result.otpEnabled });
+      setStep("idle");
+      toast.success("Two-factor authentication disabled.");
+    } catch {
+      toast.error("Could not disable 2FA right now.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyCodes = async () => {
+    try {
+      await navigator.clipboard.writeText(recoveryCodes.join("\n"));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard unavailable */
+    }
+  };
+
+  const registerPasskey = async () => {
+    setRegisteringPasskey(true);
+    try {
+      const options = await authService.passkeyRegisterBegin();
+      const { challenge_id: _challengeId, ...publicKeyOptions } = options as Record<
+        string,
+        unknown
+      >;
+      const credential = await startRegistration({
+        optionsJSON: publicKeyOptions as never,
+      });
+      await authService.passkeyRegisterComplete(
+        credential as unknown as Record<string, unknown>,
+        "Browser"
+      );
+      toast.success("Passkey saved — you can now sign in with it.");
+      const fresh = await authService.getProfile();
+      setUser({ ...user!, passkeys: fresh.passkeys });
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Could not register this passkey."));
+    } finally {
+      setRegisteringPasskey(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800">
+      {/* ---- 2FA row ---- */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <span
+            className={cn(
+              "inline-flex size-10 shrink-0 items-center justify-center rounded-xl",
+              enabled
+                ? "bg-emerald-500/10 text-emerald-500"
+                : "bg-gray-100 text-gray-500 dark:bg-gray-800"
+            )}
+          >
+            <KeyRound className="size-5" />
+          </span>
+          <div>
+            <h3 className="font-display text-sm font-bold text-foreground">
+              Two-Factor Authentication
+            </h3>
+            <p className="mt-0.5 max-w-md text-sm text-gray-600 dark:text-gray-400">
+              {enabled
+                ? "On — signing in also requires a one-time code emailed to you (or a backup recovery code)."
+                : "Off — add a second step: after your password, a code emailed to you is required to sign in."}
+            </p>
+            {enabled && (
+              <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-500">
+                <ShieldCheck className="size-3" /> Enabled
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="shrink-0">
+          {step === "password" && (
+            <div className="flex items-center gap-2">
+              <Input
+                type="password"
+                placeholder="Current password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && beginEnable()}
+                className="w-44"
+                autoComplete="current-password"
+                aria-label="Current password"
+              />
+              <Button size="sm" onClick={beginEnable} disabled={busy || !password}>
+                {busy ? <Loader2 className="size-3.5 animate-spin" /> : "Confirm"}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setStep("idle")} disabled={busy}>
+                Cancel
+              </Button>
+            </div>
+          )}
+          {step === "email" && (
+            <div className="flex items-center gap-2">
+              <Input
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="Email code"
+                className="w-32 text-center tracking-widest"
+                aria-label="Email verification code"
+              />
+              <Button size="sm" onClick={confirmEnable} disabled={busy || code.length < 6}>
+                {busy ? <Loader2 className="size-3.5 animate-spin" /> : "Verify"}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setStep("password")} disabled={busy}>
+                Back
+              </Button>
+            </div>
+          )}
+          {step === "codes" && (
+            <Button size="sm" variant="outline" onClick={() => setStep("idle")}>
+              Done
+            </Button>
+          )}
+          {step === "idle" &&
+            (enabled ? (
+              <Button variant="outline" size="sm" onClick={disable} disabled={busy}>
+                {busy ? <Loader2 className="size-3.5 animate-spin" /> : "Disable"}
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                className="bg-orange-600 text-white hover:bg-orange-700"
+                onClick={() => setStep("password")}
+              >
+                Enable 2FA
+              </Button>
+            ))}
+        </div>
+      </div>
+
+      {step === "email" && (
+        <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:bg-gray-800/60 dark:text-gray-400">
+          🔐 We emailed a 6-digit verification code to <strong>{destination}</strong>. Enter it to
+          finish enabling two-factor authentication.
+        </p>
+      )}
+
+      {/* ---- One-time recovery codes (shown exactly once) ---- */}
+      {step === "codes" && (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-950/30">
+          <h4 className="font-display text-sm font-bold text-amber-800 dark:text-amber-300">
+            ⚠️ Save your recovery codes — shown only once
+          </h4>
+          <p className="mt-1 text-xs text-amber-700 dark:text-amber-300/80">
+            If you lose access to your email, any one of these codes signs you in. Each works once.
+          </p>
+          <div className="mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            {recoveryCodes.map((codeItem) => (
+              <code
+                key={codeItem}
+                className="rounded-md bg-white px-3 py-1.5 font-mono text-sm font-semibold tracking-wide text-amber-900 dark:bg-gray-900 dark:text-amber-200"
+              >
+                {codeItem}
+              </code>
+            ))}
+          </div>
+          <Button size="sm" variant="outline" className="mt-3" onClick={copyCodes}>
+            {copied ? "✓ Copied" : "Copy all codes"}
+          </Button>
+        </div>
+      )}
+
+      {/* ---- Passkeys ---- */}
+      <div className="mt-4 border-t border-gray-100 pt-4 dark:border-gray-800">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
+              <KeyRound className="size-5" />
+            </span>
+            <div>
+              <h4 className="font-display text-sm font-bold text-foreground">Passkeys</h4>
+              <p className="mt-0.5 max-w-md text-sm text-gray-600 dark:text-gray-400">
+                Sign in with a fingerprint, face, or device PIN — no password needed.
+              </p>
+              {passkeys.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {passkeys.map((pk: PasskeyInfo) => (
+                    <span
+                      key={pk.id}
+                      className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                    >
+                      {pk.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={registerPasskey}
+            disabled={registeringPasskey}
+          >
+            {registeringPasskey ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              "+ Register a passkey"
+            )}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Landlord's own listings with their paid tier and a promote action. */
+function ListingsTab({ onPromote }: { onPromote: (room: Room) => void }) {
+  const { user } = useApp();
+  // Server-side owner filter: the landlord dashboard only needs this owner's
+  // listings, and a client-side filter over the first page of *all* rooms
+  // would silently drop listings beyond page 1.
+  const { data: rooms = [], isLoading } = useRooms(
+    user?.id != null ? { owner: user.id } : undefined
+  );
+
+  const myRooms = rooms;
+
+  if (isLoading) {
+    return (
+      <div className="py-15 text-center text-gray-600 dark:text-gray-400">
+        Loading your listings…
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-5 flex items-center gap-2">
+        <Megaphone className="size-5 text-orange-600" />
+        <div>
+          <h2 className="font-display text-lg font-bold text-foreground">My Listings</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Manage your rooms and promote them to reach more tenants.
+          </p>
+        </div>
+      </div>
+
+      {myRooms.length === 0 ? (
+        <div className="flex flex-col items-center px-5 py-15 text-center text-gray-600 dark:text-gray-400">
+          <Megaphone className="mb-4 size-12" />
+          <h3 className="mb-2 font-display text-lg font-bold text-foreground">No listings yet</h3>
+          <p>Create a room listing to start renting it out.</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {myRooms.map((room) => (
+            <div
+              key={room.id}
+              className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-card p-4 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <img
+                  src={room.img}
+                  alt={room.name}
+                  className="h-16 w-24 shrink-0 rounded-lg object-cover"
+                />
+                <div>
+                  <div className="flex items-center gap-2 font-display text-sm font-bold text-foreground">
+                    {room.name}
+                    <TierBadge tier={room.tier} showFree />
+                  </div>
+                  <div className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
+                    {room.area} • ৳{room.price.toLocaleString()}/mo •{" "}
+                    {room.available ? "Available" : "Unavailable"}
+                  </div>
+                  {room.tierExpiresAt && room.tier !== "free" && (
+                    <div className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                      {room.tier === "premium" ? "Premium" : "Featured"} until{" "}
+                      {new Date(room.tierExpiresAt).toLocaleDateString()}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className="shrink-0 bg-orange-600 text-white hover:bg-orange-700"
+                onClick={() => onPromote(room)}
+              >
+                <Megaphone className="mr-1.5 size-3.5" />
+                {room.tier === "free" ? "Promote" : "Upgrade"}
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Fraud-alert tab: reports on the landlord's own listings (admin sees all). */
+function FraudTab() {
+  const { data: reports = [], isLoading } = useFraudReports();
+  const scanRoom = useScanRoom();
+  const review = useReviewFraudReport();
+  const { user } = useApp();
+  const isAdmin = user?.role === "admin";
+
+  const severityClasses: Record<string, string> = {
+    clean: "bg-emerald-500/10 text-emerald-500",
+    low: "bg-yellow-500/10 text-yellow-500",
+    medium: "bg-orange-500/10 text-orange-500",
+    high: "bg-red-500/10 text-red-500",
+  };
+  const statusClasses: Record<string, string> = {
+    open: "bg-red-500/10 text-red-500",
+    reviewed: "bg-blue-500/10 text-blue-500",
+    dismissed: "bg-gray-500/10 text-gray-500",
+  };
+
+  if (isLoading) {
+    return (
+      <div className="py-15 text-center text-gray-600 dark:text-gray-400">
+        Loading fraud reports…
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-5 flex items-center gap-2">
+        <ShieldAlert className="size-5 text-orange-600" />
+        <div>
+          <h2 className="font-display text-lg font-bold text-foreground">Fraud &amp; Safety</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {isAdmin
+              ? "All listings flagged by the fraud detector."
+              : "Auto-detected risk signals on your listings."}
+          </p>
+        </div>
+      </div>
+
+      {reports.length === 0 ? (
+        <div className="flex flex-col items-center px-5 py-15 text-center text-gray-600 dark:text-gray-400">
+          <ShieldCheck className="mb-4 size-12 text-emerald-500" />
+          <h3 className="mb-2 font-display text-lg font-bold text-foreground">
+            No flagged listings
+          </h3>
+          <p>Your listings passed the fraud scan. New rooms are checked automatically.</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {reports.map((report) => {
+            const isScanning = scanRoom.isPending && scanRoom.variables === report.room.id;
+            return (
+              <div
+                key={report.id}
+                className="rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={report.room.img}
+                      alt={report.room.name}
+                      className="h-16 w-24 shrink-0 rounded-lg object-cover"
+                    />
+                    <div>
+                      <div className="font-display text-sm font-bold text-foreground">
+                        {report.room.name}
+                      </div>
+                      <div className="text-xs text-gray-600 dark:text-gray-400">
+                        {report.room.area} • {report.room.type}
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        <span
+                          className={cn(
+                            "inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                            severityClasses[report.severity]
+                          )}
+                        >
+                          {report.severityDisplay} risk · {report.score}/100
+                        </span>
+                        <span
+                          className={cn(
+                            "inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                            statusClasses[report.status]
+                          )}
+                        >
+                          {report.statusDisplay}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => scanRoom.mutate(report.room.id)}
+                      disabled={isScanning}
+                    >
+                      {isScanning ? <Loader2 className="size-3.5 animate-spin" /> : "Re-scan"}
+                    </Button>
+                    {isAdmin && report.status === "open" && (
+                      <>
+                        <Button
+                          size="sm"
+                          onClick={() => review.mutate({ reportId: report.id, action: "reviewed" })}
+                        >
+                          Mark reviewed
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            review.mutate({ reportId: report.id, action: "dismissed" })
+                          }
+                        >
+                          Dismiss
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {report.signals.length > 0 && (
+                  <div className="mt-4 flex flex-col gap-2 border-t border-gray-100 pt-4 dark:border-gray-800">
+                    {report.signals.map((signal) => (
+                      <div key={signal.id} className="flex items-start gap-2 text-sm">
+                        <span
+                          className={cn(
+                            "mt-1 size-2 shrink-0 rounded-full",
+                            signal.severity === "high"
+                              ? "bg-red-500"
+                              : signal.severity === "medium"
+                                ? "bg-orange-500"
+                                : "bg-yellow-500"
+                          )}
+                        />
+                        <div>
+                          <span className="font-semibold text-foreground">
+                            {signal.detectorDisplay}:
+                          </span>{" "}
+                          <span className="text-gray-600 dark:text-gray-400">{signal.message}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

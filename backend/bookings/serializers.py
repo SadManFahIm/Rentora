@@ -116,7 +116,9 @@ class BookingUpdateSerializer(serializers.ModelSerializer):
                     Booking.Status.APPROVED: {Booking.Status.CANCELLED},
                 }
             else:
-                raise serializers.ValidationError("You do not have permission to change this booking's status.")
+                raise serializers.ValidationError(
+                    "You do not have permission to change this booking's status."
+                )
 
             valid_targets = allowed.get(booking.status, set())
             if new_status not in valid_targets:
@@ -139,7 +141,9 @@ class BookingUpdateSerializer(serializers.ModelSerializer):
                 )
 
         if attrs.get("agreement_signed") and booking.status != Booking.Status.APPROVED:
-            raise serializers.ValidationError("The agreement can only be signed once the booking is approved.")
+            raise serializers.ValidationError(
+                "The agreement can only be signed once the booking is approved."
+            )
 
         return attrs
 
@@ -175,7 +179,9 @@ class ReviewCreateSerializer(serializers.ModelSerializer):
             room=room, tenant=request.user, status=Booking.Status.APPROVED
         ).exists()
         if not has_approved_booking:
-            raise serializers.ValidationError("You can only review rooms you have an approved booking for.")
+            raise serializers.ValidationError(
+                "You can only review rooms you have an approved booking for."
+            )
 
         return attrs
 

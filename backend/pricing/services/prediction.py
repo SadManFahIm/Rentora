@@ -49,7 +49,12 @@ def _has_ac(amenities: list[str]) -> bool:
 
 
 def _feature_vector(
-    *, area: str, room_type: str, gender_preference: str, size_sqft: float, amenities: list[str] | None
+    *,
+    area: str,
+    room_type: str,
+    gender_preference: str,
+    size_sqft: float,
+    amenities: list[str] | None,
 ) -> list[float]:
     """Build one room's feature row. Every position is a plain, named
     quantity (a one-hot flag or a raw count) — no hashing or embeddings —

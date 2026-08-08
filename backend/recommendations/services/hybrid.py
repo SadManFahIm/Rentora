@@ -26,7 +26,9 @@ def get_hybrid_recommendations(user, limit: int = 10) -> list[ScoredRoom]:
         return popularity_fallback(limit)
 
     pool_size = limit * CANDIDATE_POOL_MULTIPLIER
-    content_results = {sr.room.id: sr for sr in get_content_based_recommendations(user, limit=pool_size)}
+    content_results = {
+        sr.room.id: sr for sr in get_content_based_recommendations(user, limit=pool_size)
+    }
     collaborative_results = {
         sr.room.id: sr for sr in get_collaborative_recommendations(user, limit=pool_size)
     }
@@ -39,18 +41,24 @@ def get_hybrid_recommendations(user, limit: int = 10) -> list[ScoredRoom]:
     for room_id, content_sr in content_results.items():
         collaborative_sr = collaborative_results.get(room_id)
         collaborative_score = collaborative_sr.score if collaborative_sr else 0.0
-        combined_score = content_sr.score * CONTENT_WEIGHT + collaborative_score * COLLABORATIVE_WEIGHT
+        combined_score = (
+            content_sr.score * CONTENT_WEIGHT + collaborative_score * COLLABORATIVE_WEIGHT
+        )
         reasons = list(content_sr.reasons)
         if collaborative_sr:
             reasons.extend(collaborative_sr.reasons)
-        combined[room_id] = ScoredRoom(room=content_sr.room, score=round(combined_score, 1), reasons=reasons)
+        combined[room_id] = ScoredRoom(
+            room=content_sr.room, score=round(combined_score, 1), reasons=reasons
+        )
 
     for room_id, collaborative_sr in collaborative_results.items():
         if room_id in combined:
             continue
         combined_score = collaborative_sr.score * COLLABORATIVE_WEIGHT
         combined[room_id] = ScoredRoom(
-            room=collaborative_sr.room, score=round(combined_score, 1), reasons=list(collaborative_sr.reasons)
+            room=collaborative_sr.room,
+            score=round(combined_score, 1),
+            reasons=list(collaborative_sr.reasons),
         )
 
     ranked = sorted(combined.values(), key=lambda sr: sr.score, reverse=True)

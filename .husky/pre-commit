@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+# Pre-commit hook — runs lint-staged (ruff, prettier, eslint) on staged files.
+# See frontend/lint-staged.config.js for the per-file tasks.
+. "$(dirname -- "$0")/_/husky.sh"
+
+cd "$(git rev-parse --show-toplevel)" || exit 1
+./frontend/node_modules/.bin/lint-staged --config frontend/lint-staged.config.js || {
+  echo "husky: pre-commit checks failed — fix the issues above and commit again."
+  exit 1
+}

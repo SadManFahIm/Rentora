@@ -93,7 +93,9 @@ def build_user_preference_vector(user) -> dict[str, Any]:
         "price_min": max(avg_price - std_price, 0.0),
         "price_max": avg_price + std_price,
         "amenity_scores": dict(amenity_scores),
-        "top_amenities": {a for a, _ in sorted(amenity_scores.items(), key=lambda kv: kv[1], reverse=True)[:5]},
+        "top_amenities": {
+            a for a, _ in sorted(amenity_scores.items(), key=lambda kv: kv[1], reverse=True)[:5]
+        },
     }
 
 
@@ -163,7 +165,11 @@ def get_content_based_recommendations(user, limit: int = 10) -> list[ScoredRoom]
     interacted_room_ids = UserActivity.objects.filter(user=user, room__isnull=False).values_list(
         "room_id", flat=True
     )
-    rooms = Room.objects.filter(is_available=True).exclude(owner_id=user.id).exclude(id__in=interacted_room_ids)
+    rooms = (
+        Room.objects.filter(is_available=True)
+        .exclude(owner_id=user.id)
+        .exclude(id__in=interacted_room_ids)
+    )
 
     scored: list[ScoredRoom] = []
     ideal = IDEAL_VECTOR.reshape(1, -1)

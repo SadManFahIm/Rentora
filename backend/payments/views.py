@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
@@ -7,18 +8,34 @@ from django.db.models import Count, Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from notifications.utils import create_notification
 from notifications.models import Notification
+from notifications.utils import create_notification
 
 from .filters import PaymentFilter
 from .models import Payment, PaymentSchedule
 from .serializers import PaymentInitiateSerializer, PaymentSerializer
+
+# Imported lazily inside views (rooms must not be a hard module-level
+# dependency of payments) — only needed for listing-promotion side effects.
+_room_model = None
+
+
+def _get_room_model():
+    global _room_model
+    if _room_model is None:
+        from rooms.models import Room
+
+        _room_model = Room
+    return _room_model
+
+
 from .services import bkash as bkash_service
 from .services import sslcommerz as sslcommerz_service
 from .services.bkash import BkashError
@@ -42,6 +59,13 @@ TERMINAL_STATUSES = (
 )
 
 
+class IsRoomOwner(permissions.BasePermission):
+    """The landlord who owns the room a promotion payment is for."""
+
+    def has_object_permission(self, request, view, obj):
+        return obj.room_id is not None and obj.room.owner_id == request.user.id
+
+
 class IsPaymentOwner(permissions.BasePermission):
     """The tenant who made the payment — used for history/receipt access."""
 
@@ -54,7 +78,8 @@ class IsBookingLandlord(permissions.BasePermission):
     issue a refund for a payment made against their room."""
 
     def has_object_permission(self, request, view, obj):
-        return obj.booking.room.owner_id == request.user.id
+        # Listing-promotion payments have no booking (and no refund path).
+        return obj.booking_id is not None and obj.booking.room.owner_id == request.user.id
 
 
 class IsPaymentOwnerOrLandlord(permissions.BasePermission):
@@ -62,7 +87,9 @@ class IsPaymentOwnerOrLandlord(permissions.BasePermission):
     which both parties have a legitimate reason to download."""
 
     def has_object_permission(self, request, view, obj):
-        return obj.user_id == request.user.id or obj.booking.room.owner_id == request.user.id
+        return obj.user_id == request.user.id or (
+            obj.booking_id is not None and obj.booking.room.owner_id == request.user.id
+        )
 
 
 def _apply_success_side_effects(payment: Payment) -> None:
@@ -73,6 +100,24 @@ def _apply_success_side_effects(payment: Payment) -> None:
     together with the payment or not at all.
     """
     booking = payment.booking
+
+    # Paid-listing promotions: booking is None, but `room` is set. On success
+    # the room's tier is upgraded for LISTING_TIER_DURATION_DAYS from now —
+    # this is the only place a tier can be granted, so a forged callback
+    # can't skip payment and get a free promotion.
+    if payment.booking_id is None and payment.room_id is not None:
+        Room = _get_room_model()
+        tier = (
+            Room.Tier.PREMIUM
+            if payment.payment_type == Payment.Type.LISTING_PREMIUM
+            else Room.Tier.FEATURED
+        )
+        room = payment.room
+        room.tier = tier
+        room.tier_expires_at = timezone.now() + timedelta(days=settings.LISTING_TIER_DURATION_DAYS)
+        room.is_featured = True
+        room.save(update_fields=["tier", "tier_expires_at", "is_featured", "updated_at"])
+        return
 
     if payment.payment_type == Payment.Type.SECURITY_DEPOSIT and not booking.security_deposit_paid:
         booking.security_deposit_paid = True
@@ -123,7 +168,9 @@ class PaymentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return Payment.objects.none()
-        base = Payment.objects.select_related("booking", "booking__room", "booking__room__owner", "user")
+        base = Payment.objects.select_related(
+            "booking", "booking__room", "booking__room__owner", "user", "room", "room__owner"
+        )
         if self.action in ("refund", "invoice"):
             # Refund and invoice are also actionable/viewable by the room's
             # landlord, not just the payment's own `user` (the tenant who
@@ -143,6 +190,11 @@ class PaymentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.
     @action(detail=True, methods=["get"])
     def receipt(self, request, pk=None):
         payment = self.get_object()
+        if payment.booking_id is None and payment.room_id is None:
+            return Response(
+                {"detail": "This payment has no receipt."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if payment.status != Payment.Status.SUCCESS:
             return Response(
                 {"detail": "A receipt is only available for successful payments."},
@@ -151,13 +203,20 @@ class PaymentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.
 
         pdf_bytes = generate_receipt_pdf(payment)
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
-        response["Content-Disposition"] = f'attachment; filename="receipt-{payment.transaction_id}.pdf"'
+        response["Content-Disposition"] = (
+            f'attachment; filename="receipt-{payment.transaction_id}.pdf"'
+        )
         return response
 
     @extend_schema(tags=["Payments"], summary="Download a PDF invoice (owner or landlord)")
     @action(detail=True, methods=["get"])
     def invoice(self, request, pk=None):
         payment = self.get_object()
+        if payment.booking_id is None:
+            return Response(
+                {"detail": "Invoices are only available for booking payments."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         pdf_bytes = generate_invoice_pdf(payment)
         invoice_number = payment.invoice.invoice_number
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
@@ -169,6 +228,14 @@ class PaymentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.
     def refund(self, request, pk=None):
         payment = self.get_object()
 
+        # Listing promotions are paid by the listing's own owner to the
+        # platform — there's no tenant/landlord refund relationship.
+        if payment.booking_id is None:
+            return Response(
+                {"detail": "Listing promotion payments cannot be refunded through this flow."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         if payment.status != Payment.Status.SUCCESS:
             return Response(
                 {"detail": "Only successful payments can be refunded."},
@@ -177,9 +244,13 @@ class PaymentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.
 
         requested_amount = request.data.get("amount")
         try:
-            refund_amount = float(requested_amount) if requested_amount is not None else float(payment.amount)
+            refund_amount = (
+                float(requested_amount) if requested_amount is not None else float(payment.amount)
+            )
         except (TypeError, ValueError):
-            return Response({"detail": "Invalid refund amount."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Invalid refund amount."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         # Never trust a client-supplied refund amount beyond capping it at
         # what was actually paid — no partial-refund-turned-overpayment.
@@ -209,7 +280,9 @@ class PaymentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.
                     )
                 else:
                     return Response(
-                        {"detail": f"Refunds are not supported for payment method '{payment.payment_method}'."},
+                        {
+                            "detail": f"Refunds are not supported for payment method '{payment.payment_method}'."
+                        },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
             except (BkashError, SSLCommerzError) as exc:
@@ -263,6 +336,146 @@ class PaymentSummaryView(APIView):
         )
 
 
+class ListingTierUpgradeInitiateView(APIView):
+    """Start a payment to promote a listing (Featured / Premium tier).
+
+    Mirrors the booking-payment initiate views: the amount is never taken
+    from the client — it is always the server-side LISTING_TIER_PRICING
+    entry for the requested tier, so a tampered request body can't under/
+    overcharge. Supports both SSLCommerz and bKash.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [PaymentInitiateRateThrottle]
+
+    @extend_schema(
+        tags=["Payments"],
+        summary="Initiate a listing promotion payment (Featured/Premium)",
+        request={
+            "application/json": {
+                "type": "object",
+                "required": ["room_id", "tier"],
+                "properties": {
+                    "room_id": {"type": "integer"},
+                    "tier": {"type": "string", "enum": ["featured", "premium"]},
+                    "method": {"type": "string", "enum": ["sslcommerz", "bkash"]},
+                },
+            }
+        },
+    )
+    def post(self, request):
+        Room = _get_room_model()
+
+        room_id = request.data.get("room_id")
+        tier = request.data.get("tier")
+        method = request.data.get("method", "sslcommerz")
+
+        try:
+            room_id = int(room_id)
+        except (TypeError, ValueError):
+            return Response(
+                {"room_id": "room_id must be an integer."}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if tier not in ("featured", "premium"):
+            return Response(
+                {"tier": "tier must be 'featured' or 'premium'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if method not in ("sslcommerz", "bkash"):
+            return Response(
+                {"method": "method must be 'sslcommerz' or 'bkash'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Lock the room row across the check-and-create so two rapid
+        # double-click requests can't both pass the duplicate-tier guard and
+        # charge the landlord twice for the same promotion.
+        with transaction.atomic():
+            try:
+                room = Room.objects.select_for_update().get(pk=room_id)
+            except Room.DoesNotExist:
+                return Response({"detail": "Room not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            if room.owner_id != request.user.id:
+                return Response(
+                    {"detail": "You can only promote your own listings."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            tier_rank = {"premium": 2, "featured": 1, "free": 0}
+            if tier_rank[tier] < tier_rank.get(room.tier, 0):
+                return Response(
+                    {"detail": f"This listing is already on a higher tier than {tier}."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Tier is already active: refuse to take money for an upgrade that
+            # doesn't extend anything new.
+            if room.tier == tier and room.tier_expires_at and room.tier_expires_at > timezone.now():
+                return Response(
+                    {"detail": f"This listing is already on the {tier} tier."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            amount = Decimal(str(settings.LISTING_TIER_PRICING[tier]))
+            payment_type = (
+                Payment.Type.LISTING_PREMIUM if tier == "premium" else Payment.Type.LISTING_FEATURE
+            )
+
+            payment = Payment.objects.create(
+                room=room,
+                booking=None,
+                user=request.user,
+                amount=amount,
+                payment_type=payment_type,
+                payment_method=Payment.Method(method),
+                status=Payment.Status.INITIATED,
+            )
+
+        success_url = request.build_absolute_uri(reverse("payment-sslcommerz-success"))
+        fail_url = request.build_absolute_uri(reverse("payment-sslcommerz-fail"))
+        cancel_url = request.build_absolute_uri(reverse("payment-sslcommerz-cancel"))
+
+        try:
+            if method == "bkash":
+                callback_url = (
+                    request.build_absolute_uri(reverse("payment-bkash-callback"))
+                    + f"?tran_id={payment.transaction_id}"
+                )
+                session = bkash_service.create_payment(payment, callback_url)
+                url_field, url_value = "bkash_url", session["bkashURL"]
+            else:
+                session = sslcommerz_service.initiate_payment(
+                    payment, success_url, fail_url, cancel_url
+                )
+                url_field, url_value = "payment_url", session["GatewayPageURL"]
+        except (BkashError, SSLCommerzError) as exc:
+            payment.failure_reason = str(exc)
+            payment.transition_status(
+                Payment.Status.FAILED,
+                changed_by="system",
+                metadata={"error": str(exc)},
+                extra_update_fields=["failure_reason"],
+            )
+            return Response(
+                {"detail": "Could not start payment session.", "error": str(exc)},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        payment.gateway_response = session
+        payment.transition_status(
+            Payment.Status.PENDING,
+            changed_by="system",
+            extra_update_fields=["gateway_response"],
+        )
+
+        return Response(
+            {url_field: url_value, "transaction_id": payment.transaction_id},
+            status=status.HTTP_201_CREATED,
+        )
+
+
 class PaymentInitiateView(APIView):
     """Start an SSLCommerz payment: validate the booking, create a Payment
     record, open an SSLCommerz session, and hand back the gateway URL.
@@ -274,7 +487,11 @@ class PaymentInitiateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [PaymentInitiateRateThrottle]
 
-    @extend_schema(tags=["Payments"], request=PaymentInitiateSerializer, summary="Initiate an SSLCommerz payment")
+    @extend_schema(
+        tags=["Payments"],
+        request=PaymentInitiateSerializer,
+        summary="Initiate an SSLCommerz payment",
+    )
     def post(self, request):
         serializer = PaymentInitiateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
@@ -295,11 +512,15 @@ class PaymentInitiateView(APIView):
         cancel_url = request.build_absolute_uri(reverse("payment-sslcommerz-cancel"))
 
         try:
-            session = sslcommerz_service.initiate_payment(payment, success_url, fail_url, cancel_url)
+            session = sslcommerz_service.initiate_payment(
+                payment, success_url, fail_url, cancel_url
+            )
         except SSLCommerzError as exc:
             payment.failure_reason = str(exc)
             payment.transition_status(
-                Payment.Status.FAILED, changed_by="system", metadata={"error": str(exc)},
+                Payment.Status.FAILED,
+                changed_by="system",
+                metadata={"error": str(exc)},
                 extra_update_fields=["failure_reason"],
             )
             return Response(
@@ -309,7 +530,9 @@ class PaymentInitiateView(APIView):
 
         payment.gateway_response = session
         payment.transition_status(
-            Payment.Status.PENDING, changed_by="system", extra_update_fields=["gateway_response"],
+            Payment.Status.PENDING,
+            changed_by="system",
+            extra_update_fields=["gateway_response"],
         )
 
         return Response(
@@ -325,7 +548,9 @@ class BkashInitiateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [PaymentInitiateRateThrottle]
 
-    @extend_schema(tags=["Payments"], request=PaymentInitiateSerializer, summary="Initiate a bKash payment")
+    @extend_schema(
+        tags=["Payments"], request=PaymentInitiateSerializer, summary="Initiate a bKash payment"
+    )
     def post(self, request):
         serializer = PaymentInitiateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
@@ -354,7 +579,9 @@ class BkashInitiateView(APIView):
         except BkashError as exc:
             payment.failure_reason = str(exc)
             payment.transition_status(
-                Payment.Status.FAILED, changed_by="system", metadata={"error": str(exc)},
+                Payment.Status.FAILED,
+                changed_by="system",
+                metadata={"error": str(exc)},
                 extra_update_fields=["failure_reason"],
             )
             return Response(
@@ -364,7 +591,9 @@ class BkashInitiateView(APIView):
 
         payment.gateway_response = session
         payment.transition_status(
-            Payment.Status.PENDING, changed_by="system", extra_update_fields=["gateway_response"],
+            Payment.Status.PENDING,
+            changed_by="system",
+            extra_update_fields=["gateway_response"],
         )
 
         return Response(
@@ -374,6 +603,28 @@ class BkashInitiateView(APIView):
 
 
 def _notify_payment_result(payment: Payment, *, success: bool) -> None:
+    # Listing-promotion payments have no booking: notify the listing owner
+    # directly about their tier activation / failure instead.
+    if payment.booking_id is None and payment.room_id is not None:
+        tier_label = payment.get_payment_type_display()
+        if success:
+            create_notification(
+                user=payment.user,
+                notification_type=Notification.Type.PAYMENT_SUCCESS,
+                title=f"Listing promoted to {tier_label}",
+                message=f"'{payment.room.title}' is now {tier_label} for {settings.LISTING_TIER_DURATION_DAYS} days.",
+                action_url="/dashboard?tab=listings",
+            )
+        else:
+            create_notification(
+                user=payment.user,
+                notification_type=Notification.Type.PAYMENT_FAILED,
+                title="Listing promotion failed",
+                message=f"The payment to promote '{payment.room.title}' did not go through.",
+                action_url="/dashboard?tab=listings",
+            )
+        return
+
     booking = payment.booking
     landlord = booking.room.owner
 
@@ -492,7 +743,9 @@ class PaymentSuccessCallbackView(APIView):
                 except Payment.DoesNotExist:
                     return _frontend_redirect("fail", tran_id)
                 if payment.status not in TERMINAL_STATUSES:
-                    payment.failure_reason = f"Validation returned status={validation.get('status')}"
+                    payment.failure_reason = (
+                        f"Validation returned status={validation.get('status')}"
+                    )
                     payment.gateway_response = validation
                     payment.transition_status(
                         Payment.Status.FAILED,
@@ -517,10 +770,11 @@ class PaymentSuccessCallbackView(APIView):
                 return _frontend_redirect(_frontend_outcome(payment.status), tran_id)
 
             validated_amount = validation.get("amount") or validation.get("currency_amount")
-            if validated_amount is not None and abs(float(validated_amount) - float(payment.amount)) > 0.01:
-                payment.failure_reason = (
-                    f"Amount mismatch: expected {payment.amount}, gateway validated {validated_amount}"
-                )
+            if (
+                validated_amount is not None
+                and abs(float(validated_amount) - float(payment.amount)) > 0.01
+            ):
+                payment.failure_reason = f"Amount mismatch: expected {payment.amount}, gateway validated {validated_amount}"
                 payment.gateway_response = validation
                 payment.transition_status(
                     Payment.Status.FAILED,
@@ -582,7 +836,8 @@ class PaymentFailCallbackView(APIView):
             payment.failure_reason = "Gateway reported payment failure."
             payment.gateway_response = dict(request.data)
             payment.transition_status(
-                Payment.Status.FAILED, changed_by="system",
+                Payment.Status.FAILED,
+                changed_by="system",
                 extra_update_fields=["failure_reason", "gateway_response"],
             )
 
@@ -627,7 +882,9 @@ class PaymentCancelCallbackView(APIView):
 
             payment.gateway_response = dict(request.data)
             payment.transition_status(
-                Payment.Status.CANCELLED, changed_by="system", extra_update_fields=["gateway_response"],
+                Payment.Status.CANCELLED,
+                changed_by="system",
+                extra_update_fields=["gateway_response"],
             )
 
         return _frontend_redirect("cancel", tran_id)
@@ -697,7 +954,8 @@ class BkashCallbackView(APIView):
                     payment.failure_reason = f"bKash transactionStatus={transaction_status}"
                     payment.gateway_response = {**payment.gateway_response, "query": query_result}
                     payment.transition_status(
-                        Payment.Status.FAILED, changed_by="system",
+                        Payment.Status.FAILED,
+                        changed_by="system",
                         extra_update_fields=["failure_reason", "gateway_response"],
                     )
                     mutated = True
@@ -721,10 +979,16 @@ class BkashCallbackView(APIView):
                 except Payment.DoesNotExist:
                     return _frontend_redirect("fail", tran_id)
                 if payment.status not in TERMINAL_STATUSES:
-                    payment.failure_reason = execute_result.get("statusMessage") or "bKash execute did not complete."
-                    payment.gateway_response = {**payment.gateway_response, "execute": execute_result}
+                    payment.failure_reason = (
+                        execute_result.get("statusMessage") or "bKash execute did not complete."
+                    )
+                    payment.gateway_response = {
+                        **payment.gateway_response,
+                        "execute": execute_result,
+                    }
                     payment.transition_status(
-                        Payment.Status.FAILED, changed_by="system",
+                        Payment.Status.FAILED,
+                        changed_by="system",
                         extra_update_fields=["failure_reason", "gateway_response"],
                     )
                     mutated = True
@@ -744,13 +1008,17 @@ class BkashCallbackView(APIView):
                 return _frontend_redirect(_frontend_outcome(payment.status), tran_id)
 
             executed_amount = execute_result.get("amount")
-            if executed_amount is not None and abs(float(executed_amount) - float(payment.amount)) > 0.01:
+            if (
+                executed_amount is not None
+                and abs(float(executed_amount) - float(payment.amount)) > 0.01
+            ):
                 payment.failure_reason = (
                     f"Amount mismatch: expected {payment.amount}, bKash executed {executed_amount}"
                 )
                 payment.gateway_response = {**payment.gateway_response, "execute": execute_result}
                 payment.transition_status(
-                    Payment.Status.FAILED, changed_by="system",
+                    Payment.Status.FAILED,
+                    changed_by="system",
                     extra_update_fields=["failure_reason", "gateway_response"],
                 )
                 logger.error("bKash amount mismatch on tran_id=%s", tran_id)
@@ -760,7 +1028,8 @@ class BkashCallbackView(APIView):
             payment.gateway_transaction_id = execute_result.get("trxID", "")
             payment.gateway_response = {**payment.gateway_response, "execute": execute_result}
             payment.transition_status(
-                Payment.Status.SUCCESS, changed_by="system",
+                Payment.Status.SUCCESS,
+                changed_by="system",
                 extra_update_fields=["gateway_transaction_id", "gateway_response"],
             )
             _apply_success_side_effects(payment)

@@ -86,7 +86,28 @@ class RoomOwnerSerializer(serializers.ModelSerializer):
         fields = ["id", "username", "first_name", "last_name", "avatar", "phone", "nid_verified"]
 
 
-class RoomListSerializer(RoomProximityMixin, serializers.ModelSerializer):
+class _EffectiveTierMixin(serializers.Serializer):
+    """Expose the room's *effective* tier and featured flag.
+
+    The viewset annotates `effective_tier` (free once `tier_expires_at`
+    passes), so an expired promotion stops being reported as Premium/
+    Featured — the paid benefit ends when the purchased period does.
+    Falls back to the stored `tier` when the annotation is absent (e.g.
+    room objects loaded outside the list viewset).
+    """
+
+    tier = serializers.SerializerMethodField()
+    is_featured = serializers.SerializerMethodField()
+
+    def get_tier(self, obj):
+        effective = getattr(obj, "effective_tier", None)
+        return effective or obj.tier
+
+    def get_is_featured(self, obj):
+        return self.get_tier(obj) != "free"
+
+
+class RoomListSerializer(_EffectiveTierMixin, RoomProximityMixin, serializers.ModelSerializer):
     """Representation used for room list/browse and anywhere a room summary is
     embedded (wishlist entries, bookings). Includes the fields the frontend
     card *and* detail modal render, so the list endpoint needs no follow-up
@@ -111,6 +132,8 @@ class RoomListSerializer(RoomProximityMixin, serializers.ModelSerializer):
             "gender_preference",
             "size_sqft",
             "is_available",
+            "tier",
+            "tier_expires_at",
             "is_featured",
             "rating",
             "total_reviews",
@@ -123,7 +146,7 @@ class RoomListSerializer(RoomProximityMixin, serializers.ModelSerializer):
         ]
 
 
-class RoomDetailSerializer(RoomProximityMixin, serializers.ModelSerializer):
+class RoomDetailSerializer(_EffectiveTierMixin, RoomProximityMixin, serializers.ModelSerializer):
     """Full room representation, including nested images and owner profile."""
 
     images = RoomImageSerializer(many=True, read_only=True)
@@ -156,6 +179,8 @@ class RoomDetailSerializer(RoomProximityMixin, serializers.ModelSerializer):
             "gender_preference",
             "size_sqft",
             "is_available",
+            "tier",
+            "tier_expires_at",
             "is_featured",
             "owner",
             "rating",
@@ -214,10 +239,13 @@ class RoomCreateUpdateSerializer(serializers.ModelSerializer):
             "gender_preference",
             "size_sqft",
             "is_available",
+            "tier",
+            "tier_expires_at",
             "is_featured",
             "images",
             "uploaded_images",
         ]
+        read_only_fields = ["tier", "tier_expires_at", "is_featured"]
 
     def validate_title(self, value: str) -> str:
         """Strip any HTML from the title to prevent stored XSS."""

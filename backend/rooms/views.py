@@ -1,6 +1,13 @@
 import django_filters
-from django.db.models import Case, IntegerField, When
-from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
+from django.conf import settings
+from django.db import models
+from django.db.models import Case, IntegerField, Value, When
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiParameter,
+    extend_schema,
+    extend_schema_view,
+)
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -13,6 +20,7 @@ from .geo import (
     lat_delta_for_km,
     lng_delta_for_km,
 )
+from .geocoder import nominatim_search
 from .landmarks import ALL_LANDMARKS, get_landmark
 from .models import Room
 from .permissions import IsOwnerOrReadOnly
@@ -22,11 +30,15 @@ from .serializers import (
     RoomDetailSerializer,
     RoomListSerializer,
 )
+from .streets import area_center, search_streets
 
 
 class RoomFilter(django_filters.FilterSet):
     price__gte = django_filters.NumberFilter(field_name="price", lookup_expr="gte")
     price__lte = django_filters.NumberFilter(field_name="price", lookup_expr="lte")
+    # Lets the landlord dashboard list only one owner's listings server-side
+    # instead of pulling every page of all rooms and filtering client-side.
+    owner = django_filters.NumberFilter(field_name="owner_id")
 
     class Meta:
         model = Room
@@ -43,8 +55,12 @@ _GEO_PARAMS = [
         description="Map viewport filter, GeoJSON order: `minLng,minLat,maxLng,maxLat`. "
         "Returns only rooms inside the box.",
     ),
-    OpenApiParameter("near_lat", float, description="Reference-point latitude (pair with near_lng)."),
-    OpenApiParameter("near_lng", float, description="Reference-point longitude (pair with near_lat)."),
+    OpenApiParameter(
+        "near_lat", float, description="Reference-point latitude (pair with near_lng)."
+    ),
+    OpenApiParameter(
+        "near_lng", float, description="Reference-point longitude (pair with near_lat)."
+    ),
     OpenApiParameter(
         "near_landmark",
         str,
@@ -120,10 +136,27 @@ class RoomViewSet(viewsets.ModelViewSet):
 
     queryset = Room.objects.select_related("owner").prefetch_related("images").all()
     filterset_class = RoomFilter
-    filter_backends = [django_filters.rest_framework.DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filter_backends = [
+        django_filters.rest_framework.DjangoFilterBackend,
+        SearchFilter,
+        OrderingFilter,
+    ]
     search_fields = ["title", "description", "area"]
     ordering_fields = ["price", "rating", "created_at"]
     ordering = ["-created_at"]
+
+    # Paid-tier ranking: premium > featured > free, newest first within a
+    # tier. Applied when the client didn't ask for an explicit ordering (or
+    # a geo reference point, which sorts nearest-first) — promotion should
+    # surface promoted listings first, but never override a user's explicit
+    # sort choice. Uses `effective_tier` (see get_queryset) so expired
+    # promotions drop back to the free rank.
+    TIER_RANK = Case(
+        When(effective_tier="premium", then=Value(0)),
+        When(effective_tier="featured", then=Value(1)),
+        default=Value(2),
+        output_field=IntegerField(),
+    )
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -133,7 +166,14 @@ class RoomViewSet(viewsets.ModelViewSet):
         return RoomCreateUpdateSerializer
 
     def get_permissions(self):
-        if self.action in ("list", "retrieve", "landmarks"):
+        if self.action in (
+            "list",
+            "retrieve",
+            "landmarks",
+            "tier_catalog",
+            "geocode",
+            "summary",
+        ):
             return [permissions.AllowAny()]
         if self.action == "create":
             return [permissions.IsAuthenticated()]
@@ -174,7 +214,7 @@ class RoomViewSet(viewsets.ModelViewSet):
         try:
             box = BoundingBox.parse(raw)
         except ValueError as exc:
-            raise ValidationError({"bbox": str(exc)})
+            raise ValidationError({"bbox": str(exc)}) from exc
         return queryset.filter(
             lat__gte=box.min_lat,
             lat__lte=box.max_lat,
@@ -234,6 +274,23 @@ class RoomViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+
+        # Expired promotions stop conferring benefits immediately: a listing
+        # whose tier_expires_at is in the past is treated as free (both for
+        # the tier_rank ordering below and for serialized output), so a paid
+        # promotion can never silently outlive its purchased period.
+        from django.db.models import Q
+        from django.utils import timezone
+
+        expired = Q(tier_expires_at__lte=timezone.now())
+        queryset = queryset.annotate(
+            effective_tier=Case(
+                When(expired, then=Value(Room.Tier.FREE)),
+                default="tier",
+                output_field=models.CharField(max_length=10),
+            )
+        )
+
         if self.action != "list":
             return queryset
 
@@ -253,6 +310,11 @@ class RoomViewSet(viewsets.ModelViewSet):
             reference = self._reference_point()
             if reference is not None:
                 queryset = self._order_by_distance(queryset, reference)
+            else:
+                # Default browse view: promoted listings float to the top.
+                queryset = queryset.annotate(tier_rank=self.TIER_RANK).order_by(
+                    "tier_rank", "-created_at"
+                )
         return queryset
 
     def get_serializer_context(self):
@@ -278,3 +340,178 @@ class RoomViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"])
     def landmarks(self, request):
         return Response(LandmarkSerializer(ALL_LANDMARKS, many=True).data)
+
+    @extend_schema(
+        tags=["Rooms"],
+        summary="Street search / autocomplete",
+        description="Search the curated Dhaka street & area gazetteer plus map landmarks "
+        "(universities, metro stations) for a place-name query. Used by the map's "
+        "search box to fly to a street/area and start a radius search there. "
+        "Public, unpaginated, returns at most 8 suggestions.",
+        parameters=[
+            OpenApiParameter(
+                "q",
+                str,
+                description="Place-name query, e.g. `mirpur`, `gulshan avenue`, `shahbagh`.",
+            )
+        ],
+    )
+    @action(detail=False, methods=["get"])
+    def geocode(self, request):
+        query = request.query_params.get("q", "")
+        if not query.strip():
+            return Response([])
+
+        suggestions = []
+        for street in search_streets(query):
+            suggestions.append(
+                {
+                    "key": street.key,
+                    "label": street.name,
+                    "kind": street.kind,
+                    "lat": street.lat,
+                    "lng": street.lng,
+                }
+            )
+        # Merge in matching landmarks so "mirpur 10" finds the station too.
+        q_lower = query.strip().lower()
+        for landmark in ALL_LANDMARKS:
+            if q_lower in landmark.name.lower() or q_lower in landmark.key.lower():
+                suggestions.append(
+                    {
+                        "key": landmark.key,
+                        "label": landmark.name,
+                        "kind": landmark.kind.value,
+                        "lat": landmark.lat,
+                        "lng": landmark.lng,
+                    }
+                )
+
+        # Gazetteer / landmark miss? Ask OSM Nominatim (Dhaka-bounded,
+        # best-effort) so the search box still answers streets the curated
+        # list doesn't cover. Only on a total miss — for queries the gazetteer
+        # already answers we don't hit the external service at all. Dedupe by
+        # key in case the provider echoes the same place twice.
+        if not suggestions and len(query.strip()) >= 3:
+            seen = {s["key"] for s in suggestions}
+            for hit in nominatim_search(query, limit=8):
+                if hit["key"] not in seen:
+                    suggestions.append(hit)
+                    seen.add(hit["key"])
+
+        return Response(suggestions[:8])
+
+    @extend_schema(
+        tags=["Rooms"],
+        summary="Map room-count summary",
+        description="Aggregate counts (total, available, price stats) for the current map "
+        "viewport or radius — a cheap COUNT/AVG alternative to fetching the full "
+        "paginated room list just to render a badge. Accepts the same geo filters "
+        "as the list endpoint (`bbox`, `near_lat`/`near_lng`/`near_landmark` with "
+        "`radius_km`) plus an `area` filter.",
+        parameters=[
+            *_GEO_PARAMS,
+            OpenApiParameter("area", str, description="Filter to a single area (e.g. `Mirpur`)."),
+        ],
+    )
+    @action(detail=False, methods=["get"])
+    def summary(self, request):
+        queryset = Room.objects.all()
+        queryset = self._apply_bbox(queryset)
+        reference = self._reference_point()
+        if reference is not None:
+            queryset = self._apply_radius(queryset, reference)
+
+        area = request.query_params.get("area")
+        if area:
+            queryset = queryset.filter(area__iexact=area)
+
+        agg = queryset.aggregate(
+            total=models.Count("id"),
+            available=models.Count("id", filter=models.Q(is_available=True)),
+            avg_price=models.Avg("price"),
+            min_price=models.Min("price"),
+            max_price=models.Max("price"),
+        )
+        # Count *available* rooms per area so the chips' numbers match the
+        # badge's "N of M available" framing — a chip showing "Dhanmondi 3"
+        # leads only to bookable listings.
+        by_area = (
+            queryset.filter(is_available=True)
+            .values("area")
+            .annotate(count=models.Count("id"))
+            .order_by("-count", "area")
+        )
+        return Response(
+            {
+                "total": agg["total"],
+                "available": agg["available"],
+                "avg_price": round(float(agg["avg_price"]), 2)
+                if agg["avg_price"] is not None
+                else None,
+                "min_price": float(agg["min_price"]) if agg["min_price"] is not None else None,
+                "max_price": float(agg["max_price"]) if agg["max_price"] is not None else None,
+                "by_area": [
+                    {
+                        "area": row["area"],
+                        "count": row["count"],
+                        # Fly-to point for the map's area chips, when known.
+                        **(
+                            {"lat": center[0], "lng": center[1]}
+                            if (center := area_center(row["area"]))
+                            else {}
+                        ),
+                    }
+                    for row in by_area
+                ],
+            }
+        )
+
+    @extend_schema(
+        tags=["Rooms"],
+        summary="Listing tier catalog",
+        description="Public price/benefit catalog for paid listing tiers (Free / Featured / "
+        "Premium) and their duration, so the frontend can render the promotion "
+        "UI without hardcoding prices.",
+    )
+    @action(detail=False, methods=["get"], url_path="tier-catalog")
+    def tier_catalog(self, request):
+        pricing = settings.LISTING_TIER_PRICING
+        return Response(
+            {
+                "tiers": [
+                    {
+                        "tier": "free",
+                        "label": "Free",
+                        "price": pricing["free"],
+                        "benefits": [
+                            "Standard placement in search",
+                            "Up to 8 photos",
+                            "Booking requests + chat",
+                        ],
+                    },
+                    {
+                        "tier": "featured",
+                        "label": "Featured",
+                        "price": pricing["featured"],
+                        "benefits": [
+                            "Boosted above free listings",
+                            "Featured badge on card",
+                            "Shown in Featured Rooms on home",
+                        ],
+                    },
+                    {
+                        "tier": "premium",
+                        "label": "Premium",
+                        "price": pricing["premium"],
+                        "benefits": [
+                            "Top of search results",
+                            "Premium badge + highlighted card",
+                            "Priority in AI recommendations",
+                        ],
+                    },
+                ],
+                "duration_days": settings.LISTING_TIER_DURATION_DAYS,
+                "currency": "BDT",
+            }
+        )

@@ -17,6 +17,11 @@ class Payment(models.Model):
         BOOKING_DEPOSIT = "booking_deposit", "Booking Deposit"
         MONTHLY_RENT = "monthly_rent", "Monthly Rent"
         SECURITY_DEPOSIT = "security_deposit", "Security Deposit"
+        # Paid-listing promotions (monetization). These have no `booking` —
+        # they're attached to a `room` instead, and on success upgrade the
+        # room's tier for LISTING_TIER_DURATION_DAYS.
+        LISTING_FEATURE = "listing_feature", "Listing Feature"
+        LISTING_PREMIUM = "listing_premium", "Listing Premium"
 
     class Status(models.TextChoices):
         INITIATED = "initiated", "Initiated"
@@ -26,10 +31,27 @@ class Payment(models.Model):
         CANCELLED = "cancelled", "Cancelled"
         REFUNDED = "refunded", "Refunded"
 
-    booking = models.ForeignKey(Booking, on_delete=models.CASCADE, related_name="payments")
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="payments")
+    # Nullable since booking-less payments exist: listing tier promotions.
+    # Every payment still has exactly one subject — a booking (rent/deposit)
+    # or a room (featured/premium promotion) — and callbacks use whichever is
+    # set to apply the success side effects.
+    booking = models.ForeignKey(
+        Booking, on_delete=models.CASCADE, related_name="payments", null=True, blank=True
+    )
+    room = models.ForeignKey(
+        "rooms.Room",
+        on_delete=models.CASCADE,
+        related_name="promotion_payments",
+        null=True,
+        blank=True,
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="payments"
+    )
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    payment_method = models.CharField(max_length=20, choices=Method.choices, default=Method.SSLCOMMERZ)
+    payment_method = models.CharField(
+        max_length=20, choices=Method.choices, default=Method.SSLCOMMERZ
+    )
     payment_type = models.CharField(max_length=20, choices=Type.choices)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.INITIATED)
 
@@ -59,7 +81,9 @@ class Payment(models.Model):
     def __str__(self):
         return f"{self.transaction_id} ({self.status}) - {self.amount} BDT"
 
-    def transition_status(self, new_status, *, changed_by="system", metadata=None, extra_update_fields=None):
+    def transition_status(
+        self, new_status, *, changed_by="system", metadata=None, extra_update_fields=None
+    ):
         """Move this payment to ``new_status`` and record a
         :class:`PaymentAuditLog` entry for it in the same call.
 

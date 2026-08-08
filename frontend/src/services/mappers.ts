@@ -73,6 +73,8 @@ export interface ApiRoom {
   gender_preference: string;
   size_sqft: number;
   is_available: boolean;
+  tier?: string;
+  tier_expires_at?: string | null;
   is_featured: boolean;
   rating: string | number;
   total_reviews: number;
@@ -82,6 +84,11 @@ export interface ApiRoom {
   proximity?: ApiRoomProximity;
   distance_km?: number | null;
   created_at: string;
+  distance_km?: number | null;
+  proximity?: {
+    nearest_university: { key: string; name: string; distance_km: number } | null;
+    nearest_metro: { key: string; name: string; distance_km: number } | null;
+  } | null;
 }
 
 export interface ApiBooking {
@@ -158,15 +165,20 @@ export interface ApiUser {
   nid_verified?: boolean;
   bio?: string;
   date_of_birth?: string | null;
+  otp_enabled?: boolean;
+  passkeys?: {
+    id: string;
+    name: string;
+    created_at: string;
+    last_used_at: string | null;
+  }[];
 }
 
 // ---- helpers ----
 
-const capitalize = (s: string): string =>
-  s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+const capitalize = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
-const roomTypeLabel = (value: string): RoomType =>
-  capitalize(value) as RoomType;
+const roomTypeLabel = (value: string): RoomType => capitalize(value) as RoomType;
 
 const genderLabel = (value: string): GenderPref => capitalize(value) as GenderPref;
 
@@ -250,15 +262,39 @@ export function mapRoom(api: ApiRoom): Room {
     amenities: api.amenities ?? [],
     gender: genderLabel(api.gender_preference),
     available: api.is_available,
-    featured: api.is_featured,
+    tier: (api.tier as Room["tier"]) ?? "free",
+    tierExpiresAt: api.tier_expires_at ?? null,
+    featured: api.is_featured || api.tier === "featured" || api.tier === "premium",
     description: api.description ?? "",
     size: api.size_sqft,
     owner,
     ownerId: api.owner?.id ?? null,
     ownerAvatar: initials(owner),
     verified: api.verified,
+<<<<<<< HEAD
     proximity: mapProximity(api.proximity),
     distanceKm: api.distance_km ?? null,
+=======
+    distanceKm: api.distance_km != null ? Number(api.distance_km) : null,
+    proximity: api.proximity
+      ? {
+          nearestUniversity: api.proximity.nearest_university
+            ? {
+                key: api.proximity.nearest_university.key,
+                name: api.proximity.nearest_university.name,
+                distanceKm: Number(api.proximity.nearest_university.distance_km),
+              }
+            : null,
+          nearestMetro: api.proximity.nearest_metro
+            ? {
+                key: api.proximity.nearest_metro.key,
+                name: api.proximity.nearest_metro.name,
+                distanceKm: Number(api.proximity.nearest_metro.distance_km),
+              }
+            : null,
+        }
+      : null,
+>>>>>>> origin/main
   };
 }
 
@@ -338,5 +374,7 @@ export function mapUser(api: ApiUser): User {
     phone: api.phone,
     bio: api.bio,
     nidVerified: api.nid_verified,
+    otpEnabled: api.otp_enabled ?? false,
+    passkeys: api.passkeys,
   };
 }

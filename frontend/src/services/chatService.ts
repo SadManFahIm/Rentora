@@ -38,10 +38,9 @@ export const chatService = {
   /** GET /chat/rooms/:id/messages/ — paginated, newest-first from the API;
    * returned here in chronological (oldest-first) order for direct rendering. */
   async getMessages(roomId: number, search?: string): Promise<ChatMessage[]> {
-    const { data } = await api.get<Paginated<ApiChatMessage>>(
-      `/chat/rooms/${roomId}/messages/`,
-      { params: search ? { search } : undefined }
-    );
+    const { data } = await api.get<Paginated<ApiChatMessage>>(`/chat/rooms/${roomId}/messages/`, {
+      params: search ? { search } : undefined,
+    });
     return data.results.map(mapChatMessage).reverse();
   },
 
@@ -52,10 +51,7 @@ export const chatService = {
     roomId: number,
     payload: { content: string; message_type?: ChatMessageType; file_url?: string }
   ): Promise<ChatMessage> {
-    const { data } = await api.post<ApiChatMessage>(
-      `/chat/rooms/${roomId}/messages/`,
-      payload
-    );
+    const { data } = await api.post<ApiChatMessage>(`/chat/rooms/${roomId}/messages/`, payload);
     return mapChatMessage(data);
   },
 
@@ -73,9 +69,7 @@ export const chatService = {
   },
 
   /** GET /chat/online-status/ — split `userIds` into online/offline. */
-  async getOnlineStatus(
-    userIds: number[]
-  ): Promise<{ online: number[]; offline: number[] }> {
+  async getOnlineStatus(userIds: number[]): Promise<{ online: number[]; offline: number[] }> {
     const { data } = await api.get<{ online: number[]; offline: number[] }>(
       "/chat/online-status/",
       { params: { user_ids: userIds.join(",") } }

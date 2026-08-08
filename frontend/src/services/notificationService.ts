@@ -23,17 +23,13 @@ export const notificationService = {
 
   /** POST /notifications/mark-all-read/ → returns how many were flipped. */
   async markAllRead(): Promise<number> {
-    const { data } = await api.post<{ marked_count: number }>(
-      "/notifications/mark-all-read/"
-    );
+    const { data } = await api.post<{ marked_count: number }>("/notifications/mark-all-read/");
     return data.marked_count;
   },
 
   /** GET /notifications/unread-count/ */
   async getUnreadCount(): Promise<number> {
-    const { data } = await api.get<{ count: number }>(
-      "/notifications/unread-count/"
-    );
+    const { data } = await api.get<{ count: number }>("/notifications/unread-count/");
     return data.count;
   },
 };

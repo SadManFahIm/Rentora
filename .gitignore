@@ -1,6 +1,7 @@
 # Frontend
 frontend/node_modules/
 frontend/build/
+frontend/coverage/
 frontend/.env
 frontend/.env.local
 
@@ -11,6 +12,8 @@ backend/.env
 backend/db.sqlite3
 backend/media/
 backend/staticfiles/
+backend/.coverage
+backend/htmlcov/
 
 # General
 .DS_Store
@@ -20,3 +23,14 @@ backend/staticfiles/
 CLAUDE.md
 
 .claude/
+
+# Local tooling
+.tmp-chrome-profile/
+.freebuff/
+.agents/
+
+# Skills install lockfile (local tooling)
+skills-lock.json
+
+# Vite cache
+frontend/.vite/

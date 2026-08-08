@@ -16,9 +16,7 @@ class ChatRoom(models.Model):
         DIRECT = "direct", "Direct"
         GROUP = "group", "Group"
 
-    room_type = models.CharField(
-        max_length=10, choices=RoomType.choices, default=RoomType.DIRECT
-    )
+    room_type = models.CharField(max_length=10, choices=RoomType.choices, default=RoomType.DIRECT)
     listing = models.ForeignKey(
         Room,
         on_delete=models.SET_NULL,
@@ -49,9 +47,7 @@ class ChatRoomMembership(models.Model):
     after this timestamp is unread for the member.
     """
 
-    chat_room = models.ForeignKey(
-        ChatRoom, on_delete=models.CASCADE, related_name="memberships"
-    )
+    chat_room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, related_name="memberships")
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -77,9 +73,7 @@ class Message(models.Model):
         FILE = "file", "File"
         SYSTEM = "system", "System"
 
-    chat_room = models.ForeignKey(
-        ChatRoom, on_delete=models.CASCADE, related_name="messages"
-    )
+    chat_room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, related_name="messages")
     sender = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,

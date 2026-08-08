@@ -81,8 +81,12 @@ class WishlistViewSet(
         ),
         examples=[
             OpenApiExample("Toggle", value={"room_id": 1}, request_only=True),
-            OpenApiExample("Added", value={"status": "added", "wishlisted": True}, response_only=True),
-            OpenApiExample("Removed", value={"status": "removed", "wishlisted": False}, response_only=True),
+            OpenApiExample(
+                "Added", value={"status": "added", "wishlisted": True}, response_only=True
+            ),
+            OpenApiExample(
+                "Removed", value={"status": "removed", "wishlisted": False}, response_only=True
+            ),
         ],
     )
     @action(detail=False, methods=["post"])

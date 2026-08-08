@@ -26,7 +26,7 @@ external scheduler until Celery Beat is introduced. Once it is, this same
 from __future__ import annotations
 
 import numpy as np
-from django.db.models import Avg, Count, Min, Max
+from django.db.models import Avg, Count, Max, Min
 
 from rooms.models import Room
 

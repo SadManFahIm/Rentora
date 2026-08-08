@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LayoutGrid, List, SearchX } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { useRooms } from "../../hooks/useRooms";
 import RoomCard from "../../components/RoomCard/RoomCard";
 import RoomCardSkeleton from "../../components/RoomCardSkeleton";
@@ -23,14 +24,53 @@ const DEFAULT_FILTERS: Filters = {
 };
 
 export default function Rooms() {
-  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [filters, setFilters] = useState<Filters>(() => ({
+    ...DEFAULT_FILTERS,
+    query: searchParams.get("q") ?? "",
+  }));
   const [gridView, setGridView] = useState(true);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  // Set when a URL-initiated change is applied to state, so the reverse sync
+  // skips that pass instead of clobbering the URL with stale state.
+  const fromUrlRef = useRef(false);
+
+  // Sync URL param -> state so back/forward and direct ?q= links update the list.
+  useEffect(() => {
+    const q = searchParams.get("q") ?? "";
+    setFilters((f) => (f.query === q ? f : { ...f, query: q }));
+    // Set synchronously (not inside the updater, which runs after effects):
+    // mark this pass so the reverse sync skips and doesn't clobber a URL
+    // change (e.g. clicking a plain "/rooms" link) with stale state.
+    // Unconditional set is deliberate: when state already matches, the skip
+    // is a no-op, and when it doesn't, the skip prevents the clobber. Keep
+    // this OUTSIDE the setFilters updater — inside it runs too late.
+    fromUrlRef.current = true;
+  }, [searchParams]);
+
+  // Sync state -> URL param so searches are shareable/bookmarkable.
+  useEffect(() => {
+    if (fromUrlRef.current) {
+      fromUrlRef.current = false;
+      return;
+    }
+    const q = searchParams.get("q") ?? "";
+    if (filters.query === q) return;
+    const params = new URLSearchParams(searchParams);
+    if (filters.query) {
+      params.set("q", filters.query);
+    } else {
+      params.delete("q");
+    }
+    setSearchParams(params, { replace: true });
+  }, [filters.query, searchParams, setSearchParams]);
 
   // Filtering + sorting happen in the service layer (mock server-side).
   const { data: rooms = [], isLoading } = useRooms(filters);
 
-  const gridClass = gridView ? "grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3" : "grid grid-cols-1 gap-6";
+  const gridClass = gridView
+    ? "grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
+    : "grid grid-cols-1 gap-6";
 
   return (
     <>
@@ -39,7 +79,9 @@ export default function Rooms() {
       <div className="mx-auto max-w-7xl px-4 py-12 md:px-6 md:py-16 lg:px-8">
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h2 className="font-display text-xl font-bold text-foreground sm:text-2xl">Available Rooms</h2>
+            <h2 className="font-display text-xl font-bold text-foreground sm:text-2xl">
+              Available Rooms
+            </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400">
               {isLoading ? "Loading…" : `${rooms.length} listings found`}
             </p>
@@ -48,7 +90,11 @@ export default function Rooms() {
             <Button
               variant="outline"
               size="icon"
-              className={cn("rounded-lg", gridView && "border-orange-600 bg-orange-50 text-orange-600 dark:bg-orange-950/40")}
+              aria-label="Grid view"
+              className={cn(
+                "rounded-lg",
+                gridView && "border-orange-600 bg-orange-50 text-orange-600 dark:bg-orange-950/40"
+              )}
               onClick={() => setGridView(true)}
             >
               <LayoutGrid className="size-4" />
@@ -56,7 +102,11 @@ export default function Rooms() {
             <Button
               variant="outline"
               size="icon"
-              className={cn("rounded-lg", !gridView && "border-orange-600 bg-orange-50 text-orange-600 dark:bg-orange-950/40")}
+              aria-label="List view"
+              className={cn(
+                "rounded-lg",
+                !gridView && "border-orange-600 bg-orange-50 text-orange-600 dark:bg-orange-950/40"
+              )}
               onClick={() => setGridView(false)}
             >
               <List className="size-4" />
@@ -80,7 +130,9 @@ export default function Rooms() {
           </div>
         ) : (
           <div className={gridClass}>
-            {rooms.map((r) => <RoomCard key={r.id} room={r} onClick={setSelectedRoom} />)}
+            {rooms.map((r) => (
+              <RoomCard key={r.id} room={r} onClick={setSelectedRoom} />
+            ))}
           </div>
         )}
       </div>
