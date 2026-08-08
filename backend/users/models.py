@@ -13,6 +13,10 @@ class User(AbstractUser):
         FEMALE = "female", "Female"
         OTHER = "other", "Other"
 
+    # Enforce uniqueness at the database layer too — registration validates
+    # it, but admins/shells/imports must not be able to create duplicates.
+    email = models.EmailField("email address", blank=True, unique=True)
+
     phone = models.CharField(max_length=20, blank=True)
     avatar = models.ImageField(upload_to="avatars/", blank=True, null=True)
     role = models.CharField(max_length=10, choices=Role.choices, default=Role.TENANT)

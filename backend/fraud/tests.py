@@ -29,7 +29,10 @@ User = get_user_model()
 
 def make_user(username, nid_verified=False):
     return User.objects.create_user(
-        username=username, password="test12345", nid_verified=nid_verified
+        username=username,
+        email=f"{username}@example.com",
+        password="test12345",
+        nid_verified=nid_verified,
     )
 
 
@@ -337,7 +340,9 @@ class FraudViewPermissionTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_admin_can_review(self):
-        admin = User.objects.create_user(username="boss", password="x", is_staff=True)
+        admin = User.objects.create_user(
+            username="boss", email="boss@example.com", password="x", is_staff=True
+        )
         self._auth(admin)
         report = FraudReport.objects.get(room=self.room)
         res = self.client.post(
