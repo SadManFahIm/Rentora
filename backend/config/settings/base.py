@@ -294,6 +294,17 @@ BKASH_IS_SANDBOX = os.getenv("BKASH_IS_SANDBOX", "True") == "True"
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 # ============================================================
+# Email-OTP two-factor authentication (users app)
+# ============================================================
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "Rentora <noreply@rentora.com>")
+# How long a 6-digit sign-in code stays valid.
+OTP_TTL_SECONDS = int(os.getenv("OTP_TTL_SECONDS", "600"))
+# Failed attempts before a challenge locks and a new code is required.
+OTP_MAX_ATTEMPTS = int(os.getenv("OTP_MAX_ATTEMPTS", "5"))
+# Minimum delay between resend requests for the same challenge.
+OTP_RESEND_COOLDOWN_SECONDS = int(os.getenv("OTP_RESEND_COOLDOWN_SECONDS", "30"))
+
+# ============================================================
 # Payments — business rules & webhook hardening (Phase 5 Day 3)
 # ============================================================
 # Whether a landlord may approve a booking that has an unpaid security

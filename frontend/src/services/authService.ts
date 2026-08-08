@@ -1,6 +1,6 @@
 import { api, setTokens, clearTokens, getRefreshToken } from "./api";
 import { mapUser, type ApiUser } from "./mappers";
-import type { User, LoginCredentials, RegisterPayload } from "../types";
+import type { User, LoginCredentials, RegisterPayload, LoginResult } from "../types";
 
 // ============================================================
 // AUTH SERVICE — real dj-rest-auth / SimpleJWT endpoints
@@ -9,6 +9,15 @@ import type { User, LoginCredentials, RegisterPayload } from "../types";
 interface AuthApiResponse {
   access: string;
   refresh: string;
+  user: ApiUser;
+}
+
+/** Body returned by login when the account requires an email-OTP code. */
+interface OtpPendingApiResponse {
+  otp_required: true;
+  challenge: string;
+  destination_masked: string;
+  expires_in: number;
   user: ApiUser;
 }
 
@@ -22,14 +31,49 @@ export const authService = {
    * whichever the user typed: an "@"-containing value is an email, anything
    * else (e.g. the demo usernames like `rahim.hossain`) is a username.
    */
-  async login({ email, password }: LoginCredentials): Promise<User> {
+  async login({ email, password }: LoginCredentials): Promise<LoginResult> {
     const loginField = email.includes("@") ? "email" : "username";
-    const { data } = await api.post<AuthApiResponse>("/auth/login/", {
+    const { data } = await api.post<AuthApiResponse | OtpPendingApiResponse>("/auth/login/", {
       [loginField]: email,
       password,
     });
+    if ("otp_required" in data) {
+      // 2FA account: do NOT store tokens yet — the user must first prove
+      // the one-time code via authService.verifyOtp().
+      return {
+        otpRequired: true,
+        challenge: data.challenge,
+        destinationMasked: data.destination_masked,
+        expiresIn: data.expires_in,
+        user: mapUser(data.user),
+      };
+    }
+    setTokens(data.access, data.refresh);
+    return { user: mapUser(data.user), access: data.access, refresh: data.refresh };
+  },
+
+  /** POST /auth/otp/verify/ — exchange (challenge, code) for JWTs. */
+  async verifyOtp(challenge: string, code: string): Promise<User> {
+    const { data } = await api.post<AuthApiResponse>("/auth/otp/verify/", {
+      challenge,
+      code,
+    });
     setTokens(data.access, data.refresh);
     return mapUser(data.user);
+  },
+
+  /** POST /auth/otp/resend/ — re-issue the one-time code (cooldown-guarded). */
+  async resendOtp(challenge: string): Promise<void> {
+    await api.post("/auth/otp/resend/", { challenge });
+  },
+
+  /** POST /auth/otp/toggle/ — enable (needs current password) or disable 2FA. */
+  async toggle2fa(enable: boolean, password = ""): Promise<{ otpEnabled: boolean }> {
+    const { data } = await api.post<{ otp_enabled: boolean }>("/auth/otp/toggle/", {
+      enable,
+      password,
+    });
+    return { otpEnabled: data.otp_enabled };
   },
 
   /** POST /auth/register/ → persist tokens, return the mapped user. */
