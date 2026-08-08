@@ -304,6 +304,23 @@ REQUIRE_SECURITY_DEPOSIT_BEFORE_APPROVAL = (
     os.getenv("REQUIRE_SECURITY_DEPOSIT_BEFORE_APPROVAL", "False") == "True"
 )
 
+# ============================================================
+# Paid listing tiers (monetization) — Phase 9
+# ============================================================
+# Price (BDT) per tier for a single promotion period. `free` is a valid
+# value but never purchasable — it's the default tier every new listing
+# starts with. The amount is derived server-side from this table (never
+# client-supplied), exactly like booking rents.
+LISTING_TIER_PRICING = {
+    "free": 0,
+    "featured": 199,
+    "premium": 499,
+}
+
+# How long a purchased Featured/Premium promotion lasts (days).
+LISTING_TIER_DURATION_DAYS = 30
+
+
 # Number of monthly installments to generate for an approved booking whose
 # `check_out` is open-ended (no fixed lease end date).
 DEFAULT_LEASE_SCHEDULE_MONTHS = int(os.getenv("DEFAULT_LEASE_SCHEDULE_MONTHS", "12"))

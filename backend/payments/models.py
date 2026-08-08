@@ -17,6 +17,11 @@ class Payment(models.Model):
         BOOKING_DEPOSIT = "booking_deposit", "Booking Deposit"
         MONTHLY_RENT = "monthly_rent", "Monthly Rent"
         SECURITY_DEPOSIT = "security_deposit", "Security Deposit"
+        # Paid-listing promotions (monetization). These have no `booking` —
+        # they're attached to a `room` instead, and on success upgrade the
+        # room's tier for LISTING_TIER_DURATION_DAYS.
+        LISTING_FEATURE = "listing_feature", "Listing Feature"
+        LISTING_PREMIUM = "listing_premium", "Listing Premium"
 
     class Status(models.TextChoices):
         INITIATED = "initiated", "Initiated"
@@ -26,7 +31,20 @@ class Payment(models.Model):
         CANCELLED = "cancelled", "Cancelled"
         REFUNDED = "refunded", "Refunded"
 
-    booking = models.ForeignKey(Booking, on_delete=models.CASCADE, related_name="payments")
+    # Nullable since booking-less payments exist: listing tier promotions.
+    # Every payment still has exactly one subject — a booking (rent/deposit)
+    # or a room (featured/premium promotion) — and callbacks use whichever is
+    # set to apply the success side effects.
+    booking = models.ForeignKey(
+        Booking, on_delete=models.CASCADE, related_name="payments", null=True, blank=True
+    )
+    room = models.ForeignKey(
+        "rooms.Room",
+        on_delete=models.CASCADE,
+        related_name="promotion_payments",
+        null=True,
+        blank=True,
+    )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="payments"
     )

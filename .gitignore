@@ -24,3 +24,4 @@ backend/htmlcov/
 # Local tooling
 .tmp-chrome-profile/
 .freebuff/
+.agents/

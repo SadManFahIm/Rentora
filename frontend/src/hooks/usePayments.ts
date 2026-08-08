@@ -6,6 +6,7 @@ import { bookingKeys } from "./useBookings";
 import type {
   DepositStatus,
   InitiatePaymentResult,
+  ListingTier,
   Payment,
   PaymentFilters,
   PaymentGateway,
@@ -76,6 +77,24 @@ interface InitiatePaymentVars {
   bookingId: number;
   paymentType: PaymentType;
   gateway: PaymentGateway;
+}
+
+/** Promote a listing to Featured/Premium. On success the caller gets the
+ * gateway checkout URL to redirect to (mirrors useInitiatePayment). */
+export function useInitiateTierUpgrade() {
+  return useMutation<
+    InitiatePaymentResult,
+    unknown,
+    { roomId: number; tier: Exclude<ListingTier, "free">; gateway: PaymentGateway }
+  >({
+    mutationFn: ({ roomId, tier, gateway }) =>
+      paymentService.initiateTierUpgrade(roomId, tier, gateway),
+    onError: (error) => {
+      toast.error(
+        getApiErrorMessage(error, "Could not start listing promotion. Please try again.")
+      );
+    },
+  });
 }
 
 /** Start a payment session. On success the caller is handed back the

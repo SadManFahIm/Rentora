@@ -141,3 +141,147 @@ class RoomGeoAPITests(APITestCase):
         # Mirpur 10 MRT is essentially at this room, so it must be listed.
         nearby_keys = {lm["key"] for lm in res.data["nearby_landmarks"]}
         self.assertIn("mrt_mirpur_10", nearby_keys)
+
+
+class RoomTierAPITests(APITestCase):
+    """Paid listing tiers — serialization, ordering, and the catalog."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(
+            username="tierlandlord", email="t@example.com", password="pw12345!"
+        )
+        cls.free = cls._room("Free Room", Room.Tier.FREE)
+        cls.featured = cls._room("Featured Room", Room.Tier.FEATURED)
+        cls.premium = cls._room("Premium Room", Room.Tier.PREMIUM)
+
+    @classmethod
+    def _room(cls, title, tier):
+        return Room.objects.create(
+            title=title,
+            description="test",
+            room_type=Room.RoomType.SINGLE,
+            price=8000,
+            area=Room.Area.DHANMONDI,
+            address="somewhere",
+            lat=23.74,
+            lng=90.37,
+            size_sqft=200,
+            owner=cls.owner,
+            tier=tier,
+            is_featured=tier != Room.Tier.FREE,
+        )
+
+    def test_list_exposes_tier_fields(self):
+        res = self.client.get("/api/v1/rooms/")
+        self.assertEqual(res.status_code, 200)
+        for room in res.data["results"]:
+            self.assertIn("tier", room)
+            self.assertIn("tier_expires_at", room)
+
+    def test_default_ordering_ranks_premium_then_featured_then_free(self):
+        res = self.client.get("/api/v1/rooms/")
+        titles = [
+            r["title"]
+            for r in res.data["results"]
+            if r["title"] in ("Free Room", "Featured Room", "Premium Room")
+        ]
+        self.assertEqual(titles, ["Premium Room", "Featured Room", "Free Room"])
+
+    def test_explicit_ordering_overrides_tier_boost(self):
+        res = self.client.get("/api/v1/rooms/?ordering=created_at")
+        self.assertEqual(res.status_code, 200)
+
+    def test_tier_catalog_public(self):
+        res = self.client.get("/api/v1/rooms/tier-catalog/")
+        self.assertEqual(res.status_code, 200)
+        tiers = {t["tier"] for t in res.data["tiers"]}
+        self.assertEqual(tiers, {"free", "featured", "premium"})
+        self.assertGreater(res.data["duration_days"], 0)
+        self.assertEqual(res.data["currency"], "BDT")
+
+    def test_create_ignores_client_tier(self):
+        """Landlords cannot set a paid tier on create — only via payment."""
+        self.client.force_authenticate(self.owner)
+        res = self.client.post(
+            "/api/v1/rooms/",
+            {
+                "title": "Hack Tier",
+                "description": "test",
+                "room_type": "single",
+                "price": 8000,
+                "area": "Dhanmondi",
+                "address": "x",
+                "lat": 23.74,
+                "lng": 90.37,
+                "size_sqft": 200,
+                "tier": "premium",
+                "is_featured": True,
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201)
+        room = Room.objects.get(pk=res.data["id"])
+        self.assertEqual(room.tier, Room.Tier.FREE)
+        self.assertFalse(room.is_featured)
+
+    def test_owner_filter(self):
+        other = User.objects.create_user(
+            username="otherlandlord", email="other@example.com", password="pw12345!"
+        )
+        Room.objects.create(
+            title="Other's Room",
+            description="test",
+            room_type=Room.RoomType.SINGLE,
+            price=8000,
+            area=Room.Area.DHANMONDI,
+            address="somewhere",
+            lat=23.74,
+            lng=90.37,
+            size_sqft=200,
+            owner=other,
+        )
+        res = self.client.get(f"/api/v1/rooms/?owner={self.owner.id}")
+        titles = [r["title"] for r in res.data["results"]]
+        self.assertIn("Free Room", titles)
+        self.assertNotIn("Other's Room", titles)
+
+    def test_expired_tier_reports_as_free(self):
+        from django.utils import timezone
+
+        # A listing whose promotion period has passed must not keep its
+        # Premium rank/badge — effective tier falls back to free.
+        expired = Room.objects.create(
+            title="Expired Premium",
+            description="test",
+            room_type=Room.RoomType.SINGLE,
+            price=8000,
+            area=Room.Area.DHANMONDI,
+            address="somewhere",
+            lat=23.74,
+            lng=90.37,
+            size_sqft=200,
+            owner=self.owner,
+            tier=Room.Tier.PREMIUM,
+            is_featured=True,
+            tier_expires_at=timezone.now() - timezone.timedelta(days=1),
+        )
+        res = self.client.get("/api/v1/rooms/")
+        room = next(r for r in res.data["results"] if r["id"] == expired.id)
+        self.assertEqual(room["tier"], "free")
+        self.assertFalse(room["is_featured"])
+
+    def test_expire_listings_command(self):
+        from datetime import timedelta
+
+        from django.core.management import call_command
+        from django.utils import timezone
+
+        Room.objects.filter(pk=self.premium.pk).update(
+            tier_expires_at=timezone.now() - timedelta(days=1)
+        )
+        call_command("expire_listings")
+        self.premium.refresh_from_db()
+        self.assertEqual(self.premium.tier, Room.Tier.FREE)
+        self.assertFalse(self.premium.is_featured)
+        self.assertIsNone(self.premium.tier_expires_at)
