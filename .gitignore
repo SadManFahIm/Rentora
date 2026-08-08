@@ -25,3 +25,6 @@ backend/htmlcov/
 .tmp-chrome-profile/
 .freebuff/
 .agents/
+
+# Skills install lockfile (local tooling)
+skills-lock.json
