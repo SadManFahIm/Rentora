@@ -134,13 +134,13 @@ describe("roomService.createRoom", () => {
       room_type: "studio",
       price: 12000,
       area: "Dhanmondi",
+      address: "Dhanmondi, Dhaka",
       lat: 23.7461,
       lng: 90.3742,
       amenities: ["WiFi"],
       gender_preference: "any",
       size_sqft: 450,
       is_available: true,
-      is_featured: false,
     });
     expect(room.id).toBe(7);
   });

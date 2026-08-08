@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Download,
@@ -24,6 +24,7 @@ import { wishlistService } from "../../services/wishlistService";
 import { useApp } from "../../context/AppContext";
 import RoomCard from "../../components/RoomCard/RoomCard";
 import RoomModal from "../../components/RoomModal/RoomModal";
+import RoomForm from "../../components/RoomForm/RoomForm";
 import TierBadge from "../../components/TierBadge/TierBadge";
 import PromoteModal from "../../components/PromoteModal/PromoteModal";
 import PaymentMethodModal, {
@@ -178,7 +179,6 @@ function BookingListItem({
 }
 
 export default function Dashboard() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
@@ -186,6 +186,7 @@ export default function Dashboard() {
     (TABS as string[]).includes(requestedTab ?? "") ? (requestedTab as DashboardTab) : "overview"
   );
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  const [showRoomForm, setShowRoomForm] = useState(false);
   const [payRequest, setPayRequest] = useState<PaymentRequest | null>(null);
   const [promoteRoom, setPromoteRoom] = useState<Room | null>(null);
 
@@ -297,7 +298,7 @@ export default function Dashboard() {
         </div>
         <Button
           className="bg-orange-600 text-white hover:bg-orange-700"
-          onClick={() => navigate("/rooms")}
+          onClick={() => setShowRoomForm(true)}
         >
           + List a Room
         </Button>
@@ -569,6 +570,8 @@ export default function Dashboard() {
       {activeTab === "fraud" && <FraudTab />}
 
       {selectedRoom && <RoomModal room={selectedRoom} onClose={() => setSelectedRoom(null)} />}
+
+      <RoomForm open={showRoomForm} onClose={() => setShowRoomForm(false)} />
       <PaymentMethodModal request={payRequest} onClose={() => setPayRequest(null)} />
       <PromoteModal
         room={promoteRoom}
