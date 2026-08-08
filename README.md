@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](https://img.shields.io/badge/tests-180%20(98%20BE%20%2B%2082%20FE)-success)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](https://img.shields.io/badge/tests-184%20(98%20BE%20%2B%2086%20FE)-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2058%25%20%E2%80%A2%20FE%2098%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -38,13 +38,15 @@
 
 **Fraud Detection** — 6-detector engine (duplicate title, copied description, price anomaly vs market percentiles, missing images, unverified owner, rapid spam) with auto-scan + admin review queue**Auth & Trust**
 - Fresh **login/register redesign** (animated Dribbble-style auth page)
-- **Live password strength meter** + real-time confirm-match indicator on the register form
+- **Deep password strength meter** — zxcvbn-ts engine: real entropy (`~10^N` guesses), common-password detection ("top-10 common password" warnings), 4-segment meter, live confirm-match indicator
+- **HaveIBeenPwned breach check** — k-anonymity lookup (only the first 5 chars of the SHA-1 hash leave the device); shows ⚠️ breached / ✓ safe / unknown status on the register form
 - Sign in with **username or email**; **duplicate-email registration now blocked** (serializer + DB unique constraint) with a readable error message
 - Already-logged-in users are redirected from `/auth` to their dashboard
 
 **Engineering**
-- **Coverage history per branch** — every PR and main push appends its own `history-<branch>.csv` + SVG chart to the `coverage-history` branch (viewable `index.html` linking all branches)**Engineering**
-- 180 automated tests (98 backend + 82 frontend) · coverage gates (BE ≥50%, FE ≥55%)
+- **Coverage history per branch** — every PR and main push appends its own `history-<branch>.csv` + SVG chart to the `coverage-history` branch (viewable `index.html` linking all branches)
+- **Engineering**
+- 184 automated tests (98 backend + 86 frontend) · coverage gates (BE ≥50%, FE ≥55%)
 - Ruff + ESLint + Prettier with husky/lint-staged pre-commit hooks
 - GitHub Actions CI (backend, frontend, lint, coverage-summary PR comment, per-branch coverage history)
 - Route-level code splitting (React.lazy) — smaller bundles
@@ -124,6 +126,8 @@
 | Axios                 | HTTP client with interceptors |
 | React Hook Form + Zod | Form validation               |
 | Motion                | Entrance/exit animation       |
+| zxcvbn-ts             | Password entropy + strength    |
+| Pwned Passwords (HIBP)| k-anonymity breach lookup     |
 | Sonner                | Toast notifications           |
 | Vitest                | Unit tests + coverage         |
 
@@ -227,12 +231,12 @@ Rentora/
 
 Quality is enforced **in CI and at commit time** — style or coverage drift fails the pipeline automatically.
 
-### Automated tests (180 total)
+### Automated tests (184 total)
 
 | Suite             | Count | Gate                                               |
 | ----------------- | ----- | -------------------------------------------------- |
 | Backend (Django)  | 98    | ✅ passing · coverage ≥ 50% lines (currently ~58%) |
-| Frontend (Vitest) | 82    | ✅ passing · coverage ≥ 55% lines (currently ~98%) |
+| Frontend (Vitest) | 86    | ✅ passing · coverage ≥ 55% lines (currently ~98%) |
 
 ```bash
 # Backend
@@ -498,6 +502,7 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 - Custom error handler with consistent JSON envelope
 - Production security headers (HSTS, XSS filter, content-type nosniff)
 - **Fraud engine** auto-scans every new listing — flagged listings go into an admin review queue
+- **Password hygiene on register** — zxcvbn-ts entropy scoring rejects trivially guessable passwords with actionable warnings; HaveIBeenPwned k-anonymity check warns when the chosen password appears in known data breaches (nothing but a 5-char hash prefix ever leaves the device)
 
 ---
 
