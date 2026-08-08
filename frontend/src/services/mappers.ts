@@ -7,6 +7,8 @@ import type {
   Room,
   RoomType,
   GenderPref,
+  RoomProximity,
+  LandmarkProximity,
   Booking,
   BookingStatus,
   Notification,
@@ -46,6 +48,18 @@ export interface ApiOwner {
   nid_verified: boolean;
 }
 
+export interface ApiLandmarkProximity {
+  key: string;
+  name: string;
+  kind: string;
+  distance_km: number;
+}
+
+export interface ApiRoomProximity {
+  nearest_university: ApiLandmarkProximity | null;
+  nearest_metro: ApiLandmarkProximity | null;
+}
+
 export interface ApiRoom {
   id: number;
   title: string;
@@ -65,6 +79,8 @@ export interface ApiRoom {
   verified: boolean;
   owner?: ApiOwner | null;
   images?: ApiRoomImage[];
+  proximity?: ApiRoomProximity;
+  distance_km?: number | null;
   created_at: string;
 }
 
@@ -200,6 +216,24 @@ function formatDate(iso: string): string {
 
 // ---- mappers ----
 
+function mapNearby(api: ApiLandmarkProximity | null | undefined): LandmarkProximity | null {
+  if (!api) return null;
+  return {
+    key: api.key,
+    name: api.name,
+    kind: api.kind as LandmarkProximity["kind"],
+    distanceKm: api.distance_km,
+  };
+}
+
+function mapProximity(api: ApiRoom["proximity"]): RoomProximity | undefined {
+  if (!api) return undefined;
+  return {
+    nearestUniversity: mapNearby(api.nearest_university),
+    nearestMetro: mapNearby(api.nearest_metro),
+  };
+}
+
 export function mapRoom(api: ApiRoom): Room {
   const owner = ownerName(api.owner);
   return {
@@ -223,6 +257,8 @@ export function mapRoom(api: ApiRoom): Room {
     ownerId: api.owner?.id ?? null,
     ownerAvatar: initials(owner),
     verified: api.verified,
+    proximity: mapProximity(api.proximity),
+    distanceKm: api.distance_km ?? null,
   };
 }
 

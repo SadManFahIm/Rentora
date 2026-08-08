@@ -56,6 +56,23 @@ export const roomService = {
     return rooms;
   },
 
+  /**
+   * GET /rooms/?bbox=... — rooms whose location falls inside a map viewport.
+   * `bbox` is Leaflet's `LatLngBounds.toBBoxString()` (minLng,minLat,maxLng,maxLat).
+   * When `bbox` is null the whole available set is returned (initial map load).
+   *
+   * Returns the first page only (backend PAGE_SIZE=12): as the user zooms in,
+   * a viewport rarely holds more than a page of listings. Marker clustering /
+   * multi-page fetches are a later concern, not needed at current data volumes.
+   */
+  async getRoomsInBounds(bbox: string | null, filters: RoomFilters = {}): Promise<Room[]> {
+    const params = buildParams(filters);
+    params.is_available = "true";
+    if (bbox) params.bbox = bbox;
+    const { data } = await api.get<Paginated<ApiRoom>>("/rooms/", { params });
+    return data.results.map(mapRoom);
+  },
+
   /** GET /rooms/:id/ */
   async getRoomById(id: number): Promise<Room> {
     const { data } = await api.get<ApiRoom>(`/rooms/${id}/`);

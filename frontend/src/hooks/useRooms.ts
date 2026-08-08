@@ -9,6 +9,8 @@ import type { Room, RoomFilters } from "../types";
 export const roomKeys = {
   all: ["rooms"] as const,
   list: (filters: RoomFilters) => [...roomKeys.all, "list", filters] as const,
+  bounds: (bbox: string | null, filters: RoomFilters) =>
+    [...roomKeys.all, "bounds", bbox, filters] as const,
   detail: (id: number) => [...roomKeys.all, "detail", id] as const,
 };
 
@@ -18,6 +20,21 @@ export function useRooms(filters: RoomFilters = {}) {
     queryKey: roomKeys.list(filters),
     queryFn: () => roomService.getRooms(filters),
     staleTime: 60_000,
+  });
+}
+
+/**
+ * Fetch rooms within a map viewport (`bbox` from Leaflet). `bbox` null loads
+ * the whole available set (initial map render). `keepPreviousData` keeps the
+ * old markers on screen while a pan/zoom refetch is in flight, so the map
+ * doesn't flicker empty between viewports.
+ */
+export function useRoomsInBounds(bbox: string | null, filters: RoomFilters = {}) {
+  return useQuery<Room[]>({
+    queryKey: roomKeys.bounds(bbox, filters),
+    queryFn: () => roomService.getRoomsInBounds(bbox, filters),
+    staleTime: 30_000,
+    placeholderData: (previous) => previous,
   });
 }
 

@@ -5,6 +5,22 @@
 export type RoomType = "Single" | "Shared" | "Studio";
 export type GenderPref = "Any" | "Male" | "Female";
 
+export type LandmarkKind = "university" | "metro";
+
+/** A single nearby landmark with its distance from a room (Phase 7 geo). */
+export interface LandmarkProximity {
+  key: string;
+  name: string;
+  kind: LandmarkKind;
+  distanceKm: number;
+}
+
+/** Nearest university/metro to a room, as returned by the backend. */
+export interface RoomProximity {
+  nearestUniversity: LandmarkProximity | null;
+  nearestMetro: LandmarkProximity | null;
+}
+
 export interface Room {
   id: number;
   name: string;
@@ -26,6 +42,10 @@ export interface Room {
   ownerId: number | null;
   ownerAvatar: string;
   verified: boolean;
+  /** Nearest university/metro (present when the API includes it). */
+  proximity?: RoomProximity;
+  /** Distance (km) from a geo query's reference point; null unless the request supplied one. */
+  distanceKm?: number | null;
 }
 
 export type UserRole = "tenant" | "landlord" | "admin";
