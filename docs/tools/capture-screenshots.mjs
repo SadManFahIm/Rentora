@@ -54,6 +54,13 @@ const CAPTURES = [
     waitMs: 4000,
     afterClickMs: 3000,
   },
+  // No token: the auth dialog shows in its logged-out state.
+  {
+    user: null,
+    route: "/auth",
+    out: "auth-login.png",
+    waitMs: 3500,
+  },
 ];
 
 // ---- Helpers ----
@@ -196,9 +203,18 @@ async function main() {
     })()`);
 
   for (const cap of CAPTURES) {
-    const token = mintToken(cap.user);
     await navigate(`${FRONTEND}/`, 2500);
-    await injectToken(token);
+    if (cap.user) {
+      const token = mintToken(cap.user);
+      await injectToken(token);
+    } else {
+      // Logged-out capture: make sure no stale session survives.
+      await evaluate(`(() => {
+        localStorage.removeItem('rentora_access');
+        localStorage.removeItem('rentora_refresh');
+        return 'cleared';
+      })()`);
+    }
     await navigate(`${FRONTEND}${cap.route}`, cap.waitMs ?? 4000);
 
     if (cap.click) {

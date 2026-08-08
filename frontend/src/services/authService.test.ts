@@ -1,4 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { AxiosError } from "axios";
+import { getApiErrorMessage } from "./errors";
 
 // Mock the shared API client + token helpers so tests never touch the network.
 vi.mock("./api", () => ({
@@ -81,6 +83,30 @@ describe("authService.register", () => {
       password2: "demo12345",
       name: "Rahim Hossain",
     });
+  });
+
+  it("rejects when the backend reports a duplicate email (400)", async () => {
+    const err = new AxiosError("Request failed with status code 400");
+    err.response = {
+      status: 400,
+      data: {
+        success: false,
+        message: "A user is already registered with this email address.",
+        errors: [],
+      },
+    } as AxiosError["response"];
+    (api.post as ReturnType<typeof vi.fn>).mockRejectedValueOnce(err);
+
+    await expect(
+      authService.register({
+        name: "Rahim Hossain",
+        email: "rahim.hossain@rentora.com",
+        password: "demo12345",
+      })
+    ).rejects.toBe(err);
+
+    // And the error surfaces a readable message for the toast/UI layer.
+    expect(getApiErrorMessage(err)).toBe("A user is already registered with this email address.");
   });
 });
 
