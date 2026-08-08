@@ -140,6 +140,104 @@ describe("authService OTP two-factor", () => {
       password: "",
     });
   });
+
+  it("toggle2fa enable returns a pending email challenge (two-step enable)", async () => {
+    (api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: {
+        otp_enabled: false,
+        pending_enable: true,
+        challenge: "ch-enable",
+        destination_masked: "r***@rentora.com",
+      },
+    });
+    const result = await authService.toggle2fa(true, "demo12345");
+    expect(result).toMatchObject({
+      otpEnabled: false,
+      pendingEnable: true,
+      challenge: "ch-enable",
+      destinationMasked: "r***@rentora.com",
+    });
+  });
+
+  it("confirmEnable2fa returns the one-time recovery codes", async () => {
+    (api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: {
+        otp_enabled: true,
+        recovery_codes: ["ABCD-EFGH-1234", "WXYZ-ABCD-5678"],
+      },
+    });
+    const result = await authService.confirmEnable2fa("ch-enable", "123456");
+    expect(api.post).toHaveBeenCalledWith("/auth/otp/confirm-enable/", {
+      challenge: "ch-enable",
+      code: "123456",
+    });
+    expect(result.otpEnabled).toBe(true);
+    expect(result.recoveryCodes[0]).toBe("ABCD-EFGH-1234");
+  });
+
+  it("verifyOtp accepts a recovery code instead of the emailed code", async () => {
+    (api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: { access: "a", refresh: "r", user: apiUser },
+    });
+    await authService.verifyOtp("ch-abc", "", "ABCD-EFGH-1234");
+    expect(api.post).toHaveBeenCalledWith("/auth/otp/verify/", {
+      challenge: "ch-abc",
+      recovery_code: "ABCD-EFGH-1234",
+    });
+  });
+});
+
+describe("authService passkeys (WebAuthn)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("passkeyRegisterBegin fetches the ceremony options", async () => {
+    (api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: { rp: { id: "localhost" }, challenge: "c1" },
+    });
+    const options = await authService.passkeyRegisterBegin();
+    expect(api.post).toHaveBeenCalledWith("/auth/passkey/register/begin/");
+    expect(options.challenge).toBe("c1");
+  });
+
+  it("passkeyRegisterComplete posts the authenticator response", async () => {
+    (api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: { verified: true, credential_id: "AQIDBAU" },
+    });
+    const result = await authService.passkeyRegisterComplete({ id: "AQIDBAU" }, "Laptop");
+    expect(api.post).toHaveBeenCalledWith("/auth/passkey/register/complete/", {
+      response: { id: "AQIDBAU" },
+      name: "Laptop",
+    });
+    expect(result.credentialId).toBe("AQIDBAU");
+  });
+
+  it("passkeyLoginComplete returns pending OTP for a 2FA account (no tokens)", async () => {
+    (api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: {
+        otp_required: true,
+        challenge: "ch-pk",
+        destination_masked: "r***@rentora.com",
+        expires_in: 600,
+        user: apiUser,
+      },
+    });
+    const result = await authService.passkeyLoginComplete("cid", { id: "AQIDBAU" });
+    expect(setTokens).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ otpRequired: true, challenge: "ch-pk" });
+  });
+
+  it("passkeyLoginComplete issues tokens for a non-2FA account", async () => {
+    (api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: { access: "a", refresh: "r", user: apiUser },
+    });
+    const result = await authService.passkeyLoginComplete("cid", { id: "AQIDBAU" });
+    expect(api.post).toHaveBeenCalledWith("/auth/passkey/login/complete/", {
+      challenge_id: "cid",
+      response: { id: "AQIDBAU" },
+    });
+    expect(setTokens).toHaveBeenCalledWith("a", "r");
+    expect("otpRequired" in result && result.otpRequired).toBe(false);
+  });
 });
 
 describe("authService.register", () => {

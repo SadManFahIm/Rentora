@@ -41,6 +41,8 @@ class UserSerializer(serializers.ModelSerializer):
 class CustomUserDetailsSerializer(UserDetailsSerializer):
     """Used by dj-rest-auth's GET/PUT /api/v1/auth/user/."""
 
+    passkeys = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = (
@@ -57,8 +59,20 @@ class CustomUserDetailsSerializer(UserDetailsSerializer):
             "bio",
             "date_of_birth",
             "otp_enabled",
+            "passkeys",
         )
         read_only_fields = ("email", "nid_verified")
+
+    def get_passkeys(self, obj):
+        return [
+            {
+                "id": cred.credential_id,
+                "name": cred.name or "Passkey",
+                "created_at": cred.created_at.isoformat(),
+                "last_used_at": cred.last_used_at.isoformat() if cred.last_used_at else None,
+            }
+            for cred in obj.passkeys.all()[:10]
+        ]
 
 
 class CustomRegisterSerializer(RegisterSerializer):
@@ -119,7 +133,18 @@ class OTPSerializer(serializers.Serializer):
 
     challenge = serializers.CharField(required=False, allow_blank=True)
     code = serializers.CharField(required=False, allow_blank=True, max_length=10)
+    recovery_code = serializers.CharField(
+        required=False, allow_blank=True, max_length=16, label="Recovery code"
+    )
     password = serializers.CharField(
         required=False, allow_blank=True, write_only=True, style={"input_type": "password"}
     )
     enable = serializers.BooleanField(required=False, default=True)
+
+
+class PasskeySerializer(serializers.Serializer):
+    """Input for passkey registration/authentication completions."""
+
+    response = serializers.JSONField()
+    challenge_id = serializers.CharField(required=False, allow_blank=True)
+    name = serializers.CharField(required=False, allow_blank=True, max_length=120)

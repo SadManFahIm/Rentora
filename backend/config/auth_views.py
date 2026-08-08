@@ -12,13 +12,9 @@ returns ``202 Pending`` so the client can prompt for the one-time code.
 
 from dj_rest_auth.registration.views import RegisterView
 from dj_rest_auth.views import LoginView
-from django.conf import settings
 from drf_spectacular.utils import extend_schema
-from rest_framework import status
-from rest_framework.response import Response
 
-from users.serializers import CustomUserDetailsSerializer
-from users.services import _mask_email, create_challenge
+from users.otp_views import pending_otp_response
 
 from .throttling import AuthRateThrottle
 
@@ -45,17 +41,7 @@ class ThrottledLoginView(LoginView):
         user = self.serializer.validated_data["user"]
 
         if user.otp_enabled:
-            challenge = create_challenge(user)
-            return Response(
-                {
-                    "otp_required": True,
-                    "challenge": challenge.challenge_token,
-                    "destination_masked": _mask_email(user.email or ""),
-                    "expires_in": int(getattr(settings, "OTP_TTL_SECONDS", 600)),
-                    "user": CustomUserDetailsSerializer(user, context=request).data,
-                },
-                status=status.HTTP_202_ACCEPTED,
-            )
+            return pending_otp_response(request, user)
 
         return super().post(request, *args, **kwargs)
 
