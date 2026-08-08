@@ -171,6 +171,27 @@ ROOMS = [
         "total_reviews": 20,
         "image_url": "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=600&q=80",
     },
+    {
+        "title": "Fresh Studio, Uttara",
+        "room_type": Room.RoomType.STUDIO,
+        "price": 11000,
+        "area": Room.Area.BANANI,
+        "address": "House 4, Road 9, Uttara Sector 3, Dhaka",
+        "lat": 23.8759,
+        "lng": 90.3795,
+        "amenities": ["WiFi", "AC", "Furnished"],
+        "gender_preference": Room.GenderPreference.ANY,
+        "size_sqft": 380,
+        "is_available": True,
+        "tier": Room.Tier.FREE,
+        "is_featured": False,
+        "description": "Brand new studio with a free tier — perfect for trying the Promote flow.",
+        "owner_name": "Demo Promoter",
+        "verified": True,
+        "rating": 0,
+        "total_reviews": 0,
+        "image_url": "https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e?w=600&q=80",
+    },
 ]
 
 
@@ -190,7 +211,7 @@ class Command(BaseCommand):
             },
         )
         if created:
-            user.set_password("landlord123")
+            user.set_password("demo12345")
             user.save(update_fields=["password"])
             self.stdout.write(f"  created landlord user '{username}'")
         return user
