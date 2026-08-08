@@ -28,9 +28,16 @@ def generate_receipt_pdf(payment: Payment) -> bytes:
     )
     styles = getSampleStyleSheet()
     booking = payment.booking
-    room = booking.room
-    landlord = room.owner
     tenant = payment.user
+
+    # Listing-promotion payments have no booking — render the promoted room
+    # and its owner instead of booking fields.
+    if booking is None:
+        room = payment.room
+        landlord = room.owner
+    else:
+        room = booking.room
+        landlord = room.owner
 
     elements = [
         Paragraph("Rentora", styles["Title"]),
@@ -50,8 +57,9 @@ def generate_receipt_pdf(payment: Payment) -> bytes:
         ["Room", room.title],
         ["Tenant", tenant.get_full_name() or tenant.username],
         ["Landlord", landlord.get_full_name() or landlord.username],
-        ["Booking Check-in", booking.check_in.strftime("%d %B %Y")],
     ]
+    if booking is not None:
+        rows.append(["Booking Check-in", booking.check_in.strftime("%d %B %Y")])
 
     table = Table(rows, colWidths=[55 * mm, 105 * mm])
     table.setStyle(

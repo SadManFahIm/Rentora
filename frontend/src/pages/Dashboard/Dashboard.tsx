@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { Download, Heart, Loader2, ShieldAlert, ShieldCheck } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Download, Heart, Loader2, Megaphone, ShieldAlert, ShieldCheck } from "lucide-react";
 import { useDashboard } from "../../hooks/useDashboard";
+import { useRooms } from "../../hooks/useRooms";
 import { useBookings } from "../../hooks/useBookings";
 import { useFraudReports, useReviewFraudReport, useScanRoom } from "../../hooks/useFraud";
 import {
@@ -15,6 +16,8 @@ import { wishlistService } from "../../services/wishlistService";
 import { useApp } from "../../context/AppContext";
 import RoomCard from "../../components/RoomCard/RoomCard";
 import RoomModal from "../../components/RoomModal/RoomModal";
+import TierBadge from "../../components/TierBadge/TierBadge";
+import PromoteModal from "../../components/PromoteModal/PromoteModal";
 import PaymentMethodModal, {
   type PaymentRequest,
 } from "../../components/PaymentMethodModal/PaymentMethodModal";
@@ -31,8 +34,8 @@ import {
 import type { Booking, PaymentStatus, Room } from "../../types";
 import { cn } from "../../lib/utils";
 
-type DashboardTab = "overview" | "bookings" | "payments" | "wishlist" | "fraud";
-const TABS: DashboardTab[] = ["overview", "bookings", "payments", "wishlist", "fraud"];
+type DashboardTab = "overview" | "listings" | "bookings" | "payments" | "wishlist" | "fraud";
+const TABS: DashboardTab[] = ["overview", "listings", "bookings", "payments", "wishlist", "fraud"];
 
 interface StatCard {
   icon: string;
@@ -68,6 +71,8 @@ const paymentTypeLabels: Record<string, string> = {
   monthly_rent: "Monthly Rent",
   security_deposit: "Security Deposit",
   booking_deposit: "Booking Deposit",
+  listing_feature: "Listing Promotion (Featured)",
+  listing_premium: "Listing Promotion (Premium)",
 };
 
 const takaFmt = (n: number) => `৳${n.toLocaleString()}`;
@@ -161,6 +166,7 @@ function BookingListItem({
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const [activeTab, setActiveTab] = useState<DashboardTab>(
@@ -168,6 +174,7 @@ export default function Dashboard() {
   );
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [payRequest, setPayRequest] = useState<PaymentRequest | null>(null);
+  const [promoteRoom, setPromoteRoom] = useState<Room | null>(null);
 
   const [statusFilter, setStatusFilter] = useState<PaymentStatus | "all">("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -355,6 +362,8 @@ export default function Dashboard() {
           </div>
         </>
       )}
+
+      {activeTab === "listings" && <ListingsTab onPromote={setPromoteRoom} />}
 
       {activeTab === "bookings" &&
         (bookingsLoading ? (
@@ -544,6 +553,100 @@ export default function Dashboard() {
 
       {selectedRoom && <RoomModal room={selectedRoom} onClose={() => setSelectedRoom(null)} />}
       <PaymentMethodModal request={payRequest} onClose={() => setPayRequest(null)} />
+      <PromoteModal
+        room={promoteRoom}
+        onClose={() => setPromoteRoom(null)}
+        onPromoted={(roomId) => {
+          // Room tier changed server-side after a successful payment; refresh
+          // the landlord's listings list.
+          queryClient.invalidateQueries({ queryKey: ["rooms"] });
+          void roomId;
+        }}
+      />
+    </div>
+  );
+}
+
+/** Landlord's own listings with their paid tier and a promote action. */
+function ListingsTab({ onPromote }: { onPromote: (room: Room) => void }) {
+  const { user } = useApp();
+  // Server-side owner filter: the landlord dashboard only needs this owner's
+  // listings, and a client-side filter over the first page of *all* rooms
+  // would silently drop listings beyond page 1.
+  const { data: rooms = [], isLoading } = useRooms(
+    user?.id != null ? { owner: user.id } : undefined
+  );
+
+  const myRooms = rooms;
+
+  if (isLoading) {
+    return (
+      <div className="py-15 text-center text-gray-600 dark:text-gray-400">
+        Loading your listings…
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-5 flex items-center gap-2">
+        <Megaphone className="size-5 text-orange-600" />
+        <div>
+          <h2 className="font-display text-lg font-bold text-foreground">My Listings</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Manage your rooms and promote them to reach more tenants.
+          </p>
+        </div>
+      </div>
+
+      {myRooms.length === 0 ? (
+        <div className="flex flex-col items-center px-5 py-15 text-center text-gray-600 dark:text-gray-400">
+          <Megaphone className="mb-4 size-12" />
+          <h3 className="mb-2 font-display text-lg font-bold text-foreground">No listings yet</h3>
+          <p>Create a room listing to start renting it out.</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {myRooms.map((room) => (
+            <div
+              key={room.id}
+              className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-card p-4 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <img
+                  src={room.img}
+                  alt={room.name}
+                  className="h-16 w-24 shrink-0 rounded-lg object-cover"
+                />
+                <div>
+                  <div className="flex items-center gap-2 font-display text-sm font-bold text-foreground">
+                    {room.name}
+                    <TierBadge tier={room.tier} showFree />
+                  </div>
+                  <div className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
+                    {room.area} • ৳{room.price.toLocaleString()}/mo •{" "}
+                    {room.available ? "Available" : "Unavailable"}
+                  </div>
+                  {room.tierExpiresAt && room.tier !== "free" && (
+                    <div className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                      {room.tier === "premium" ? "Premium" : "Featured"} until{" "}
+                      {new Date(room.tierExpiresAt).toLocaleDateString()}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className="shrink-0 bg-orange-600 text-white hover:bg-orange-700"
+                onClick={() => onPromote(room)}
+              >
+                <Megaphone className="mr-1.5 size-3.5" />
+                {room.tier === "free" ? "Promote" : "Upgrade"}
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

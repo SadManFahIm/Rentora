@@ -29,10 +29,12 @@
 - Receive booking requests with approve/reject workflow
 - Get notified on new bookings and reviews
 - **Fraud protection** — every listing is auto-scanned on creation; flagged listings show an "under review" badge
+- **Paid listing tiers** — promote a listing to **Featured** (৳199/30 days) or **Premium** (৳499/30 days) via SSLCommerz/bKash to rank higher in search and show a badge; expired promotions auto-revert to Free
 - Dashboard with revenue stats, ratings, listing analytics, and fraud risk cards with one-click re-scan
 
 **Platform Features**
 - JWT authentication (register/login/refresh/logout)
+- **Paid listing tiers (monetization)** — Free / Featured / Premium with server-side pricing, gateway-checkout promotion flow, and premium-first search ordering
 - Real-time notifications (booking updates, reviews, roommate requests, fraud flags)
 - Review system with verified stay badges
 - **6-detector fraud engine** — duplicate titles, copied descriptions, suspicious pricing (vs. market percentiles), missing images, unverified owners, rapid listing spam
@@ -350,6 +352,13 @@ cd frontend && npm run test:coverage
 | GET | `/api/v1/fraud/rooms/:room_id/status/` | Public | Public badge data (drives "under review" badge) |
 | GET | `/api/v1/fraud/reports/` | Auth | Reports (owner: own rooms; admin: all) — filter by `status`/`severity` |
 | POST | `/api/v1/fraud/rooms/:room_id/scan/` | Owner/Admin | Re-run the detector on a room |
+### Listing Tiers (Monetization)
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| GET | `/api/v1/rooms/tier-catalog/` | Public | Tier pricing + benefits catalog (drives the Promote UI) |
+| POST | `/api/v1/payments/tier-upgrade/initiate/` | Owner | Start a promotion payment (Featured/Premium; amount server-side) |
+
+Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badge, Home "Featured Rooms") → **Premium** (৳499/30d: top of search, gold badge, priority in AI recommendations). Expired promotions revert to Free automatically (`expire_listings` management command + query-time `effective_tier`).
 | POST | `/api/v1/fraud/reports/:report_id/review/` | Admin | Mark reviewed / dismissed |
 
 ### Documentation
@@ -383,6 +392,7 @@ cd frontend && npm run test:coverage
 - [x] **Phase 6:** AI features (recommendation engine — content-based + collaborative + hybrid; price insight + fair-price prediction; **fraud detection** — 6-detector engine with auto-scan + review queue)
 - [ ] **Phase 7:** Map frontend (Leaflet.js, heatmap, university/metro proximity) — *geo backend done: bbox/radius/landmark queries ready*
 - [x] **Roommate Matching:** profile + weighted scoring (budget/area/room-type/gender/lifestyle) + request/approve flow
+- [x] **Paid Listing Tiers:** Free/Featured/Premium promotion payments (SSLCommerz/bKash) with premium-first search ordering — *first monetization stream*
 - [ ] **Phase 8:** Docker + CI/CD + deployment
 
 ---
@@ -417,8 +427,10 @@ cd frontend && npm run test:coverage
 | 🏠 Landlord | `sabbir.rahman` | `demo12345` | Student Room Azimpur listing |
 | 🏠 Landlord | `farhana.akter` | `demo12345` | Modern Studio Mirpur listing |
 | 🏠 Landlord | `tanvir.islam` | `demo12345` | Fraud dashboard (Executive Single Banani + re-scan) |
+| 🏠 Landlord | `demo.promoter` | `demo12345` | **Fresh FREE listing** — try the Promote flow (Dashboard → Listings → Promote) |
 
 **Tips**
+- Sign in with the **username** (e.g. `rahim.hossain`) **or** the email address (e.g. `rahim.hossain@rentora.com`) — both work.
 - `rahim.hossain` has a roommate profile — log in and open **Roommates** to see live match scores.
 - `tanvir.islam` has listings — open **Dashboard → Fraud** to see the risk cards and try **Re-scan**.
 - All accounts use the shared demo password `demo12345`.

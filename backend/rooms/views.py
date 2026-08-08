@@ -1,5 +1,7 @@
 import django_filters
-from django.db.models import Case, IntegerField, When
+from django.conf import settings
+from django.db import models
+from django.db.models import Case, IntegerField, Value, When
 from drf_spectacular.utils import (
     OpenApiExample,
     OpenApiParameter,
@@ -32,6 +34,9 @@ from .serializers import (
 class RoomFilter(django_filters.FilterSet):
     price__gte = django_filters.NumberFilter(field_name="price", lookup_expr="gte")
     price__lte = django_filters.NumberFilter(field_name="price", lookup_expr="lte")
+    # Lets the landlord dashboard list only one owner's listings server-side
+    # instead of pulling every page of all rooms and filtering client-side.
+    owner = django_filters.NumberFilter(field_name="owner_id")
 
     class Meta:
         model = Room
@@ -138,6 +143,19 @@ class RoomViewSet(viewsets.ModelViewSet):
     ordering_fields = ["price", "rating", "created_at"]
     ordering = ["-created_at"]
 
+    # Paid-tier ranking: premium > featured > free, newest first within a
+    # tier. Applied when the client didn't ask for an explicit ordering (or
+    # a geo reference point, which sorts nearest-first) — promotion should
+    # surface promoted listings first, but never override a user's explicit
+    # sort choice. Uses `effective_tier` (see get_queryset) so expired
+    # promotions drop back to the free rank.
+    TIER_RANK = Case(
+        When(effective_tier="premium", then=Value(0)),
+        When(effective_tier="featured", then=Value(1)),
+        default=Value(2),
+        output_field=IntegerField(),
+    )
+
     def get_serializer_class(self):
         if self.action == "list":
             return RoomListSerializer
@@ -146,7 +164,7 @@ class RoomViewSet(viewsets.ModelViewSet):
         return RoomCreateUpdateSerializer
 
     def get_permissions(self):
-        if self.action in ("list", "retrieve", "landmarks"):
+        if self.action in ("list", "retrieve", "landmarks", "tier_catalog"):
             return [permissions.AllowAny()]
         if self.action == "create":
             return [permissions.IsAuthenticated()]
@@ -247,6 +265,23 @@ class RoomViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+
+        # Expired promotions stop conferring benefits immediately: a listing
+        # whose tier_expires_at is in the past is treated as free (both for
+        # the tier_rank ordering below and for serialized output), so a paid
+        # promotion can never silently outlive its purchased period.
+        from django.db.models import Q
+        from django.utils import timezone
+
+        expired = Q(tier_expires_at__lte=timezone.now())
+        queryset = queryset.annotate(
+            effective_tier=Case(
+                When(expired, then=Value(Room.Tier.FREE)),
+                default="tier",
+                output_field=models.CharField(max_length=10),
+            )
+        )
+
         if self.action != "list":
             return queryset
 
@@ -266,6 +301,11 @@ class RoomViewSet(viewsets.ModelViewSet):
             reference = self._reference_point()
             if reference is not None:
                 queryset = self._order_by_distance(queryset, reference)
+            else:
+                # Default browse view: promoted listings float to the top.
+                queryset = queryset.annotate(tier_rank=self.TIER_RANK).order_by(
+                    "tier_rank", "-created_at"
+                )
         return queryset
 
     def get_serializer_context(self):
@@ -291,3 +331,52 @@ class RoomViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"])
     def landmarks(self, request):
         return Response(LandmarkSerializer(ALL_LANDMARKS, many=True).data)
+
+    @extend_schema(
+        tags=["Rooms"],
+        summary="Listing tier catalog",
+        description="Public price/benefit catalog for paid listing tiers (Free / Featured / "
+        "Premium) and their duration, so the frontend can render the promotion "
+        "UI without hardcoding prices.",
+    )
+    @action(detail=False, methods=["get"], url_path="tier-catalog")
+    def tier_catalog(self, request):
+        pricing = settings.LISTING_TIER_PRICING
+        return Response(
+            {
+                "tiers": [
+                    {
+                        "tier": "free",
+                        "label": "Free",
+                        "price": pricing["free"],
+                        "benefits": [
+                            "Standard placement in search",
+                            "Up to 8 photos",
+                            "Booking requests + chat",
+                        ],
+                    },
+                    {
+                        "tier": "featured",
+                        "label": "Featured",
+                        "price": pricing["featured"],
+                        "benefits": [
+                            "Boosted above free listings",
+                            "Featured badge on card",
+                            "Shown in Featured Rooms on home",
+                        ],
+                    },
+                    {
+                        "tier": "premium",
+                        "label": "Premium",
+                        "price": pricing["premium"],
+                        "benefits": [
+                            "Top of search results",
+                            "Premium badge + highlighted card",
+                            "Priority in AI recommendations",
+                        ],
+                    },
+                ],
+                "duration_days": settings.LISTING_TIER_DURATION_DAYS,
+                "currency": "BDT",
+            }
+        )

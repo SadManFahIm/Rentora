@@ -20,6 +20,7 @@ class RoomAdmin(admin.ModelAdmin):
         "room_type",
         "price",
         "is_available",
+        "tier",
         "is_featured",
         "rating",
         "owner",
@@ -28,6 +29,7 @@ class RoomAdmin(admin.ModelAdmin):
         "area",
         "room_type",
         "is_available",
+        "tier",
         "is_featured",
         "verified",
     ]
