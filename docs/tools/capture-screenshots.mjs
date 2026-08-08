@@ -57,6 +57,18 @@ const CAPTURES = [
     waitMs: 6000,
   },
   {
+    // Dark theme variant — prefs stored under the same key the UI store uses.
+    user: null,
+    route: "/map",
+    out: "map-view-dark.png",
+    waitMs: 6000,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: true }, version: 0 }));
+      return 'dark';
+    })()`,
+  },
+  {
     user: "tanvir.islam",
     route: "/dashboard",
     click: "fraud",
@@ -292,6 +304,9 @@ async function main() {
         localStorage.removeItem('rentora_refresh');
         return 'cleared';
       })()`);
+    }
+    if (cap.beforeCapture) {
+      await evaluate(cap.beforeCapture);
     }
     await navigate(`${FRONTEND}${cap.route}`, cap.waitMs ?? 4000);
 

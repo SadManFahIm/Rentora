@@ -11,6 +11,7 @@ import type { StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
   Crosshair,
+  Footprints,
   Landmark as LandmarkIcon,
   List as ListIcon,
   Map as MapIcon,
@@ -28,12 +29,16 @@ import type { Room } from "../../types";
 import {
   avgPrice,
   buildBbox,
+  formatDistance,
+  formatTravelTime,
   landmarksToFeatureCollection,
   markerClassName,
   markerPrice,
+  quantizeBounds,
   roomsToFeatureCollection,
   sortRoomsForList,
   tierColor,
+  travelIsochrones,
   viewSummary,
 } from "../../lib/mapUtils";
 import { cn } from "../../lib/utils";
@@ -107,6 +112,7 @@ export default function Map() {
   const [heatmap, setHeatmap] = useState(false);
   const [clustering, setClustering] = useState(true);
   const [listOpen, setListOpen] = useState(false);
+  const [showTravel, setShowTravel] = useState(false);
   const [activeRoomId, setActiveRoomId] = useState<number | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -167,15 +173,21 @@ export default function Map() {
     );
 
     // Pan/zoom end -> update the bbox the room list is filtered by.
+    // Quantized outward to ~100 m so micro-pans between two positions that
+    // are effectively the same viewport hit the React Query cache instead of
+    // firing a fresh refetch (the bbox cache), while never shrinking below
+    // the visible area (edge rooms can't be dropped from results).
     const syncViewbox = () => {
       const b = map.getBounds();
       setViewbox(
-        buildBbox({
-          west: b.getWest(),
-          south: b.getSouth(),
-          east: b.getEast(),
-          north: b.getNorth(),
-        })
+        buildBbox(
+          quantizeBounds({
+            west: b.getWest(),
+            south: b.getSouth(),
+            east: b.getEast(),
+            north: b.getNorth(),
+          })
+        )
       );
     };
 
@@ -478,12 +490,17 @@ export default function Map() {
       el.setAttribute("data-room-id", String(room.id));
       el.innerHTML = markerPrice(room.price);
 
+      const distanceLine =
+        room.distanceKm != null
+          ? `<div class="map-popup__dist">📍 ${formatDistance(room.distanceKm)} away · ${formatTravelTime(room.distanceKm)}</div>`
+          : "";
       const popup = new maplibregl.Popup({ offset: 22, closeButton: false, maxWidth: "260px" })
         .setHTML(`
         <div class="map-popup">
           <div class="map-popup__price">৳${room.price.toLocaleString()}<span>/mo</span></div>
           <div class="map-popup__name">${esc(room.name)}</div>
           <div class="map-popup__meta">${esc(room.area)} · ${esc(room.type)} · ★ ${room.rating} (${room.reviews})</div>
+          ${distanceLine}
           <div class="map-popup__cta">View listing →</div>
         </div>
       `);
@@ -560,6 +577,65 @@ export default function Map() {
       // no-op during rapid state changes
     }
   }, [radiusCenter, radiusKm, mapReady]);
+
+  // ---- travel-time overlay -------------------------------------------------
+  // Walking isochrone bands (10/20/30 min) around the radius-search centre,
+  // so tenants see how far they can get on foot — useful when comparing
+  // "how close to the university/office" a listing really is. Works in both
+  // light and dark themes (semi-transparent fills + stroked rims).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const id = "travel-bands";
+    const bandLayerIds = [0, 1, 2].map((i) => `${id}-${i}`);
+    const removeAll = () => {
+      bandLayerIds.forEach((l) => {
+        if (map.getLayer(l)) map.removeLayer(l);
+      });
+      if (map.getSource(id)) map.removeSource(id);
+    };
+    try {
+      const active = showTravel && radiusCenter;
+      if (active) {
+        const bands = travelIsochrones(radiusCenter);
+        if (!map.getSource(id)) {
+          map.addSource(id, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+          // Insert below the room markers/cluster layers so the translucent
+          // bands tint the basemap, not the pins on top of it.
+          const beforeId = map.getLayer("rooms-clusters-layer")
+            ? "rooms-clusters-layer"
+            : undefined;
+          bands.forEach((band, i) => {
+            map.addLayer(
+              {
+                id: `${id}-${i}`,
+                type: "fill",
+                source: id,
+                filter: ["==", ["get", "band"], i],
+                paint: {
+                  "fill-color": band.color,
+                  "fill-opacity": 0.1,
+                  "fill-outline-color": band.color,
+                },
+              },
+              beforeId
+            );
+          });
+        }
+        (map.getSource(id) as maplibregl.GeoJSONSource).setData({
+          type: "FeatureCollection",
+          features: bands.map((band, i) => ({
+            ...band.feature,
+            properties: { band: i },
+          })),
+        });
+      } else if (map.getLayer(`${id}-0`)) {
+        removeAll();
+      }
+    } catch {
+      // no-op during rapid state changes
+    }
+  }, [showTravel, radiusCenter, mapReady]);
 
   const counts = useMemo(() => {
     const total = rooms.length;
@@ -646,6 +722,18 @@ export default function Map() {
               size="sm"
               className={cn(
                 "gap-1.5 rounded-lg",
+                showTravel && "bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300"
+              )}
+              disabled={!radiusCenter}
+              onClick={() => setShowTravel((t) => !t)}
+            >
+              <Footprints className="size-4" /> Travel
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "gap-1.5 rounded-lg",
                 listOpen && "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
               )}
               onClick={() => setListOpen((o) => !o)}
@@ -666,6 +754,20 @@ export default function Map() {
                 <span>Click the map to search near a point</span>
               )}
             </div>
+            {showTravel && radiusCenter && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-gray-600 dark:text-gray-400">
+                <span className="font-semibold">Walking:</span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block size-2 rounded-full bg-green-500" /> 10 min
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block size-2 rounded-full bg-amber-500" /> 20 min
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block size-2 rounded-full bg-red-500" /> 30 min
+                </span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <input
                 type="range"
@@ -851,9 +953,18 @@ function MapSidebar({ rooms, loading, activeId, onSelect, onClose }: MapSidebarP
                 <div className="truncate text-sm font-semibold text-foreground">{room.name}</div>
                 <div className="truncate text-xs text-gray-500 dark:text-gray-400">
                   {room.area} · {room.type} · ★ {room.rating} ({room.reviews})
+                  {room.distanceKm != null && (
+                    <>
+                      {" "}
+                      ·{" "}
+                      <span className="text-teal-600 dark:text-teal-400">
+                        {formatDistance(room.distanceKm)} · {formatTravelTime(room.distanceKm)}
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
-              <div className="shrink-0 text-sm font-bold text-orange-600">
+              <div className="shrink-0 text-right text-sm font-bold text-orange-600">
                 ৳{room.price.toLocaleString()}
               </div>
             </button>
