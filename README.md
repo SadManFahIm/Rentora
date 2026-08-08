@@ -7,6 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
+[![Tests](<https://img.shields.io/badge/tests-268%20(136%20BE%20%2B%20132%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Tests](<https://img.shields.io/badge/tests-278%20(137%20BE%20%2B%20141%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
@@ -86,6 +87,7 @@
 **Engineering**
 
 - **Coverage history per branch** — every PR and main push appends its own `history-<branch>.csv` + SVG chart to the `coverage-history` branch (viewable `index.html` linking all branches)
+- 268 automated tests (136 backend + 132 frontend) · coverage gates (BE ≥50%, FE ≥55%)
 - 278 automated tests (137 backend + 141 frontend) · coverage gates (BE ≥50%, FE ≥55%)
 - Ruff + ESLint + Prettier with husky/lint-staged pre-commit hooks
 - GitHub Actions CI (backend, frontend, lint, coverage-summary PR comment, per-branch coverage history)
