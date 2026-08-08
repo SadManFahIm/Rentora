@@ -25,6 +25,9 @@ __all__ = [
     "_mask_email",
     "_sha256",
     "create_challenge",
+    "delete_recovery_codes",
+    "generate_recovery_codes",
+    "redeem_recovery_code",
     "resend_code",
     "verify_code",
 ]
@@ -77,24 +80,26 @@ def _deliver_code(user, code: str) -> None:
     )
 
 
-def create_challenge(user) -> OTPChallenge:
+def create_challenge(user, purpose: str = OTPChallenge.Purpose.LOGIN) -> OTPChallenge:
     """Close stale challenges and mint a fresh one for ``user``.
 
-    Returns the challenge; the caller is responsible for reading the plain
-    code from ``challenge.code`` — it is exposed only at creation time (the
-    DB row stores the hash). See ``get_pending_code`` for that.
+    ``purpose`` distinguishes login challenges from the email-ownership
+    check used when *enabling* 2FA. Returns the challenge; the caller is
+    responsible for reading the plain code from ``challenge.code`` — it is
+    exposed only at creation time (the DB row stores the hash).
     """
     # A previously-issued challenge must not remain usable once the user
     # signs in again — otherwise an old leaked challenge could replay.
-    OTPChallenge.objects.filter(user=user, status=OTPChallenge.Status.PENDING).update(
-        status=OTPChallenge.Status.EXPIRED
-    )
+    OTPChallenge.objects.filter(
+        user=user, purpose=purpose, status=OTPChallenge.Status.PENDING
+    ).update(status=OTPChallenge.Status.EXPIRED)
 
     challenge_token = secrets.token_urlsafe(32)
     code = _generate_code()
     now = timezone.now()
     challenge = OTPChallenge.objects.create(
         user=user,
+        purpose=purpose,
         challenge_token_hash=_sha256(challenge_token),
         code_hash=_sha256(code),
         expires_at=now
@@ -141,6 +146,63 @@ def verify_code(challenge: OTPChallenge, code: str) -> tuple[bool, str]:
     challenge.save(update_fields=["attempts"])
     remaining = max_attempts - challenge.attempts
     return False, f"Incorrect code. {remaining} attempt(s) remaining."
+
+
+# ============================================================
+# Recovery codes (2FA backup)
+# ============================================================
+
+RECOVERY_CODE_COUNT = 10
+RECOVERY_CODE_GROUPS = 3
+RECOVERY_CODE_GROUP_LEN = 4
+
+
+def _format_recovery(code: str) -> str:
+    """``AbCdEfGh1234`` → ``AbCd-EfGh-1234`` (uppercased)."""
+    code = code.upper()
+    return "-".join(
+        code[i : i + RECOVERY_CODE_GROUP_LEN] for i in range(0, len(code), RECOVERY_CODE_GROUP_LEN)
+    )
+
+
+def generate_recovery_codes(user) -> list[str]:
+    """Mint a fresh batch of one-time backup codes for ``user``.
+
+    Returns the plaintext codes (shown to the user exactly once). Only their
+    SHA-256 hashes are persisted; any previous batch is replaced.
+    """
+    from .models import RecoveryCode
+
+    RecoveryCode.objects.filter(user=user).delete()
+    codes: list[str] = []
+    for _ in range(RECOVERY_CODE_COUNT):
+        raw = secrets.token_urlsafe(RECOVERY_CODE_GROUP_LEN)[:12]
+        plain = _format_recovery(raw)
+        RecoveryCode.objects.create(user=user, code_hash=_sha256(plain))
+        codes.append(plain)
+    return codes
+
+
+def redeem_recovery_code(user, code: str) -> bool:
+    """Mark ``code`` used if it belongs to ``user`` and is still unused."""
+    from .models import RecoveryCode
+
+    normalized = code.strip().upper()
+    matches = RecoveryCode.objects.filter(user=user, code_hash=_sha256(normalized))
+    if not matches.exists():
+        return False
+    # Single-use: claim atomically via used_at (a second concurrent request
+    # will find it used).
+    claimed = matches.filter(used_at__isnull=True).update(used_at=timezone.now())
+    return claimed == 1
+
+
+def delete_recovery_codes(user) -> int:
+    """Remove every recovery code for ``user`` (called on 2FA disable)."""
+    from .models import RecoveryCode
+
+    deleted, _ = RecoveryCode.objects.filter(user=user).delete()
+    return deleted
 
 
 def resend_code(challenge: OTPChallenge) -> tuple[bool, str]:

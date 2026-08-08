@@ -13,8 +13,8 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from .models import OTPChallenge
-from .services import OTP_MAX_ATTEMPTS
+from .models import OTPChallenge, RecoveryCode
+from .services import OTP_MAX_ATTEMPTS, generate_recovery_codes
 
 User = get_user_model()
 
@@ -22,6 +22,7 @@ LOGIN_URL = "/api/v1/auth/login/"
 VERIFY_URL = "/api/v1/auth/otp/verify/"
 RESEND_URL = "/api/v1/auth/otp/resend/"
 TOGGLE_URL = "/api/v1/auth/otp/toggle/"
+CONFIRM_ENABLE_URL = "/api/v1/auth/otp/confirm-enable/"
 
 # Raised auth throttle (10/hour per IP is the default) so the suite is
 # deterministic; keep the envelope handler so error shapes match prod.
@@ -150,22 +151,66 @@ class OTPFlowTests(APITestCase):
         # The fresh code verifies; the old one no longer does.
         self.assertEqual(self._verify(challenge, new_code).status_code, status.HTTP_200_OK)
 
+    # ---- Enabling is now two-step: password → emailed code → recovery codes ----
+
     @override_settings(REST_FRAMEWORK=REST_OVERRIDE)
-    def test_toggle_requires_current_password_to_enable(self):
+    def test_toggle_requires_current_password_before_any_code_is_sent(self):
         self.client.force_authenticate(user=self.user)
 
         res = self.client.post(TOGGLE_URL, {"enable": True, "password": "wrong"}, format="json")
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        # Nothing was emailed and 2FA stayed off.
+        self.assertEqual(len(self.delivered_codes), 0)
         self.assertFalse(User.objects.get(pk=self.user.pk).otp_enabled)
+
+    @override_settings(REST_FRAMEWORK=REST_OVERRIDE)
+    def test_toggle_sends_email_code_but_does_not_enable_yet(self):
+        self.client.force_authenticate(user=self.user)
 
         res = self.client.post(TOGGLE_URL, {"enable": True, "password": "demo12345"}, format="json")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertTrue(res.data["otp_enabled"])
-        self.assertTrue(User.objects.get(pk=self.user.pk).otp_enabled)
+        # Still OFF until the emailed code is confirmed — this is what makes
+        # it impossible to lock the account behind an unreachable inbox.
+        self.assertFalse(res.data["otp_enabled"])
+        self.assertTrue(res.data["pending_enable"])
+        self.assertTrue(res.data["challenge"])
+        self.assertEqual(res.data["destination_masked"], "o***@rentora.com")
+        self.assertEqual(len(self.delivered_codes), 1)
+        self.assertFalse(User.objects.get(pk=self.user.pk).otp_enabled)
 
-        # Disabling requires no password (it only weakens security).
-        res = self.client.post(TOGGLE_URL, {"enable": False}, format="json")
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
+    @override_settings(REST_FRAMEWORK=REST_OVERRIDE)
+    def test_confirm_enable_verifies_email_then_mints_recovery_codes(self):
+        self.client.force_authenticate(user=self.user)
+
+        toggle = self.client.post(
+            TOGGLE_URL, {"enable": True, "password": "demo12345"}, format="json"
+        )
+        challenge = toggle.data["challenge"]
+        code = self.delivered_codes[-1]
+
+        confirm = self.client.post(
+            CONFIRM_ENABLE_URL, {"challenge": challenge, "code": code}, format="json"
+        )
+        self.assertEqual(confirm.status_code, status.HTTP_200_OK)
+        self.assertTrue(confirm.data["otp_enabled"])
+        self.assertTrue(User.objects.get(pk=self.user.pk).otp_enabled)
+        # 10 one-time recovery codes are minted and returned exactly once.
+        self.assertEqual(len(confirm.data["recovery_codes"]), 10)
+        self.assertEqual(RecoveryCode.objects.filter(user=self.user).count(), 10)
+
+    @override_settings(REST_FRAMEWORK=REST_OVERRIDE)
+    def test_confirm_enable_rejects_wrong_code(self):
+        self.client.force_authenticate(user=self.user)
+        toggle = self.client.post(
+            TOGGLE_URL, {"enable": True, "password": "demo12345"}, format="json"
+        )
+
+        res = self.client.post(
+            CONFIRM_ENABLE_URL,
+            {"challenge": toggle.data["challenge"], "code": "000000"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(User.objects.get(pk=self.user.pk).otp_enabled)
 
     @override_settings(REST_FRAMEWORK=REST_OVERRIDE)
@@ -177,6 +222,59 @@ class OTPFlowTests(APITestCase):
         res = self.client.post(TOGGLE_URL, {"enable": True, "password": "demo12345"}, format="json")
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(User.objects.get(pk=self.user.pk).otp_enabled)
+
+    # ---- Recovery codes ----
+
+    @override_settings(REST_FRAMEWORK=REST_OVERRIDE)
+    def test_recovery_code_logs_in_at_the_otp_step(self):
+        self._enable()
+        codes = generate_recovery_codes(self.user)
+        challenge = self._login().data["challenge"]
+
+        res = self.client.post(
+            VERIFY_URL,
+            {"challenge": challenge, "recovery_code": codes[0]},
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn("access", res.data)
+        # Single-use: the same code must not work again.
+        used = RecoveryCode.objects.filter(user=self.user, used_at__isnull=False).count()
+        self.assertEqual(used, 1)
+
+    @override_settings(REST_FRAMEWORK=REST_OVERRIDE)
+    def test_recovery_code_is_rejected_when_used_twice(self):
+        self._enable()
+        codes = generate_recovery_codes(self.user)
+        challenge = self._login().data["challenge"]
+
+        self.assertEqual(
+            self.client.post(
+                VERIFY_URL,
+                {"challenge": challenge, "recovery_code": codes[0]},
+                format="json",
+            ).status_code,
+            status.HTTP_200_OK,
+        )
+        challenge2 = self._login().data["challenge"]
+        res = self.client.post(
+            VERIFY_URL,
+            {"challenge": challenge2, "recovery_code": codes[0]},
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @override_settings(REST_FRAMEWORK=REST_OVERRIDE)
+    def test_recovery_codes_are_deleted_when_2fa_disabled(self):
+        self._enable()
+        generate_recovery_codes(self.user)
+        self.assertEqual(RecoveryCode.objects.filter(user=self.user).count(), 10)
+
+        self.client.force_authenticate(user=self.user)
+        res = self.client.post(TOGGLE_URL, {"enable": False}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertFalse(User.objects.get(pk=self.user.pk).otp_enabled)
+        self.assertEqual(RecoveryCode.objects.filter(user=self.user).count(), 0)
 
     @override_settings(REST_FRAMEWORK=REST_OVERRIDE)
     def test_stale_challenge_is_invalidated_on_new_login(self):

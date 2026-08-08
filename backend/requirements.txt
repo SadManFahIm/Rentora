@@ -63,3 +63,4 @@ webencodings==0.5.1
 zope.interface==8.5
 ruff==0.16.1
 coverage==7.15.3
+webauthn>=2.2

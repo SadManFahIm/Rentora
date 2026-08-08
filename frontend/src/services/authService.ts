@@ -52,11 +52,14 @@ export const authService = {
     return { user: mapUser(data.user), access: data.access, refresh: data.refresh };
   },
 
-  /** POST /auth/otp/verify/ — exchange (challenge, code) for JWTs. */
-  async verifyOtp(challenge: string, code: string): Promise<User> {
+  /**
+   * POST /auth/otp/verify/ — exchange (challenge, code) for JWTs.
+   * Pass ``recoveryCode`` instead of ``code`` to use a backup code.
+   */
+  async verifyOtp(challenge: string, code: string, recoveryCode = ""): Promise<User> {
     const { data } = await api.post<AuthApiResponse>("/auth/otp/verify/", {
       challenge,
-      code,
+      ...(recoveryCode ? { recovery_code: recoveryCode } : { code }),
     });
     setTokens(data.access, data.refresh);
     return mapUser(data.user);
@@ -67,13 +70,92 @@ export const authService = {
     await api.post("/auth/otp/resend/", { challenge });
   },
 
-  /** POST /auth/otp/toggle/ — enable (needs current password) or disable 2FA. */
-  async toggle2fa(enable: boolean, password = ""): Promise<{ otpEnabled: boolean }> {
-    const { data } = await api.post<{ otp_enabled: boolean }>("/auth/otp/toggle/", {
-      enable,
-      password,
-    });
-    return { otpEnabled: data.otp_enabled };
+  /**
+   * POST /auth/otp/toggle/ — disable 2FA, or begin ENABLING it.
+   * Enabling is two-step: this returns a pending email challenge; finish it
+   * with confirmEnable2fa().
+   */
+  async toggle2fa(
+    enable: boolean,
+    password = ""
+  ): Promise<{
+    otpEnabled: boolean;
+    pendingEnable?: boolean;
+    challenge?: string;
+    destinationMasked?: string;
+  }> {
+    const { data } = await api.post<{
+      otp_enabled: boolean;
+      pending_enable?: boolean;
+      challenge?: string;
+      destination_masked?: string;
+    }>("/auth/otp/toggle/", { enable, password });
+    return {
+      otpEnabled: data.otp_enabled,
+      pendingEnable: data.pending_enable,
+      challenge: data.challenge,
+      destinationMasked: data.destination_masked,
+    };
+  },
+
+  /** POST /auth/otp/confirm-enable/ — verify the emailed code, get recovery codes. */
+  async confirmEnable2fa(
+    challenge: string,
+    code: string
+  ): Promise<{ otpEnabled: boolean; recoveryCodes: string[] }> {
+    const { data } = await api.post<{ otp_enabled: boolean; recovery_codes: string[] }>(
+      "/auth/otp/confirm-enable/",
+      { challenge, code }
+    );
+    return { otpEnabled: data.otp_enabled, recoveryCodes: data.recovery_codes };
+  },
+
+  // ---- Passkeys (WebAuthn / FIDO2) ----
+
+  /** POST /auth/passkey/register/begin/ → options for the browser ceremony. */
+  async passkeyRegisterBegin(): Promise<Record<string, unknown>> {
+    const { data } = await api.post("/auth/passkey/register/begin/");
+    return data;
+  },
+
+  /** POST /auth/passkey/register/complete/ → store the new credential. */
+  async passkeyRegisterComplete(
+    response: Record<string, unknown>,
+    name = ""
+  ): Promise<{ verified: boolean; credentialId: string }> {
+    const { data } = await api.post<{ verified: boolean; credential_id: string }>(
+      "/auth/passkey/register/complete/",
+      { response, name }
+    );
+    return { verified: data.verified, credentialId: data.credential_id };
+  },
+
+  /** POST /auth/passkey/login/begin/ → options + challenge_id. */
+  async passkeyLoginBegin(): Promise<{ challenge_id: string } & Record<string, unknown>> {
+    const { data } = await api.post("/auth/passkey/login/begin/");
+    return data;
+  },
+
+  /** POST /auth/passkey/login/complete/ → verified → JWTs (or pending OTP). */
+  async passkeyLoginComplete(
+    challengeId: string,
+    response: Record<string, unknown>
+  ): Promise<LoginResult> {
+    const { data } = await api.post<AuthApiResponse | OtpPendingApiResponse>(
+      "/auth/passkey/login/complete/",
+      { challenge_id: challengeId, response }
+    );
+    if ("otp_required" in data) {
+      return {
+        otpRequired: true,
+        challenge: data.challenge,
+        destinationMasked: data.destination_masked,
+        expiresIn: data.expires_in,
+        user: mapUser(data.user),
+      };
+    }
+    setTokens(data.access, data.refresh);
+    return { user: mapUser(data.user), access: data.access, refresh: data.refresh };
   },
 
   /** POST /auth/register/ → persist tokens, return the mapped user. */
