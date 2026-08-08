@@ -196,14 +196,20 @@ export interface GeocodeSuggestion {
   lng: number;
 }
 
-/** Aggregate room counts from GET /rooms/summary/ (map badge). */
+/** Aggregate room counts from GET /rooms/summary/ (map badge + area chips). */
 export interface MapSummary {
   total: number;
   available: number;
   avg_price: number | null;
   min_price: number | null;
   max_price: number | null;
-  by_area: { area: string; count: number }[];
+  by_area: {
+    area: string;
+    count: number;
+    /** Fly-to point for the area chip, when the gazetteer knows the area. */
+    lat?: number;
+    lng?: number;
+  }[];
 }
 
 // ---- API payloads ----

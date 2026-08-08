@@ -262,12 +262,23 @@ class RoomSummaryAPITests(APITestCase):
         self.assertEqual(res.data["min_price"], 7000.0)
         self.assertEqual(res.data["max_price"], 11000.0)
 
+    def test_summary_by_area_includes_centers_for_known_areas(self):
+        res = self.client.get("/api/v1/rooms/summary/")
+        row = next(r for r in res.data["by_area"] if r["area"] == "Dhanmondi")
+        self.assertEqual(row["count"], 1)
+        # The gazetteer knows Dhanmondi's centre, so the chip can fly there.
+        self.assertIn("lat", row)
+        self.assertIn("lng", row)
+        self.assertGreater(row["lat"], 23.7)
+        self.assertLess(row["lat"], 23.8)
+
     def test_summary_respects_bbox(self):
         # A tight box around Mirpur excludes the Dhanmondi room.
         res = self.client.get("/api/v1/rooms/summary/?bbox=90.36,23.80,90.37,23.82")
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.data["total"], 1)
-        self.assertIn("Mirpur", {row["area"] for row in res.data["by_area"]})
+        # The Mirpur room is unavailable, so per-area chips exclude it.
+        self.assertEqual(res.data["by_area"], [])
 
     def test_summary_respects_area_filter(self):
         res = self.client.get("/api/v1/rooms/summary/?area=Dhanmondi")
@@ -277,7 +288,8 @@ class RoomSummaryAPITests(APITestCase):
     def test_summary_respects_radius(self):
         res = self.client.get("/api/v1/rooms/summary/?near_landmark=mrt_mirpur_10&radius_km=3")
         self.assertEqual(res.data["total"], 1)
-        self.assertEqual(res.data["by_area"][0]["area"], "Mirpur")
+        # Mirpur room is unavailable — chips only surface bookable areas.
+        self.assertEqual(res.data["by_area"], [])
 
     def test_summary_invalid_bbox_returns_400(self):
         res = self.client.get("/api/v1/rooms/summary/?bbox=bad")

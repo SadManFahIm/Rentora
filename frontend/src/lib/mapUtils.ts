@@ -178,6 +178,77 @@ export function viewSummary(rooms: Room[]): string {
 }
 
 // ============================================================
+// SHAREABLE MAP VIEW STATE (Phase 7 — URL-encoded map view)
+// ============================================================
+
+/** View state encoded in the map URL so links share the exact map view. */
+export interface MapViewParams {
+  /** [lat, lng] from `?center=` (comma-separated). */
+  center: [number, number] | null;
+  /** Zoom level from `?zoom=`, clamped to MapLibre's sane range. */
+  zoom: number | null;
+  /** Radius search distance in km from `?r=`. */
+  radiusKm: number | null;
+  /** Radius-search label from `?q=` (the street/area/station name). */
+  query: string | null;
+}
+
+/**
+ * Parse `?center=lat,lng&zoom=z&r=km&q=label` from a search string into a
+ * typed view. Invalid/missing values become `null` so callers can fall back
+ * to their defaults. `center` is returned as [lat, lng] (human order) even
+ * though MapLibre consumes [lng, lat].
+ */
+export function parseMapViewUrl(search: string): MapViewParams {
+  const params = new URLSearchParams(search);
+  let center: [number, number] | null = null;
+  const centerRaw = params.get("center");
+  if (centerRaw) {
+    const [lat, lng] = centerRaw.split(",").map((v) => Number(v));
+    if (
+      Number.isFinite(lat) &&
+      Number.isFinite(lng) &&
+      Math.abs(lat) <= 90 &&
+      Math.abs(lng) <= 180
+    ) {
+      center = [lat, lng];
+    }
+  }
+  const zoom = Number(params.get("zoom"));
+  const radiusKm = Number(params.get("r"));
+  const query = params.get("q");
+  return {
+    center,
+    zoom: Number.isFinite(zoom) && zoom >= 2 && zoom <= 20 ? zoom : null,
+    radiusKm: Number.isFinite(radiusKm) && radiusKm > 0 && radiusKm <= 10 ? radiusKm : null,
+    query: query && query.trim().length > 0 ? query.trim().slice(0, 80) : null,
+  };
+}
+
+/**
+ * Build the shareable `?center=lat,lng&zoom=z&r=km&q=label` search string for
+ * a map view. The mirror of `parseMapViewUrl` — used by the URL-sync effect
+ * AND the Share button so a copied link always equals what the URL bar shows
+ * (and round-trips through `parseMapViewUrl` losslessly).
+ */
+export function buildMapViewUrl(view: {
+  center: { lat: number; lng: number };
+  zoom: number;
+  radiusKm?: number | null;
+  label?: string | null;
+}): string {
+  // encodeURIComponent keeps commas (unlike URLSearchParams' %2C) so the
+  // address stays readable: ?center=23.8103,90.4125&zoom=11.2. parseMapViewUrl
+  // reads both forms fine.
+  const parts = [`center=${view.center.lat.toFixed(4)},${view.center.lng.toFixed(4)}`];
+  parts.push(`zoom=${view.zoom.toFixed(1)}`);
+  if (view.radiusKm != null && view.radiusKm > 0 && view.label) {
+    parts.push(`r=${view.radiusKm}`, `q=${encodeURIComponent(view.label.slice(0, 80))}`);
+  }
+  return `?${parts.join("&")}`;
+}
+
+// ============================================================
 // DISTANCE + TRAVEL-TIME HELPERS (Phase 7 — travel overlay)
 // ============================================================
 
@@ -233,6 +304,9 @@ export function formatDriveTime(distanceKm: number): string {
   return `≈ ${minutes} min drive`;
 }
 
+/** Travel modes the directions deep-link supports (Google Maps travelmode). */
+export type TravelMode = "walking" | "driving" | "transit";
+
 /**
  * Google Maps directions deep-link between two points. Used by the map
  * popup's "Get Directions" action — opens Maps with the route pre-filled so
@@ -241,12 +315,13 @@ export function formatDriveTime(distanceKm: number): string {
  */
 export function directionsUrl(
   destination: { lat: number; lng: number },
-  origin?: { lat: number; lng: number } | null
+  origin?: { lat: number; lng: number } | null,
+  mode: TravelMode = "walking"
 ): string {
   const point = (p: { lat: number; lng: number }) => `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`;
   const dest = `destination=${point(destination)}`;
   const orig = origin ? `&origin=${point(origin)}` : "";
-  return `https://www.google.com/maps/dir/?api=1${orig}&${dest}&travelmode=walking`;
+  return `https://www.google.com/maps/dir/?api=1${orig}&${dest}&travelmode=${mode}`;
 }
 
 /**
