@@ -52,6 +52,17 @@ export interface Room {
   /** Distance (km) from a geo query's reference point; null unless the request supplied one. */
   distanceKm?: number | null;
 }
+export interface TierInfo {
+  tier: ListingTier;
+  label: string;
+  price: number;
+  benefits: string[];
+}
+export interface TierCatalog {
+  tiers: TierInfo[];
+  durationDays: number;
+  currency: string;
+}
 
 export type UserRole = "tenant" | "landlord" | "admin";
 
