@@ -46,20 +46,36 @@ const DHAKA_ZOOM = 11.2;
 const TILE_LIGHT = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const TILE_DARK = "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png";
 
-const MAP_STYLE = (tiles: string): StyleSpecification => ({
+// Dimmed OSM raster fallback for dark mode. CARTO's CDN is occasionally
+// unreachable (some ISPs/regions), which would leave a black, unreadable
+// map — so when dark tiles fail we re-render the map on plain OSM tiles
+// darkened with raster paint properties (labels stay visible).
+const MAP_STYLE = (tiles: string, dimForDark: boolean): StyleSpecification => ({
   version: 8,
   sources: {
     osm: {
       type: "raster",
       tiles: [tiles],
       tileSize: 256,
-      // CARTO dark tiles (used in dark mode) are OSM-derived; their own
-      // tiles carry the attribution banner, so crediting OSM suffices.
       attribution: "© OpenStreetMap contributors",
       maxzoom: 19,
     },
   },
-  layers: [{ id: "osm", type: "raster", source: "osm" }],
+  layers: [
+    {
+      id: "osm",
+      type: "raster",
+      source: "osm",
+      paint: dimForDark
+        ? {
+            "raster-brightness-min": 0.02,
+            "raster-brightness-max": 0.42,
+            "raster-saturation": -0.85,
+            "raster-contrast": 0.25,
+          }
+        : {},
+    },
+  ],
 });
 
 /** Debounce map-move refetches so panning doesn't hammer the API. */
@@ -94,6 +110,9 @@ export default function Map() {
   const [activeRoomId, setActiveRoomId] = useState<number | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
+  // When dark tiles (CARTO CDN) fail to load, fall back to dimmed OSM tiles
+  // so the map stays readable instead of going black.
+  const [darkTileFallback, setDarkTileFallback] = useState(false);
 
   // ---- radius search state --------------------------------------------
   const [radiusCenter, setRadiusCenter] = useState<{
@@ -133,9 +152,10 @@ export default function Map() {
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
+    const tiles = darkMode ? (darkTileFallback ? TILE_LIGHT : TILE_DARK) : TILE_LIGHT;
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: MAP_STYLE(darkMode ? TILE_DARK : TILE_LIGHT),
+      style: MAP_STYLE(tiles, darkMode && darkTileFallback),
       center: DHAKA_CENTER,
       zoom: DHAKA_ZOOM,
       attributionControl: { compact: true },
@@ -174,9 +194,18 @@ export default function Map() {
       }
     });
 
-    map.on("error", () => {
-      // Tiles can fail offline; don't let the whole page crash.
-      setMapError("Map tiles could not be loaded — check your connection.");
+    map.on("error", (e) => {
+      // Raster tiles sometimes 404 for a single tile (benign). Only treat
+      // real fetch/network failures as a problem.
+      const msg = (e?.error as Error | undefined)?.message ?? "";
+      if (/Failed to fetch|NetworkError|timeout|ERR_/i.test(msg)) {
+        if (darkMode && !darkTileFallback) {
+          // CARTO dark CDN unreachable — re-render on dimmed OSM tiles.
+          setDarkTileFallback(true);
+        } else {
+          setMapError("Map tiles could not be loaded — check your connection.");
+        }
+      }
     });
 
     return () => {
@@ -190,7 +219,7 @@ export default function Map() {
       // would render with no markers until the next refetch.
       setMapReady(false);
     };
-  }, [darkMode]);
+  }, [darkMode, darkTileFallback]);
 
   // ---- GeoJSON layers (landmarks + heatmap) ----------------------------
   useEffect(() => {
