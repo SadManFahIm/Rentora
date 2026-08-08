@@ -5,6 +5,21 @@
 export type RoomType = "Single" | "Shared" | "Studio";
 export type GenderPref = "Any" | "Male" | "Female";
 
+export type LandmarkKind = "university" | "metro";
+
+/** A single nearby landmark with its distance from a room (Phase 7 geo). */
+export interface LandmarkProximity {
+  key: string;
+  name: string;
+  kind: LandmarkKind;
+  distanceKm: number;
+}
+
+/** Nearest university/metro to a room, as returned by the backend. */
+export interface RoomProximity {
+  nearestUniversity: LandmarkProximity | null;
+  nearestMetro: LandmarkProximity | null;
+}
 /** Paid listing tier (monetization): free is the default; featured/premium
  * are unlocked via a promotion payment and expire. */
 export type ListingTier = "free" | "featured" | "premium";
@@ -32,23 +47,17 @@ export interface Room {
   ownerId: number | null;
   ownerAvatar: string;
   verified: boolean;
-  /** Distance (km) from the query's reference point — set on radius/map queries. */
+  /** Nearest university/metro (present when the API includes it). */
+  proximity?: RoomProximity;
+  /** Distance (km) from a geo query's reference point; null unless the request supplied one. */
   distanceKm?: number | null;
-  /** Nearest university + metro to this listing, each with distance in km. */
-  proximity?: {
-    nearestUniversity: { key: string; name: string; distanceKm: number } | null;
-    nearestMetro: { key: string; name: string; distanceKm: number } | null;
-  } | null;
 }
-
-/** Public tier catalog from GET /rooms/tier-catalog/. */
 export interface TierInfo {
   tier: ListingTier;
   label: string;
   price: number;
   benefits: string[];
 }
-
 export interface TierCatalog {
   tiers: TierInfo[];
   durationDays: number;

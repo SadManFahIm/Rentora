@@ -11,7 +11,7 @@ import type {
 } from "../types";
 
 // ============================================================
-// ROOM SERVICE — real /rooms/ endpoints
+// ROOM SERVICE ΓÇö real /rooms/ endpoints
 // ============================================================
 
 /** Translate UI filters into the backend's query parameters. */
@@ -28,7 +28,7 @@ function buildParams(filters: RoomFilters): Record<string, string> {
   if (filters.available === "yes") params.is_available = "true";
   if (filters.owner != null) params.owner = String(filters.owner);
 
-  // Geo / map queries (Phase 7) — the backend supports bbox and a reference
+  // Geo / map queries (Phase 7) ΓÇö the backend supports bbox and a reference
   // point (near_lat/near_lng or near_landmark) with radius_km.
   if (filters.bbox) params.bbox = filters.bbox;
   if (filters.nearLat != null) params.near_lat = String(filters.nearLat);
@@ -71,7 +71,7 @@ export const roomService = {
     return rooms;
   },
 
-  /** GET /rooms/landmarks/ — public map landmark layers (universities + metro). */
+  /** GET /rooms/landmarks/ ΓÇö public map landmark layers (universities + metro). */
   async getLandmarks(): Promise<Landmark[]> {
     const { data } =
       await api.get<{ key: string; name: string; kind: string; lat: number; lng: number }[]>(
@@ -92,7 +92,7 @@ export const roomService = {
     return mapRoom(data);
   },
 
-  /** GET /rooms/geocode/ — street/area/landmark autocomplete for the map search box. */
+  /** GET /rooms/geocode/ ΓÇö street/area/landmark autocomplete for the map search box. */
   async geocode(query: string): Promise<GeocodeSuggestion[]> {
     const { data } = await api.get<
       { key: string; label: string; kind: string; lat: number; lng: number }[]
@@ -107,7 +107,7 @@ export const roomService = {
   },
 
   /**
-   * GET /rooms/summary/ — aggregate room counts for the current map viewport
+   * GET /rooms/summary/ ΓÇö aggregate room counts for the current map viewport
    * (total/available/price stats), so the map badge doesn't need the full
    * paginated list. Accepts the same geo filters as getRooms.
    */
@@ -118,7 +118,7 @@ export const roomService = {
     return data;
   },
 
-  /** GET /rooms/tier-catalog/ — public paid-tier pricing/benefits. */
+  /** GET /rooms/tier-catalog/ ΓÇö public paid-tier pricing/benefits. */
   async getTierCatalog(): Promise<TierCatalog> {
     const { data } = await api.get<{
       tiers: {
@@ -142,7 +142,7 @@ export const roomService = {
     };
   },
 
-  /** POST /rooms/ — create a listing (landlord). */
+  /** POST /rooms/ ΓÇö create a listing (landlord). */
   async createRoom(payload: CreateRoomPayload): Promise<Room> {
     const body = {
       title: payload.name,
