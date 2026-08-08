@@ -38,7 +38,9 @@ import type { GeocodeSuggestion, Room } from "../../types";
 import {
   avgPrice,
   buildBbox,
+  directionsUrl,
   formatDistance,
+  formatDriveTime,
   formatTravelTime,
   haversineKm,
   landmarkToFeature,
@@ -116,6 +118,9 @@ export default function Map() {
   const roomsRef = useRef<Room[]>([]);
   // Guards the once-per-map registration of cluster click/hover handlers.
   const clusterHandlersRef = useRef<maplibregl.Map | null>(null);
+  // The cluster stats popup — closed before opening another / on map move so
+  // a stale "N rooms here" bubble can't linger over changed geometry.
+  const clusterPopupRef = useRef<maplibregl.Popup | null>(null);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [showLandmarks, setShowLandmarks] = useState<Record<MapLayerId, boolean>>({
     universities: true,
@@ -455,6 +460,14 @@ export default function Map() {
             cluster: true,
             clusterMaxZoom: 14,
             clusterRadius: 50,
+            // Roll the member rooms' prices up into each cluster so the label
+            // can show the average rent AND the count — one cheap expression,
+            // no extra /rooms/summary/ call per cluster.
+            clusterProperties: {
+              price_sum: ["+", ["get", "price"]],
+              price_min: ["min", ["get", "price"]],
+              price_max: ["max", ["get", "price"]],
+            },
           });
           map.addLayer({
             id: CLUSTER_LAYER,
@@ -471,7 +484,7 @@ export default function Map() {
                 50,
                 "#c2410c",
               ],
-              "circle-radius": ["step", ["get", "point_count"], 20, 10, 28, 50, 36],
+              "circle-radius": ["step", ["get", "point_count"], 24, 10, 32, 50, 40],
               "circle-opacity": 0.9,
               "circle-stroke-color": "#ffffff",
               "circle-stroke-width": 2,
@@ -483,9 +496,25 @@ export default function Map() {
             source: CLUSTER_SOURCE,
             filter: ["has", "point_count"],
             layout: {
-              "text-field": ["get", "point_count_abbreviated"],
+              // Count on the first line, average rent on the second —
+              // "12 rooms · avg ৳10k" at a glance. Colors chosen to stay
+              // readable on both light and dark basemaps.
+              "text-field": [
+                "format",
+                ["get", "point_count_abbreviated"],
+                { "font-scale": 1.1 },
+                "\n",
+                {},
+                [
+                  "concat",
+                  "৳",
+                  ["to-string", ["round", ["/", ["get", "price_sum"], ["get", "point_count"]]]],
+                ],
+                { "font-scale": 0.8 },
+              ],
               "text-size": 12,
               "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
+              "text-line-height": 1.25,
             },
             paint: { "text-color": "#ffffff" },
           });
@@ -520,22 +549,45 @@ export default function Map() {
         // rooms refetch, so re-registering would stack duplicate listeners.
         // Handlers read live data through roomsRef instead of the closure.
         if (clusterHandlersRef.current !== map) {
-          clusterHandlersRef.current = map;
-
-          // Cluster click -> zoom in on the cluster.
+          clusterHandlersRef.current = map; // Cluster click -> show a quick count/price summary popup, then
+          // zoom in on the cluster (the popup follows the zoom). A stale
+          // popup is closed before a new one opens and on any map movement.
           map.on("click", CLUSTER_LAYER, (e) => {
             const feature = e.features?.[0];
             if (!feature) return;
-            const clusterId = feature.properties?.cluster_id as number;
+            const props = feature.properties ?? {};
+            const count = props.point_count as number;
+            const avg = Math.round((props.price_sum as number) / count);
+            const min = props.price_min as number;
+            const max = props.price_max as number;
+            const coords = (feature.geometry as GeoJSON.Point).coordinates as [number, number];
+            clusterPopupRef.current?.remove();
+            clusterPopupRef.current = new maplibregl.Popup({
+              closeButton: false,
+              closeOnClick: true,
+              maxWidth: "220px",
+            })
+              .setLngLat(coords)
+              .setHTML(
+                `
+                <div class="map-popup">
+                  <div class="map-popup__name">${count} room${count === 1 ? "" : "s"} here</div>
+                  <div class="map-popup__meta">avg ৳${avg.toLocaleString()} · ৳${min.toLocaleString()}–৳${max.toLocaleString()}</div>
+                  <div class="map-popup__cta">Click to zoom in →</div>
+                </div>
+              `
+              )
+              .addTo(map);
+            const clusterId = props.cluster_id as number;
             (map.getSource(CLUSTER_SOURCE) as maplibregl.GeoJSONSource)
               .getClusterExpansionZoom(clusterId)
               .then((zoom) => {
-                map.easeTo({
-                  center: (feature.geometry as GeoJSON.Point).coordinates as [number, number],
-                  zoom: zoom + 1,
-                });
+                map.easeTo({ center: coords, zoom: zoom + 1 });
               });
           });
+
+          // Don't leave the stats bubble floating over a moved/zoomed map.
+          map.on("moveend", () => clusterPopupRef.current?.remove());
 
           // Unclustered point click -> open the room.
           map.on("click", UNCLUSTERED, (e) => {
@@ -579,10 +631,17 @@ export default function Map() {
       el.setAttribute("data-room-id", String(room.id));
       el.innerHTML = markerPrice(room.price);
 
+      // Distance + ETA (walking AND driving) when the query has a reference
+      // point, plus a deep-link that opens Google Maps with the route
+      // pre-filled (origin = the radius-search point when one is active).
       const distanceLine =
         room.distanceKm != null
-          ? `<div class="map-popup__dist">📍 ${formatDistance(room.distanceKm)} away · ${formatTravelTime(room.distanceKm)}</div>`
+          ? `<div class="map-popup__dist">📍 ${formatDistance(room.distanceKm)} away · ${formatTravelTime(room.distanceKm)} · ${formatDriveTime(room.distanceKm)}</div>`
           : "";
+      const directionsLink = `<a class="map-popup__dir" href="${directionsUrl(
+        { lat: room.lat, lng: room.lng },
+        radiusCenter
+      )}" target="_blank" rel="noopener noreferrer">Get Directions →</a>`;
       const popup = new maplibregl.Popup({ offset: 22, closeButton: false, maxWidth: "260px" })
         .setHTML(`
         <div class="map-popup">
@@ -590,6 +649,7 @@ export default function Map() {
           <div class="map-popup__name">${esc(room.name)}</div>
           <div class="map-popup__meta">${esc(room.area)} · ${esc(room.type)} · ★ ${room.rating} (${room.reviews})</div>
           ${distanceLine}
+          ${directionsLink}
           <div class="map-popup__cta">View listing →</div>
         </div>
       `);
@@ -602,7 +662,9 @@ export default function Map() {
       el.addEventListener("click", () => openRoom(room));
       markersRef.current.push(marker);
     });
-  }, [rooms, mapReady, clustering]);
+    // radiusCenter feeds the popup's directions origin, so markers rebuild
+    // when the search point moves (they also refetch rooms then anyway).
+  }, [rooms, mapReady, clustering, radiusCenter]);
 
   // Keep the active room highlighted without re-creating all markers
   // (re-creating on activeRoomId change would detach the open popup).

@@ -20,6 +20,7 @@ from .geo import (
     lat_delta_for_km,
     lng_delta_for_km,
 )
+from .geocoder import nominatim_search
 from .landmarks import ALL_LANDMARKS, get_landmark
 from .models import Room
 from .permissions import IsOwnerOrReadOnly
@@ -385,6 +386,19 @@ class RoomViewSet(viewsets.ModelViewSet):
                         "lng": landmark.lng,
                     }
                 )
+
+        # Gazetteer / landmark miss? Ask OSM Nominatim (Dhaka-bounded,
+        # best-effort) so the search box still answers streets the curated
+        # list doesn't cover. Only on a total miss — for queries the gazetteer
+        # already answers we don't hit the external service at all. Dedupe by
+        # key in case the provider echoes the same place twice.
+        if not suggestions and len(query.strip()) >= 3:
+            seen = {s["key"] for s in suggestions}
+            for hit in nominatim_search(query, limit=8):
+                if hit["key"] not in seen:
+                    suggestions.append(hit)
+                    seen.add(hit["key"])
+
         return Response(suggestions[:8])
 
     @extend_schema(

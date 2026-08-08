@@ -3,7 +3,10 @@ import type { Room } from "../types";
 import {
   avgPrice,
   buildBbox,
+  directionsUrl,
+  drivingMinutes,
   formatDistance,
+  formatDriveTime,
   formatTravelTime,
   haversineKm,
   landmarkToFeature,
@@ -213,6 +216,40 @@ describe("formatDistance", () => {
   it("shows metres under 1 km and km above", () => {
     expect(formatDistance(0.85)).toBe("850 m");
     expect(formatDistance(1.2)).toBe("1.2 km");
+  });
+});
+
+describe("drivingMinutes / formatDriveTime", () => {
+  it("estimates driving time at the conservative urban speed", () => {
+    // 3 km at 18 km/h = 10 min.
+    expect(drivingMinutes(3)).toBe(10);
+    expect(drivingMinutes(0)).toBe(0);
+  });
+
+  it("formats a human drive-time label", () => {
+    expect(formatDriveTime(3)).toBe("≈ 10 min drive");
+    expect(formatDriveTime(0.1)).toBe("< 1 min drive");
+  });
+});
+
+describe("directionsUrl", () => {
+  it("builds a Google Maps walking-route link to the destination", () => {
+    const url = directionsUrl({ lat: 23.746, lng: 90.376 });
+    expect(url).toContain("google.com/maps/dir");
+    expect(url).toContain("destination=23.746000,90.376000");
+    expect(url).toContain("travelmode=walking");
+    expect(url).not.toContain("origin=");
+  });
+
+  it("includes the origin when a search point is active", () => {
+    const url = directionsUrl({ lat: 23.746, lng: 90.376 }, { lat: 23.75, lng: 90.37 });
+    expect(url).toContain("origin=23.750000,90.370000");
+  });
+
+  it("rounds full-precision coordinates to keep the URL short", () => {
+    const url = directionsUrl({ lat: 23.792611111, lng: 90.416722222 });
+    expect(url).toContain("destination=23.792611,90.416722");
+    expect(url).not.toContain(".2222");
   });
 });
 
