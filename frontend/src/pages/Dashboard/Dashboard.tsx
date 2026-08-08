@@ -1,7 +1,15 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, Heart, Loader2, Megaphone, ShieldAlert, ShieldCheck } from "lucide-react";
+import {
+  Download,
+  Heart,
+  Loader2,
+  Megaphone,
+  ShieldAlert,
+  ShieldCheck,
+  KeyRound,
+} from "lucide-react";
 import { useDashboard } from "../../hooks/useDashboard";
 import { useRooms } from "../../hooks/useRooms";
 import { useBookings } from "../../hooks/useBookings";
@@ -24,6 +32,9 @@ import PaymentMethodModal, {
 import { Button } from "../../components/ui/button";
 import { Skeleton } from "../../components/ui/skeleton";
 import { Input } from "../../components/ui/input";
+import { toast } from "sonner";
+import { authService } from "../../services/authService";
+import { getApiErrorMessage } from "../../services/errors";
 import {
   Select,
   SelectContent,
@@ -360,6 +371,10 @@ export default function Dashboard() {
               to premium listings.
             </p>
           </div>
+
+          <div className="mt-6">
+            <TwoFactorCard />
+          </div>
         </>
       )}
 
@@ -563,6 +578,111 @@ export default function Dashboard() {
           void roomId;
         }}
       />
+    </div>
+  );
+}
+
+/** Account security: enable/disable email-OTP two-factor authentication.
+ * Enabling asks for the current password (the backend enforces it too). */
+function TwoFactorCard() {
+  const { user, setUser } = useApp();
+  const [enabling, setEnabling] = useState(false);
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const enabled = user?.otpEnabled === true;
+
+  const enable = async () => {
+    setBusy(true);
+    try {
+      const result = await authService.toggle2fa(true, password);
+      setUser({ ...user!, otpEnabled: result.otpEnabled });
+      setEnabling(false);
+      setPassword("");
+      toast.success("Two-factor authentication enabled.");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Could not enable 2FA. Check your current password."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disable = async () => {
+    setBusy(true);
+    try {
+      const result = await authService.toggle2fa(false);
+      setUser({ ...user!, otpEnabled: result.otpEnabled });
+      toast.success("Two-factor authentication disabled.");
+    } catch {
+      toast.error("Could not disable 2FA right now.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-4 rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-start gap-3">
+        <span
+          className={cn(
+            "inline-flex size-10 shrink-0 items-center justify-center rounded-xl",
+            enabled
+              ? "bg-emerald-500/10 text-emerald-500"
+              : "bg-gray-100 text-gray-500 dark:bg-gray-800"
+          )}
+        >
+          <KeyRound className="size-5" />
+        </span>
+        <div>
+          <h3 className="font-display text-sm font-bold text-foreground">
+            Two-Factor Authentication
+          </h3>
+          <p className="mt-0.5 max-w-md text-sm text-gray-600 dark:text-gray-400">
+            {enabled
+              ? "On — signing in also requires a one-time code emailed to you."
+              : "Off — add an extra security layer: signing in will also require a one-time code emailed to you."}
+          </p>
+          {enabled && (
+            <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-500">
+              <ShieldCheck className="size-3" /> Enabled
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="shrink-0">
+        {enabled ? (
+          <Button variant="outline" size="sm" onClick={disable} disabled={busy}>
+            {busy ? <Loader2 className="size-3.5 animate-spin" /> : "Disable"}
+          </Button>
+        ) : enabling ? (
+          <div className="flex items-center gap-2">
+            <Input
+              type="password"
+              placeholder="Current password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-44"
+              autoComplete="current-password"
+              aria-label="Current password"
+            />
+            <Button size="sm" onClick={enable} disabled={busy || !password}>
+              {busy ? <Loader2 className="size-3.5 animate-spin" /> : "Confirm"}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setEnabling(false)} disabled={busy}>
+              Cancel
+            </Button>
+          </div>
+        ) : (
+          <Button
+            size="sm"
+            className="bg-orange-600 text-white hover:bg-orange-700"
+            onClick={() => setEnabling(true)}
+          >
+            Enable 2FA
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

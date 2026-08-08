@@ -35,7 +35,7 @@ describe("authService.login", () => {
     (api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       data: { access: "a", refresh: "r", user: apiUser },
     });
-    const user = await authService.login({
+    const result = await authService.login({
       email: "rahim.hossain@rentora.com",
       password: "demo12345",
     });
@@ -43,7 +43,10 @@ describe("authService.login", () => {
       email: "rahim.hossain@rentora.com",
       password: "demo12345",
     });
-    expect(user.name).toBe("Rahim Hossain");
+    expect(result).not.toHaveProperty("otpRequired");
+    if (!("otpRequired" in result)) {
+      expect(result.user.name).toBe("Rahim Hossain");
+    }
   });
 
   it("sends the value as username when it has no @ (demo usernames)", async () => {
@@ -61,8 +64,81 @@ describe("authService.login", () => {
     (api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       data: { access: "access-token", refresh: "refresh-token", user: apiUser },
     });
-    await authService.login({ email: "rahim.hossain@rentora.com", password: "demo12345" });
+    const result = await authService.login({
+      email: "rahim.hossain@rentora.com",
+      password: "demo12345",
+    });
     expect(setTokens).toHaveBeenCalledWith("access-token", "refresh-token");
+    expect("otpRequired" in result && result.otpRequired).toBe(false);
+  });
+
+  it("returns a pending OTP challenge and stores no tokens for 2FA accounts", async () => {
+    (api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: {
+        otp_required: true,
+        challenge: "ch-abc",
+        destination_masked: "r***@rentora.com",
+        expires_in: 600,
+        user: apiUser,
+      },
+    });
+    const result = await authService.login({
+      email: "rahim.hossain@rentora.com",
+      password: "demo12345",
+    });
+    expect(setTokens).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      otpRequired: true,
+      challenge: "ch-abc",
+      destinationMasked: "r***@rentora.com",
+      expiresIn: 600,
+    });
+  });
+});
+
+describe("authService OTP two-factor", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("verifyOtp exchanges the code for tokens and returns the user", async () => {
+    (api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: { access: "a", refresh: "r", user: apiUser },
+    });
+    const user = await authService.verifyOtp("ch-abc", "123456");
+    expect(api.post).toHaveBeenCalledWith("/auth/otp/verify/", {
+      challenge: "ch-abc",
+      code: "123456",
+    });
+    expect(setTokens).toHaveBeenCalledWith("a", "r");
+    expect(user.username).toBe("rahim.hossain");
+  });
+
+  it("resendOtp posts the challenge", async () => {
+    (api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ data: {} });
+    await authService.resendOtp("ch-abc");
+    expect(api.post).toHaveBeenCalledWith("/auth/otp/resend/", { challenge: "ch-abc" });
+  });
+
+  it("toggle2fa enables with the current password", async () => {
+    (api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: { otp_enabled: true },
+    });
+    const result = await authService.toggle2fa(true, "demo12345");
+    expect(api.post).toHaveBeenCalledWith("/auth/otp/toggle/", {
+      enable: true,
+      password: "demo12345",
+    });
+    expect(result.otpEnabled).toBe(true);
+  });
+
+  it("toggle2fa disables without a password", async () => {
+    (api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: { otp_enabled: false },
+    });
+    await authService.toggle2fa(false);
+    expect(api.post).toHaveBeenCalledWith("/auth/otp/toggle/", {
+      enable: false,
+      password: "",
+    });
   });
 });
 

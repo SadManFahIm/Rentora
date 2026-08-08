@@ -61,6 +61,14 @@ const CAPTURES = [
     out: "auth-login.png",
     waitMs: 3500,
   },
+  // Email-OTP 2FA step: enable 2FA, sign in through the REAL login form
+  // (token injection would bypass the challenge), screenshot the code step,
+  // then disable 2FA again so the demo accounts stay in their default state.
+  {
+    otpLogin: { username: "rahim.hossain", password: DEMO_PASSWORD },
+    out: "otp-verification.png",
+    waitMs: 4500,
+  },
 ];
 
 // ---- Helpers ----
@@ -87,6 +95,20 @@ function findChrome() {
   throw new Error(
     "Chrome not found — set CHROME_PATH or install Google Chrome."
   );
+}
+
+/** Enable/disable email-OTP 2FA for a user via Django shell. */
+function setUserOtp(username, enabled) {
+  const script = [
+    "from django.contrib.auth import get_user_model;",
+    `u = get_user_model().objects.get(username='${username}');`,
+    `u.otp_enabled = ${enabled ? "True" : "False"};`,
+    "u.save(update_fields=['otp_enabled'])",
+  ].join(" ");
+  execSync(`"${PY}" "${MANAGE_PY}" shell -c "${script}"`, {
+    encoding: "utf8",
+    cwd: path.join(ROOT, "backend"),
+  });
 }
 
 /** Mint a JWT access token for a user via Django shell (bypasses login rate limits). */
@@ -202,7 +224,53 @@ async function main() {
       return 'ok';
     })()`);
 
+  // React controlled inputs need the native value setter + input event.
+  const fillLoginForm = async (username, password) => {
+    await evaluate(`(() => {
+      const setVal = (el, val) => {
+        const proto = Object.getPrototypeOf(el);
+        Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, val);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      };
+      const inputs = [...document.querySelectorAll('input')];
+      const email = inputs.find(i => i.placeholder && i.placeholder.includes('email'));
+      const pw = inputs.find(i => i.type === 'password');
+      if (email) setVal(email, '${username}');
+      if (pw) setVal(pw, '${password}');
+      return 'filled';
+    })()`);
+    await sleep(400);
+    const clicked = await evaluate(`(() => {
+      const btn = [...document.querySelectorAll('button')]
+        .find(b => b.textContent.trim() === 'Sign In');
+      if (btn) { btn.click(); return 'clicked'; }
+      return 'not-found';
+    })()`);
+    if (clicked !== "clicked") console.warn("⚠️  Sign In button not found");
+  };
+
   for (const cap of CAPTURES) {
+    // 2FA OTP step — sign in through the real form.
+    if (cap.otpLogin) {
+      const { username, password } = cap.otpLogin;
+      setUserOtp(username, true);
+      try {
+        await navigate(`${FRONTEND}/`, 2500);
+        await evaluate(`(() => {
+          localStorage.removeItem('rentora_access');
+          localStorage.removeItem('rentora_refresh');
+          return 'cleared';
+        })()`);
+        await navigate(`${FRONTEND}/auth`, cap.waitMs ?? 4000);
+        await fillLoginForm(username, password);
+        await sleep(2500);
+        await shot(cap.out);
+      } finally {
+        setUserOtp(username, false);
+      }
+      continue;
+    }
+
     await navigate(`${FRONTEND}/`, 2500);
     if (cap.user) {
       const token = mintToken(cap.user);

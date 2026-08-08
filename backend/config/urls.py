@@ -13,6 +13,7 @@ from drf_spectacular.views import (
 )
 
 from config.auth_views import ThrottledLoginView, ThrottledRegisterView
+from users import otp_views as users_otp_views
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -36,6 +37,10 @@ urlpatterns = [
         ThrottledRegisterView.as_view(),
         name="rest_register",
     ),
+    # Email-OTP two-factor authentication (see users/otp_views.py).
+    path("api/v1/auth/otp/verify/", users_otp_views.OTPVerifyView.as_view(), name="otp_verify"),
+    path("api/v1/auth/otp/resend/", users_otp_views.OTPResendView.as_view(), name="otp_resend"),
+    path("api/v1/auth/otp/toggle/", users_otp_views.OTPToggleView.as_view(), name="otp_toggle"),
     # dj-rest-auth: logout/, user/ (GET+PUT), token/refresh/ (JWT enabled),
     # password/reset/, password/change/, etc. (login/ overridden above).
     path("api/v1/auth/", include("dj_rest_auth.urls")),

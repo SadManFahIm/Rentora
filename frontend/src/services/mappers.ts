@@ -144,6 +144,7 @@ export interface ApiUser {
   nid_verified?: boolean;
   bio?: string;
   date_of_birth?: string | null;
+  otp_enabled?: boolean;
 }
 
 // ---- helpers ----
@@ -304,5 +305,6 @@ export function mapUser(api: ApiUser): User {
     phone: api.phone,
     bio: api.bio,
     nidVerified: api.nid_verified,
+    otpEnabled: api.otp_enabled ?? false,
   };
 }

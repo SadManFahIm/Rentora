@@ -62,6 +62,8 @@ export interface User {
   phone?: string;
   bio?: string;
   nidVerified?: boolean;
+  /** Email-OTP two-factor authentication is enabled for this account. */
+  otpEnabled?: boolean;
 }
 
 export interface Notification {
@@ -169,6 +171,22 @@ export interface AuthResult {
   user: User;
   access: string;
   refresh: string;
+}
+
+/** Response from login when the account has email-OTP 2FA enabled. */
+export interface OtpPending {
+  otpRequired: true;
+  challenge: string;
+  destinationMasked: string;
+  expiresIn: number;
+  user: User;
+}
+
+/** Login either completes with JWTs or demands a one-time code. */
+export type LoginResult = AuthResult | OtpPending;
+
+export function isOtpPending(result: LoginResult): result is OtpPending {
+  return "otpRequired" in result && result.otpRequired === true;
 }
 
 export interface CreateBookingPayload {
