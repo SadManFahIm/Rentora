@@ -1,6 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { roomService } from "../services/roomService";
-import type { CreateRoomPayload, Landmark, Room, RoomFilters, TierCatalog } from "../types";
+import type {
+  CreateRoomPayload,
+  GeocodeSuggestion,
+  Landmark,
+  MapSummary,
+  Room,
+  RoomFilters,
+  TierCatalog,
+} from "../types";
 
 // ============================================================
 // ROOM QUERY HOOKS
@@ -48,6 +56,26 @@ export function useRoom(id: number | null | undefined) {
     queryKey: roomKeys.detail(id ?? -1),
     queryFn: () => roomService.getRoomById(id as number),
     enabled: id != null,
+  });
+}
+
+/** Street/area/landmark autocomplete for the map search box (debounced by caller). */
+export function useGeocode(query: string) {
+  const trimmed = query.trim();
+  return useQuery<GeocodeSuggestion[]>({
+    queryKey: [...roomKeys.all, "geocode", trimmed] as const,
+    queryFn: () => roomService.geocode(trimmed),
+    enabled: trimmed.length >= 2,
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** Aggregate room counts for the map badge (cheap COUNT/AVG, same geo filters). */
+export function useMapSummary(filters: RoomFilters = {}) {
+  return useQuery<MapSummary>({
+    queryKey: [...roomKeys.all, "summary", filters] as const,
+    queryFn: () => roomService.getMapSummary(filters),
+    staleTime: 30_000,
   });
 }
 

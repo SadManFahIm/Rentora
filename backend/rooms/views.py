@@ -29,6 +29,7 @@ from .serializers import (
     RoomDetailSerializer,
     RoomListSerializer,
 )
+from .streets import search_streets
 
 
 class RoomFilter(django_filters.FilterSet):
@@ -164,7 +165,14 @@ class RoomViewSet(viewsets.ModelViewSet):
         return RoomCreateUpdateSerializer
 
     def get_permissions(self):
-        if self.action in ("list", "retrieve", "landmarks", "tier_catalog"):
+        if self.action in (
+            "list",
+            "retrieve",
+            "landmarks",
+            "tier_catalog",
+            "geocode",
+            "summary",
+        ):
             return [permissions.AllowAny()]
         if self.action == "create":
             return [permissions.IsAuthenticated()]
@@ -331,6 +339,101 @@ class RoomViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"])
     def landmarks(self, request):
         return Response(LandmarkSerializer(ALL_LANDMARKS, many=True).data)
+
+    @extend_schema(
+        tags=["Rooms"],
+        summary="Street search / autocomplete",
+        description="Search the curated Dhaka street & area gazetteer plus map landmarks "
+        "(universities, metro stations) for a place-name query. Used by the map's "
+        "search box to fly to a street/area and start a radius search there. "
+        "Public, unpaginated, returns at most 8 suggestions.",
+        parameters=[
+            OpenApiParameter(
+                "q",
+                str,
+                description="Place-name query, e.g. `mirpur`, `gulshan avenue`, `shahbagh`.",
+            )
+        ],
+    )
+    @action(detail=False, methods=["get"])
+    def geocode(self, request):
+        query = request.query_params.get("q", "")
+        if not query.strip():
+            return Response([])
+
+        suggestions = []
+        for street in search_streets(query):
+            suggestions.append(
+                {
+                    "key": street.key,
+                    "label": street.name,
+                    "kind": street.kind,
+                    "lat": street.lat,
+                    "lng": street.lng,
+                }
+            )
+        # Merge in matching landmarks so "mirpur 10" finds the station too.
+        q_lower = query.strip().lower()
+        for landmark in ALL_LANDMARKS:
+            if q_lower in landmark.name.lower() or q_lower in landmark.key.lower():
+                suggestions.append(
+                    {
+                        "key": landmark.key,
+                        "label": landmark.name,
+                        "kind": landmark.kind.value,
+                        "lat": landmark.lat,
+                        "lng": landmark.lng,
+                    }
+                )
+        return Response(suggestions[:8])
+
+    @extend_schema(
+        tags=["Rooms"],
+        summary="Map room-count summary",
+        description="Aggregate counts (total, available, price stats) for the current map "
+        "viewport or radius — a cheap COUNT/AVG alternative to fetching the full "
+        "paginated room list just to render a badge. Accepts the same geo filters "
+        "as the list endpoint (`bbox`, `near_lat`/`near_lng`/`near_landmark` with "
+        "`radius_km`) plus an `area` filter.",
+        parameters=[
+            *_GEO_PARAMS,
+            OpenApiParameter("area", str, description="Filter to a single area (e.g. `Mirpur`)."),
+        ],
+    )
+    @action(detail=False, methods=["get"])
+    def summary(self, request):
+        queryset = Room.objects.all()
+        queryset = self._apply_bbox(queryset)
+        reference = self._reference_point()
+        if reference is not None:
+            queryset = self._apply_radius(queryset, reference)
+
+        area = request.query_params.get("area")
+        if area:
+            queryset = queryset.filter(area__iexact=area)
+
+        agg = queryset.aggregate(
+            total=models.Count("id"),
+            available=models.Count("id", filter=models.Q(is_available=True)),
+            avg_price=models.Avg("price"),
+            min_price=models.Min("price"),
+            max_price=models.Max("price"),
+        )
+        by_area = (
+            queryset.values("area").annotate(count=models.Count("id")).order_by("-count", "area")
+        )
+        return Response(
+            {
+                "total": agg["total"],
+                "available": agg["available"],
+                "avg_price": round(float(agg["avg_price"]), 2)
+                if agg["avg_price"] is not None
+                else None,
+                "min_price": float(agg["min_price"]) if agg["min_price"] is not None else None,
+                "max_price": float(agg["max_price"]) if agg["max_price"] is not None else None,
+                "by_area": [{"area": row["area"], "count": row["count"]} for row in by_area],
+            }
+        )
 
     @extend_schema(
         tags=["Rooms"],
