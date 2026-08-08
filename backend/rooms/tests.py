@@ -179,6 +179,46 @@ class RoomGeocodeTests(APITestCase):
         self.assertEqual(res.status_code, 200)
         self.assertLessEqual(len(res.data), 8)
 
+    def test_geocode_falls_back_to_nominatim_on_miss(self):
+        from unittest.mock import patch
+
+        hit = {
+            "key": "osm-way-123",
+            "label": "Indira Road",
+            "kind": "street",
+            "lat": 23.74,
+            "lng": 90.39,
+        }
+        with patch("rooms.views.nominatim_search", return_value=[hit]) as mock:
+            res = self.client.get("/api/v1/rooms/geocode/", {"q": "indira road"})
+        self.assertEqual(res.status_code, 200)
+        mock.assert_called_once()
+        self.assertIn("Indira Road", [s["label"] for s in res.data])
+
+    def test_geocode_skips_nominatim_when_gazetteer_hits(self):
+        from unittest.mock import patch
+
+        with patch("rooms.views.nominatim_search") as mock:
+            res = self.client.get("/api/v1/rooms/geocode/", {"q": "gulshan avenue"})
+        self.assertEqual(res.status_code, 200)
+        mock.assert_not_called()
+        self.assertTrue(any("Gulshan Avenue" in s["label"] for s in res.data))
+
+    def test_geocode_deduplicates_osm_hits(self):
+        from unittest.mock import patch
+
+        hit = {
+            "key": "osm-node-7",
+            "label": "Mirpur Road",
+            "kind": "street",
+            "lat": 23.78,
+            "lng": 90.37,
+        }
+        with patch("rooms.views.nominatim_search", return_value=[hit, hit]):
+            res = self.client.get("/api/v1/rooms/geocode/", {"q": "mirpur road extra"})
+        labels = [s["label"] for s in res.data]
+        self.assertEqual(labels.count("Mirpur Road"), 1)
+
 
 class RoomSummaryAPITests(APITestCase):
     @classmethod
