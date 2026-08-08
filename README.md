@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-270%20(137%20BE%20%2B%20133%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-278%20(137%20BE%20%2B%20141%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -75,6 +75,7 @@
 - **Price heatmap** — green → amber → red circles scaled by rent, so expensive areas are visible at a glance
 - **Map + list split view** — a viewport-synced sidebar lists the rooms on screen (promoted first, then by price); on mobile it becomes a bottom sheet
 - Tapping a pin opens the room popup → full **RoomModal** (booking, chat, fraud badge, AI price insight)
+- **Shareable map URLs** — the current viewport (center + zoom + radius search) is live-synced to the URL (`/map?center=23.81,90.41&zoom=12&r=23.78,90.40,2.0`), so you can copy the address and share an exact map view; the **Share** button copies the link, and opening a shared link restores the exact view, radius and area chips
 - **Readable in both themes** — dark tiles are the CARTO CDN; if it's unreachable the map auto-falls back to dimmed OSM tiles (street labels stay legible), and the travel overlay + legend are styled for light *and* dark
 
 **Listing Location Picker (landlord)**
@@ -85,7 +86,7 @@
 **Engineering**
 
 - **Coverage history per branch** — every PR and main push appends its own `history-<branch>.csv` + SVG chart to the `coverage-history` branch (viewable `index.html` linking all branches)
-- 270 automated tests (137 backend + 133 frontend) · coverage gates (BE ≥50%, FE ≥55%)
+- 278 automated tests (137 backend + 141 frontend) · coverage gates (BE ≥50%, FE ≥55%)
 - Ruff + ESLint + Prettier with husky/lint-staged pre-commit hooks
 - GitHub Actions CI (backend, frontend, lint, coverage-summary PR comment, per-branch coverage history)
 - Route-level code splitting (React.lazy) — smaller bundles
@@ -276,12 +277,12 @@ Rentora/
 
 Quality is enforced **in CI and at commit time** — style or coverage drift fails the pipeline automatically.
 
-### Automated tests (246 total)
+### Automated tests (278 total)
 
 | Suite             | Count | Gate                                               |
 | ----------------- | ----- | -------------------------------------------------- |
 | Backend (Django)  | 137   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
-| Frontend (Vitest) | 133   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
+| Frontend (Vitest) | 141   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
 
 ```bash
 # Backend

@@ -3,6 +3,7 @@ import type { Room } from "../types";
 import {
   avgPrice,
   buildBbox,
+  buildMapViewUrl,
   directionsUrl,
   drivingMinutes,
   formatDistance,
@@ -14,6 +15,7 @@ import {
   markerClassName,
   markerPrice,
   metroRouteFeatureCollection,
+  parseMapViewUrl,
   quantizeBounds,
   roomToFeature,
   roomsToFeatureCollection,
@@ -310,6 +312,76 @@ describe("travelIsochrones", () => {
     const radii = bands.map((b) => b.radiusKm);
     expect(radii[0]).toBeLessThan(radii[1]);
     expect(radii[1]).toBeLessThan(radii[2]);
+  });
+});
+
+describe("parseMapViewUrl", () => {
+  it("parses a full view: center, zoom, radius and label", () => {
+    const v = parseMapViewUrl("?center=23.8103,90.4125&zoom=13.5&r=2&q=Gulshan%20Avenue");
+    expect(v.center).toEqual([23.8103, 90.4125]);
+    expect(v.zoom).toBe(13.5);
+    expect(v.radiusKm).toBe(2);
+    expect(v.query).toBe("Gulshan Avenue");
+  });
+
+  it("returns nulls for missing or invalid values", () => {
+    const v = parseMapViewUrl("");
+    expect(v.center).toBeNull();
+    expect(v.zoom).toBeNull();
+    expect(v.radiusKm).toBeNull();
+    expect(v.query).toBeNull();
+  });
+
+  it("rejects out-of-range coordinates and zoom", () => {
+    expect(parseMapViewUrl("?center=999,90").center).toBeNull();
+    expect(parseMapViewUrl("?center=23.7,nope").center).toBeNull();
+    expect(parseMapViewUrl("?zoom=99").zoom).toBeNull();
+    expect(parseMapViewUrl("?zoom=-3").zoom).toBeNull();
+  });
+
+  it("rejects absurd radius values and trims labels", () => {
+    expect(parseMapViewUrl("?r=50").radiusKm).toBeNull();
+    expect(parseMapViewUrl("?r=0").radiusKm).toBeNull();
+    expect(parseMapViewUrl("?q=   ").query).toBeNull();
+  });
+});
+
+describe("buildMapViewUrl", () => {
+  it("encodes center and zoom", () => {
+    expect(buildMapViewUrl({ center: { lat: 23.8103, lng: 90.4125 }, zoom: 11.2 })).toBe(
+      "?center=23.8103,90.4125&zoom=11.2"
+    );
+  });
+
+  it("omits radius params when there is no label or radius", () => {
+    const url = buildMapViewUrl({
+      center: { lat: 23.81, lng: 90.41 },
+      zoom: 12,
+      radiusKm: null,
+      label: null,
+    });
+    expect(url).not.toContain("&r=");
+    expect(url).not.toContain("&q=");
+  });
+
+  it("includes the radius search when active", () => {
+    const url = buildMapViewUrl({
+      center: { lat: 23.8, lng: 90.4 },
+      zoom: 13,
+      radiusKm: 2,
+      label: "Gulshan Avenue",
+    });
+    expect(url).toContain("&r=2");
+    expect(url).toContain("&q=Gulshan%20Avenue");
+  });
+
+  it("round-trips through parseMapViewUrl", () => {
+    const view = { center: { lat: 23.8103, lng: 90.4125 }, zoom: 13.5, radiusKm: 2, label: "DU" };
+    const parsed = parseMapViewUrl(buildMapViewUrl(view));
+    expect(parsed.center).toEqual([23.8103, 90.4125]);
+    expect(parsed.zoom).toBe(13.5);
+    expect(parsed.radiusKm).toBe(2);
+    expect(parsed.query).toBe("DU");
   });
 });
 

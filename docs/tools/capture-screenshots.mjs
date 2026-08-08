@@ -55,7 +55,12 @@ const CAPTURES = [
     user: null,
     route: "/map",
     out: "map-view.png",
-    waitMs: 6000,
+    waitMs: 10000,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
     afterLoad: `(() => {
       const input = document.querySelector('input[aria-label="Search for a street, area or station"]');
       if (!input) return 'no-input';
@@ -71,7 +76,7 @@ const CAPTURES = [
     user: null,
     route: "/map",
     out: "map-view-dark.png",
-    waitMs: 6000,
+    waitMs: 10000,
     beforeCapture: `(() => {
       localStorage.setItem('rentora-ui',
         JSON.stringify({ state: { darkMode: true }, version: 0 }));
@@ -171,7 +176,11 @@ async function main() {
       `--remote-debugging-port=${DBG_PORT}`,
       "--no-first-run",
       "--no-default-browser-check",
-      "--disable-gpu",
+      // MapLibre renders through WebGL — headless needs software GL
+      // (SwiftShader) or the vector-tile map captures as a black canvas.
+      "--use-gl=angle",
+      "--use-angle=swiftshader",
+      "--enable-unsafe-swiftshader",
       "--disable-dev-shm-usage",
       "--user-data-dir=" + path.join(process.cwd(), ".tmp-chrome-profile"),
       "--window-size=1440,1100",
