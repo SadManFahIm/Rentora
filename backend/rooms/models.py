@@ -8,6 +8,16 @@ class Room(models.Model):
         SHARED = "shared", "Shared"
         STUDIO = "studio", "Studio"
 
+    class Tier(models.TextChoices):
+        """Paid listing tiers (monetization). Free is the default; Featured and
+        Premium are unlocked through a paid promotion and expire after
+        LISTING_TIER_DURATION_DAYS (see config/settings/base.py).
+        """
+
+        FREE = "free", "Free"
+        FEATURED = "featured", "Featured"
+        PREMIUM = "premium", "Premium"
+
     class GenderPreference(models.TextChoices):
         ANY = "any", "Any"
         MALE = "male", "Male"
@@ -35,6 +45,11 @@ class Room(models.Model):
     )
     size_sqft = models.IntegerField()
     is_available = models.BooleanField(default=True)
+    # Paid-listing tier (monetization). `is_featured` below stays in sync
+    # (True once tier is featured/premium) so existing "featured rooms"
+    # surfaces keep working; `tier` is the source of truth going forward.
+    tier = models.CharField(max_length=10, choices=Tier.choices, default=Tier.FREE)
+    tier_expires_at = models.DateTimeField(null=True, blank=True)
     is_featured = models.BooleanField(default=False)
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="rooms"

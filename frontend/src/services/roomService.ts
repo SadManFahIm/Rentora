@@ -1,6 +1,6 @@
 import { api } from "./api";
 import { mapRoom, type ApiRoom, type Paginated } from "./mappers";
-import type { Room, RoomFilters, CreateRoomPayload } from "../types";
+import type { Room, RoomFilters, CreateRoomPayload, TierCatalog } from "../types";
 
 // ============================================================
 // ROOM SERVICE — real /rooms/ endpoints
@@ -18,6 +18,7 @@ function buildParams(filters: RoomFilters): Record<string, string> {
   if (filters.minPrice) params.price__gte = filters.minPrice;
   if (filters.maxPrice) params.price__lte = filters.maxPrice;
   if (filters.available === "yes") params.is_available = "true";
+  if (filters.owner != null) params.owner = String(filters.owner);
 
   switch (filters.sort) {
     case "price-asc":
@@ -59,6 +60,30 @@ export const roomService = {
   async getRoomById(id: number): Promise<Room> {
     const { data } = await api.get<ApiRoom>(`/rooms/${id}/`);
     return mapRoom(data);
+  },
+
+  /** GET /rooms/tier-catalog/ — public paid-tier pricing/benefits. */
+  async getTierCatalog(): Promise<TierCatalog> {
+    const { data } = await api.get<{
+      tiers: {
+        tier: string;
+        label: string;
+        price: number;
+        benefits: string[];
+      }[];
+      duration_days: number;
+      currency: string;
+    }>("/rooms/tier-catalog/");
+    return {
+      tiers: data.tiers.map((t) => ({
+        tier: t.tier as TierCatalog["tiers"][number]["tier"],
+        label: t.label,
+        price: Number(t.price),
+        benefits: t.benefits,
+      })),
+      durationDays: data.duration_days,
+      currency: data.currency,
+    };
   },
 
   /** POST /rooms/ — create a listing (landlord). */

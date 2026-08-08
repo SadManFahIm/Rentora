@@ -3,6 +3,7 @@ import { useWishlistStore } from "../../stores/wishlistStore";
 import type { Room } from "../../types";
 import { Card, CardContent } from "../ui/card";
 import { Badge } from "../ui/badge";
+import TierBadge from "../TierBadge/TierBadge";
 import { cn } from "../../lib/utils";
 
 interface RoomCardProps {
@@ -15,9 +16,19 @@ export default function RoomCard({ room, onClick }: RoomCardProps) {
   const toggleWishlist = useWishlistStore((s) => s.toggleWishlist);
   const isWishlisted = wishlist.includes(room.id);
 
+  const isPremium = room.tier === "premium";
+  const isFeatured = room.tier === "featured";
+
   return (
     <Card
-      className="group cursor-pointer gap-0 overflow-hidden rounded-xl border-gray-200 py-0! transition-all duration-300 hover:-translate-y-1 hover:shadow-lg dark:border-gray-800"
+      className={cn(
+        "group cursor-pointer gap-0 overflow-hidden rounded-xl py-0! transition-all duration-300 hover:-translate-y-1 hover:shadow-lg",
+        isPremium
+          ? "border-amber-400 shadow-md ring-1 ring-amber-400/60 dark:border-amber-500/70"
+          : isFeatured
+            ? "border-orange-300 dark:border-orange-500/50"
+            : "border-gray-200 dark:border-gray-800"
+      )}
       onClick={() => onClick(room)}
     >
       {/* Image */}
@@ -36,6 +47,9 @@ export default function RoomCard({ room, onClick }: RoomCardProps) {
         >
           {room.available ? room.type : "Unavailable"}
         </Badge>
+        <div className="absolute left-3 top-3 flex flex-col items-start gap-1.5">
+          <TierBadge tier={room.tier} />
+        </div>
         <button
           className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-sm transition-transform hover:scale-110"
           onClick={(e) => {

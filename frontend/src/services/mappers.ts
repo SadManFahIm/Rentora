@@ -59,6 +59,8 @@ export interface ApiRoom {
   gender_preference: string;
   size_sqft: number;
   is_available: boolean;
+  tier?: string;
+  tier_expires_at?: string | null;
   is_featured: boolean;
   rating: string | number;
   total_reviews: number;
@@ -214,7 +216,9 @@ export function mapRoom(api: ApiRoom): Room {
     amenities: api.amenities ?? [],
     gender: genderLabel(api.gender_preference),
     available: api.is_available,
-    featured: api.is_featured,
+    tier: (api.tier as Room["tier"]) ?? "free",
+    tierExpiresAt: api.tier_expires_at ?? null,
+    featured: api.is_featured || api.tier === "featured" || api.tier === "premium",
     description: api.description ?? "",
     size: api.size_sqft,
     owner,

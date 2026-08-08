@@ -16,10 +16,16 @@ interface AuthApiResponse {
 const usernameFromEmail = (email: string): string => email.trim();
 
 export const authService = {
-  /** POST /auth/login/ → persist tokens, return the mapped user. */
+  /** POST /auth/login/ → persist tokens, return the mapped user.
+   *
+   * The backend login accepts either an email address or a username. Send
+   * whichever the user typed: an "@"-containing value is an email, anything
+   * else (e.g. the demo usernames like `rahim.hossain`) is a username.
+   */
   async login({ email, password }: LoginCredentials): Promise<User> {
+    const loginField = email.includes("@") ? "email" : "username";
     const { data } = await api.post<AuthApiResponse>("/auth/login/", {
-      email,
+      [loginField]: email,
       password,
     });
     setTokens(data.access, data.refresh);
