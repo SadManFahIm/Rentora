@@ -1,71 +1,530 @@
-// Map Page
-import { useRooms } from "../../hooks/useRooms";
+// Phase 7 — Interactive map view (MapLibre GL JS).
+//
+// The map is the discovery surface for the geo backend: every viewport change
+// refetches rooms inside the visible bounding box (`bbox`), markers open the
+// existing RoomModal, and landmarks (universities + metro stations) can be
+// toggled as layers. A radius search lets tenants pick a point on the map
+// (a university, metro station, or their office) and see rooms within N km.
+import { useEffect, useMemo, useRef, useState } from "react";
+import * as maplibregl from "maplibre-gl";
+import type { StyleSpecification } from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import {
+  Crosshair,
+  Landmark as LandmarkIcon,
+  Map as MapIcon,
+  TrainFront,
+  Thermometer,
+} from "lucide-react";
+import { useLandmarks, useRooms } from "../../hooks/useRooms";
+import RoomModal from "../../components/RoomModal/RoomModal";
+import { Button } from "../../components/ui/button";
+import { Badge } from "../../components/ui/badge";
+import { useUiStore } from "../../stores/uiStore";
+import type { Room } from "../../types";
+import {
+  avgPrice,
+  buildBbox,
+  landmarksToFeatureCollection,
+  markerClassName,
+  markerPrice,
+  roomsToFeatureCollection,
+} from "../../lib/mapUtils";
+import { cn } from "../../lib/utils";
 
-interface MapFeature {
-  icon: string;
-  title: string;
-  desc: string;
+// Dhaka centre — the default viewport for first-time visitors.
+const DHAKA_CENTER: [number, number] = [90.4125, 23.8103];
+const DHAKA_ZOOM = 11.2;
+
+// Key-free raster tiles (OSM/CARTO). Light/dark follow the app theme.
+const TILE_LIGHT = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const TILE_DARK = "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png";
+
+const MAP_STYLE = (tiles: string): StyleSpecification => ({
+  version: 8,
+  sources: {
+    osm: {
+      type: "raster",
+      tiles: [tiles],
+      tileSize: 256,
+      // CARTO dark tiles (used in dark mode) are OSM-derived; their own
+      // tiles carry the attribution banner, so crediting OSM suffices.
+      attribution: "© OpenStreetMap contributors",
+      maxzoom: 19,
+    },
+  },
+  layers: [{ id: "osm", type: "raster", source: "osm" }],
+});
+
+/** Debounce map-move refetches so panning doesn't hammer the API. */
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(t);
+  }, [value, delayMs]);
+  return debounced;
 }
 
-export default function Map() {
-  const { data: rooms = [] } = useRooms();
+type MapLayerId = "universities" | "metro";
 
-  const features: MapFeature[] = [
-    { icon: "🏫", title: "Near Universities", desc: "Rooms within 1km of DU, BUET, NSU" },
-    { icon: "🚇", title: "Metro Access", desc: "Filter by proximity to MRT-6 stations" },
-    { icon: "🔥", title: "Price Heatmap", desc: "Visualize rent distribution across Dhaka" },
-  ];
+export default function Map() {
+  const darkMode = useUiStore((s) => s.darkMode);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<maplibregl.Marker[]>([]);
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  const [showLandmarks, setShowLandmarks] = useState<Record<MapLayerId, boolean>>({
+    universities: true,
+    metro: true,
+  });
+  const [heatmap, setHeatmap] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
+
+  // ---- radius search state --------------------------------------------
+  const [radiusCenter, setRadiusCenter] = useState<{
+    lat: number;
+    lng: number;
+    label: string;
+  } | null>(null);
+  const [radiusKm, setRadiusKm] = useState(2);
+  const [viewbox, setViewbox] = useState<string | null>(null);
+
+  // Debounced viewport: fires ~300ms after the user stops panning/zooming.
+  const debouncedViewbox = useDebouncedValue(viewbox, 300);
+  const debouncedRadiusCenter = useDebouncedValue(radiusCenter, 300);
+
+  const filters = useMemo(() => {
+    const f: {
+      bbox?: string;
+      nearLat?: number;
+      nearLng?: number;
+      radiusKm?: number;
+    } = {};
+    if (debouncedRadiusCenter) {
+      f.nearLat = debouncedRadiusCenter.lat;
+      f.nearLng = debouncedRadiusCenter.lng;
+      f.radiusKm = radiusKm;
+    } else if (debouncedViewbox) {
+      f.bbox = debouncedViewbox;
+    }
+    return f;
+  }, [debouncedViewbox, debouncedRadiusCenter, radiusKm]);
+
+  const { data: rooms = [], isLoading } = useRooms(filters);
+  const { data: landmarks = [] } = useLandmarks();
+
+  // ---- map bootstrap ---------------------------------------------------
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
+
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: MAP_STYLE(darkMode ? TILE_DARK : TILE_LIGHT),
+      center: DHAKA_CENTER,
+      zoom: DHAKA_ZOOM,
+      attributionControl: { compact: true },
+    });
+    mapRef.current = map;
+    map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "top-right");
+    map.addControl(
+      new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true } })
+    );
+
+    // Pan/zoom end -> update the bbox the room list is filtered by.
+    const syncViewbox = () => {
+      const b = map.getBounds();
+      setViewbox(
+        buildBbox({
+          west: b.getWest(),
+          south: b.getSouth(),
+          east: b.getEast(),
+          north: b.getNorth(),
+        })
+      );
+    };
+
+    map.on("load", () => {
+      setMapReady(true);
+      // Sync the viewport once the map has its initial position.
+      syncViewbox();
+    });
+    map.on("moveend", syncViewbox);
+
+    // Clicking empty map space clears the radius search.
+    map.on("click", (e: maplibregl.MapMouseEvent) => {
+      if (e.originalEvent.target === map.getCanvas()) setRadiusCenter(null);
+    });
+
+    map.on("error", () => {
+      // Tiles can fail offline; don't let the whole page crash.
+      setMapError("Map tiles could not be loaded — check your connection.");
+    });
+
+    return () => {
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
+      map.remove();
+      mapRef.current = null;
+      // Force dependent effects (markers, layers, heatmap) to re-run against
+      // the fresh map instance when the map is recreated (e.g. dark-mode
+      // tile switch) — without this, mapReady stays true and the new map
+      // would render with no markers until the next refetch.
+      setMapReady(false);
+    };
+  }, [darkMode]);
+
+  // ---- GeoJSON layers (landmarks + heatmap) ----------------------------
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+
+    const addSourceLayer = (id: string, data: GeoJSON.FeatureCollection, paint: object) => {
+      try {
+        if (map.getSource(id)) {
+          (map.getSource(id) as maplibregl.GeoJSONSource).setData(data);
+        } else {
+          map.addSource(id, { type: "geojson", data });
+          map.addLayer({ id, type: "circle", source: id, paint });
+        }
+      } catch {
+        // Source/layer already exists from a previous pass — no-op.
+      }
+    };
+
+    const univ = landmarks.filter((l) => l.kind === "university");
+    const metro = landmarks.filter((l) => l.kind === "metro");
+    addSourceLayer("universities", landmarksToFeatureCollection(univ), {
+      "circle-radius": 6,
+      "circle-color": "#7c3aed",
+      "circle-stroke-color": "#ffffff",
+      "circle-stroke-width": 1.5,
+      "circle-opacity": 0.9,
+    });
+    addSourceLayer("metro", landmarksToFeatureCollection(metro), {
+      "circle-radius": 5,
+      "circle-color": "#0d9488",
+      "circle-stroke-color": "#ffffff",
+      "circle-stroke-width": 1.5,
+      "circle-opacity": 0.9,
+    });
+  }, [landmarks, mapReady]);
+
+  // Layer visibility follows the toggles.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    (["universities", "metro"] as MapLayerId[]).forEach((id) => {
+      if (map.getLayer(id))
+        map.setLayoutProperty(id, "visibility", showLandmarks[id] ? "visible" : "none");
+    });
+  }, [showLandmarks, mapReady]);
+
+  // ---- heatmap layer -----------------------------------------------------
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const id = "price-heatmap";
+    try {
+      if (heatmap) {
+        if (!map.getSource(id)) {
+          map.addSource(id, { type: "geojson", data: roomsToFeatureCollection(rooms) });
+          map.addLayer({
+            id,
+            type: "circle",
+            source: id,
+            paint: {
+              "circle-radius": [
+                "interpolate",
+                ["linear"],
+                ["get", "price"],
+                5000,
+                8,
+                15000,
+                16,
+                30000,
+                24,
+              ],
+              "circle-color": [
+                "interpolate",
+                ["linear"],
+                ["get", "price"],
+                5000,
+                "#22c55e",
+                15000,
+                "#f59e0b",
+                30000,
+                "#ef4444",
+              ],
+              "circle-opacity": 0.45,
+              "circle-stroke-color": "#ffffff",
+              "circle-stroke-width": 1,
+            },
+          });
+        } else {
+          (map.getSource(id) as maplibregl.GeoJSONSource).setData(roomsToFeatureCollection(rooms));
+        }
+      } else if (map.getLayer(id)) {
+        map.removeLayer(id);
+        map.removeSource(id);
+      }
+    } catch {
+      // Layer juggling during rapid toggle — safe to ignore.
+    }
+  }, [heatmap, rooms, mapReady]);
+
+  // ---- custom price markers ----------------------------------------------
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current = [];
+
+    // Escape user-generated text before it enters popup HTML — the backend
+    // sanitizes titles, but defence-in-depth keeps stored-XSS out of popups.
+    const esc = (s: string) =>
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+    rooms.forEach((room) => {
+      if (!room.available) return;
+      const el = document.createElement("button");
+      el.className = markerClassName(room.tier);
+      el.setAttribute("aria-label", `View ${room.name}`);
+      el.innerHTML = markerPrice(room.price);
+
+      const popup = new maplibregl.Popup({ offset: 22, closeButton: false, maxWidth: "260px" })
+        .setHTML(`
+        <div class="map-popup">
+          <div class="map-popup__price">৳${room.price.toLocaleString()}<span>/mo</span></div>
+          <div class="map-popup__name">${esc(room.name)}</div>
+          <div class="map-popup__meta">${esc(room.area)} · ${esc(room.type)} · ★ ${room.rating} (${room.reviews})</div>
+          <div class="map-popup__cta">View listing →</div>
+        </div>
+      `);
+
+      const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
+        .setLngLat([room.lng, room.lat])
+        .setPopup(popup)
+        .addTo(map);
+
+      el.addEventListener("click", () => setSelectedRoom(room));
+      markersRef.current.push(marker);
+    });
+  }, [rooms, mapReady]);
+
+  // ---- radius circle -------------------------------------------------------
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const id = "radius-circle";
+    try {
+      if (radiusCenter) {
+        if (!map.getSource(id)) {
+          map.addSource(id, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+          map.addLayer({
+            id,
+            type: "circle",
+            source: id,
+            paint: {
+              // Draw the circle at the true on-screen radius: at zoom z the
+              // metres-per-pixel ≈ 156543.03 · cos(lat) / 2^z, so a km-radius
+              // becomes radiusKm·1000·2^z / (156543.03·cos(lat)) px. Dhaka is
+              // ~23.8°N (cos ≈ 0.914); stop points evaluated at z=10 and z=16
+              // let the exponential curve track it closely in between.
+              "circle-radius": [
+                "interpolate",
+                ["exponential", 2],
+                ["zoom"],
+                10,
+                (radiusKm * 1000 * 2 ** 10) / (156543.03 * 0.914),
+                16,
+                (radiusKm * 1000 * 2 ** 16) / (156543.03 * 0.914),
+              ],
+              "circle-color": "#3b82f6",
+              "circle-opacity": 0.12,
+              "circle-stroke-color": "#3b82f6",
+              "circle-stroke-width": 2,
+            },
+          });
+        }
+        (map.getSource(id) as maplibregl.GeoJSONSource).setData({
+          type: "FeatureCollection",
+          features: [
+            {
+              type: "Feature",
+              geometry: { type: "Point", coordinates: [radiusCenter.lng, radiusCenter.lat] },
+              properties: {},
+            },
+          ],
+        });
+      } else if (map.getLayer(id)) {
+        map.removeLayer(id);
+        map.removeSource(id);
+      }
+    } catch {
+      // no-op during rapid state changes
+    }
+  }, [radiusCenter, radiusKm, mapReady]);
+
+  const counts = useMemo(() => {
+    const total = rooms.length;
+    const available = rooms.filter((r) => r.available).length;
+    return { total, available, avg: avgPrice(rooms) };
+  }, [rooms]);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-12 md:px-6 md:py-16 lg:px-8">
-      <div className="mb-6 flex items-center justify-between">
-        <h2 className="font-display text-xl font-bold text-foreground sm:text-2xl">🗺️ Map View</h2>
-        <p className="text-sm text-gray-600 dark:text-gray-400">Browse rooms by location</p>
-      </div>
+    <div className="relative h-[calc(100vh-5rem)] min-h-[560px] w-full overflow-hidden">
+      {/* Map canvas */}
+      <div ref={containerRef} className="absolute inset-0" />
 
-      <div className="mb-6 flex h-100 flex-col items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-linear-to-br from-gray-50 to-gray-200 text-center text-gray-600 dark:border-gray-800 dark:from-gray-800 dark:to-gray-900 dark:text-gray-400">
-        <div className="grid grid-cols-8 gap-2 opacity-40">
-          {Array(16)
-            .fill(0)
-            .map((_, i) => (
-              <div
-                key={i}
-                className="h-2 w-2 rounded-full bg-orange-600"
-                style={{ opacity: i % 3 === 0 ? 1 : 0.3 }}
-              />
-            ))}
+      {/* Map error overlay */}
+      {mapError && (
+        <div className="absolute inset-x-0 top-4 z-20 mx-auto w-fit max-w-lg rounded-xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-medium text-red-700 shadow-lg dark:border-red-800 dark:bg-red-950/60 dark:text-red-300">
+          {mapError}
         </div>
-        <h3 className="font-display text-lg font-bold text-foreground">Interactive Map</h3>
-        <p className="text-sm">
-          OpenStreetMap integration — showing {rooms.filter((r) => r.available).length} available
-          listings
-        </p>
-        <div className="mt-2 flex flex-wrap justify-center gap-2.5 px-4">
-          {rooms
-            .filter((r) => r.available)
-            .map((r) => (
-              <div
-                key={r.id}
-                className="rounded-lg border border-gray-200 bg-card px-3.5 py-2 text-sm font-semibold dark:border-gray-800"
-              >
-                📍 {r.area} — ৳{r.price.toLocaleString()}
-              </div>
-            ))}
-        </div>
-      </div>
+      )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {features.map((f) => (
-          <div
-            key={f.title}
-            className="rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800"
+      {/* Toolbar */}
+      <div className="absolute left-4 top-4 z-10 flex max-w-[calc(100%-2rem)] flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white/95 p-2 shadow-lg backdrop-blur dark:border-gray-800 dark:bg-gray-900/95">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "gap-1.5 rounded-lg",
+              showLandmarks.universities &&
+                "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+            )}
+            onClick={() => setShowLandmarks((s) => ({ ...s, universities: !s.universities }))}
           >
-            <div className="mb-2 text-2xl">{f.icon}</div>
-            <h4 className="mb-1.5 font-display font-bold text-foreground">{f.title}</h4>
-            <p className="text-sm text-gray-600 dark:text-gray-400">{f.desc}</p>
+            <LandmarkIcon className="size-4" /> Universities
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "gap-1.5 rounded-lg",
+              showLandmarks.metro &&
+                "bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300"
+            )}
+            onClick={() => setShowLandmarks((s) => ({ ...s, metro: !s.metro }))}
+          >
+            <TrainFront className="size-4" /> Metro
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "gap-1.5 rounded-lg",
+              heatmap && "bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300"
+            )}
+            onClick={() => setHeatmap((h) => !h)}
+          >
+            <Thermometer className="size-4" /> Price heatmap
+          </Button>
+        </div>
+
+        {/* Radius search */}
+        <div className="rounded-xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur dark:border-gray-800 dark:bg-gray-900/95">
+          <div className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Crosshair className="size-4 text-blue-600" />
+            {radiusCenter ? (
+              <span>
+                Near {radiusCenter.label} · <span className="text-blue-600">{radiusKm} km</span>
+              </span>
+            ) : (
+              <span>Click the map to search near a point</span>
+            )}
           </div>
-        ))}
+          <div className="flex items-center gap-2">
+            <input
+              type="range"
+              min={0.5}
+              max={5}
+              step={0.5}
+              value={radiusKm}
+              onChange={(e) => setRadiusKm(Number(e.target.value))}
+              className="h-2 w-full cursor-pointer accent-blue-600"
+              aria-label="Search radius in km"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0 rounded-lg text-xs"
+              onClick={() => setRadiusCenter(null)}
+            >
+              Clear
+            </Button>
+          </div>
+        </div>
+
+        {/* Landmark quick-pick chips */}
+        {!radiusCenter && (
+          <div className="flex max-w-sm flex-wrap gap-1.5">
+            {landmarks
+              .filter((l) => l.kind === "university")
+              .slice(0, 6)
+              .map((l) => (
+                <button
+                  key={l.key}
+                  onClick={() => {
+                    setRadiusCenter({ lat: l.lat, lng: l.lng, label: l.name });
+                    mapRef.current?.flyTo({ center: [l.lng, l.lat], zoom: 13 });
+                  }}
+                  className="rounded-full border border-gray-200 bg-white/95 px-3 py-1 text-xs font-medium text-gray-700 shadow-sm backdrop-blur transition-colors hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700 dark:border-gray-700 dark:bg-gray-900/95 dark:text-gray-300 dark:hover:border-violet-600 dark:hover:bg-violet-950/40 dark:hover:text-violet-300"
+                >
+                  🎓 {l.name}
+                </button>
+              ))}
+          </div>
+        )}
       </div>
+
+      {/* Loading badge */}
+      {isLoading && (
+        <div className="absolute right-4 top-4 z-10">
+          <Badge className="animate-pulse bg-white/90 text-gray-700 shadow dark:bg-gray-900/90 dark:text-gray-300">
+            Loading rooms…
+          </Badge>
+        </div>
+      )}
+
+      {/* Room count summary */}
+      <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2">
+        <Badge className="gap-1.5 bg-white/95 px-3 py-1.5 text-sm shadow dark:bg-gray-900/95">
+          <MapIcon className="size-3.5" />
+          {counts.available} rooms in view
+          {counts.avg != null && (
+            <span className="text-gray-500 dark:text-gray-400">
+              · avg ৳{counts.avg.toLocaleString()}
+            </span>
+          )}
+        </Badge>
+      </div>
+
+      {/* Legend */}
+      <div className="absolute bottom-4 right-4 z-10 hidden rounded-lg border border-gray-200 bg-white/95 px-3 py-2 text-xs shadow backdrop-blur sm:block dark:border-gray-800 dark:bg-gray-900/95">
+        <div className="mb-1 font-semibold text-foreground">Legend</div>
+        <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+          <span className="inline-block size-2.5 rounded-full bg-[#ea580c]" /> Free
+        </div>
+        <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+          <span className="inline-block size-2.5 rounded-full bg-[#3b82f6]" /> Featured
+        </div>
+        <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+          <span className="inline-block size-2.5 rounded-full bg-[#f59e0b]" /> Premium
+        </div>
+        <div className="mt-1.5 flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+          <span className="inline-block size-2.5 rounded-full bg-[#7c3aed]" /> University
+        </div>
+        <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+          <span className="inline-block size-2.5 rounded-full bg-[#0d9488]" /> Metro
+        </div>
+      </div>
+
+      {selectedRoom && <RoomModal room={selectedRoom} onClose={() => setSelectedRoom(null)} />}
     </div>
   );
 }

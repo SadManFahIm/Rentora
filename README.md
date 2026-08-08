@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-220%20(122%20BE%20%2B%2098%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-230%20(122%20BE%20%2B%20108%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -47,6 +47,7 @@
 - Login returns a pending challenge (masked destination, e.g. `r***@rentora.com`); tokens are only issued after the code verifies — no tokens leak at the password step
 
 **Passkeys (WebAuthn / FIDO2)**
+
 - Passwordless sign-in with a fingerprint, face, or device PIN — `py_webauthn` server-side, `@simplewebauthn/browser` client-side
 - **Conditional UI** on the login form: passkeys surface in the browser's native autofill; a manual "Sign in with a passkey" button is the fallback
 - Only **public keys** stored; sign counters tracked for clone/replay protection; 2FA-enabled accounts still get the email-OTP step after the passkey
@@ -54,11 +55,20 @@
 - Sign in with **username or email**; **duplicate-email registration now blocked** (serializer + DB unique constraint) with a readable error message
 - Already-logged-in users are redirected from `/auth` to their dashboard
 
+**Interactive Map (Phase 7)**
+
+- **MapLibre GL JS** map of Dhaka — OpenStreetMap tiles, key-free, with dark/light tile switching that follows the app theme
+- **Price marker pins** — every listing is a tappable pin showing its price (`৳12k`), coloured by tier (free orange / featured blue / premium amber) so promoted rooms pop exactly like the list
+- **Viewport sync** — panning/zooming refetches rooms inside the visible `bbox` (debounced 300ms), so the map and the room count always match what's on screen
+- **Radius search** — click a point on the map (or a university chip) and drag a slider to see rooms within 0.5–5 km, powered by the geo backend's `near_lat`/`near_lng` + `radius_km`
+- **Landmark layers** — toggle universities 🎓 and metro stations 🚇 on/off as map layers (from `/rooms/landmarks/`)
+- **Price heatmap** — green → amber → red circles scaled by rent, so expensive areas are visible at a glance
+- Tapping a pin opens the room popup → full **RoomModal** (booking, chat, fraud badge, AI price insight)
+
 **Engineering**
 
 - **Coverage history per branch** — every PR and main push appends its own `history-<branch>.csv` + SVG chart to the `coverage-history` branch (viewable `index.html` linking all branches)
-- **Engineering**
-- 220 automated tests (122 backend + 98 frontend) · coverage gates (BE ≥50%, FE ≥55%)
+- 230 automated tests (122 backend + 108 frontend) · coverage gates (BE ≥50%, FE ≥55%)
 - Ruff + ESLint + Prettier with husky/lint-staged pre-commit hooks
 - GitHub Actions CI (backend, frontend, lint, coverage-summary PR comment, per-branch coverage history)
 - Route-level code splitting (React.lazy) — smaller bundles
@@ -69,22 +79,22 @@
 
 > Tracked like a product backlog — every shipped phase is checked off.
 
-| Phase     | Scope                                                                                             | Status                  |
-| --------- | ------------------------------------------------------------------------------------------------- | ----------------------- |
-| **1–2**   | React prototype with mock data                                                                    | ✅ Shipped              |
-| **2.5**   | Frontend refactor — Vite, TS strict, Tailwind, Zustand, React Query, shadcn/ui                    | ✅ Shipped              |
-| **3**     | Django backend — 10+ apps, JWT auth, full REST API, frontend integration                          | ✅ Shipped              |
-| **4**     | Real-time chat (Django Channels, typing, read receipts, file upload) + real-time notifications    | ✅ Shipped              |
-| **5**     | Payments — SSLCommerz + bKash, refunds, PDF receipts, invoices, security deposits, webhook audit  | ✅ Shipped              |
-| **6**     | AI — recommendation engine (content/collaborative/hybrid) + price insight + fair-price prediction | ✅ Shipped              |
-| **Bonus** | Roommate matching (profile + scoring + request flow)                                              | ✅ Shipped              |
-| **Bonus** | Fraud engine (6 detectors, auto-scan, review queue)                                               | ✅ Shipped              |
-| **Bonus** | Paid listing tiers (Free/Featured/Premium monetization)                                           | ✅ Shipped              || **Bonus** | Two-factor authentication (email OTP, password-gated enable)                                       | ✅ Shipped              |
-| **Bonus** | 2FA recovery codes (10 one-time backups) + email-verified enable                                    | ✅ Shipped              |
-| **Bonus** | Passkeys / WebAuthn (passwordless login, conditional UI)                                            | ✅ Shipped              |
-| **Bonus** | Geo backend (bbox / radius / landmark queries)                                                    | ✅ Shipped              |
-| **7**     | Map frontend (Leaflet, heatmap, university/metro proximity)                                       | ⏳ Next — geo API ready |
-| **8**     | Docker Compose + production deployment + HTTPS                                                    | ⏳ Next — CI/CD done    |
+| Phase     | Scope                                                                                             | Status               |
+| --------- | ------------------------------------------------------------------------------------------------- | -------------------- |
+| **1–2**   | React prototype with mock data                                                                    | ✅ Shipped           |
+| **2.5**   | Frontend refactor — Vite, TS strict, Tailwind, Zustand, React Query, shadcn/ui                    | ✅ Shipped           |
+| **3**     | Django backend — 10+ apps, JWT auth, full REST API, frontend integration                          | ✅ Shipped           |
+| **4**     | Real-time chat (Django Channels, typing, read receipts, file upload) + real-time notifications    | ✅ Shipped           |
+| **5**     | Payments — SSLCommerz + bKash, refunds, PDF receipts, invoices, security deposits, webhook audit  | ✅ Shipped           |
+| **6**     | AI — recommendation engine (content/collaborative/hybrid) + price insight + fair-price prediction | ✅ Shipped           |
+| **Bonus** | Roommate matching (profile + scoring + request flow)                                              | ✅ Shipped           |
+| **Bonus** | Fraud engine (6 detectors, auto-scan, review queue)                                               | ✅ Shipped           |
+| **Bonus** | Paid listing tiers (Free/Featured/Premium monetization)                                           | ✅ Shipped           |     | **Bonus** | Two-factor authentication (email OTP, password-gated enable) | ✅ Shipped |
+| **Bonus** | 2FA recovery codes (10 one-time backups) + email-verified enable                                  | ✅ Shipped           |
+| **Bonus** | Passkeys / WebAuthn (passwordless login, conditional UI)                                          | ✅ Shipped           |
+| **Bonus** | Geo backend (bbox / radius / landmark queries)                                                    | ✅ Shipped           |
+| **7**     | Map frontend (MapLibre GL, price heatmap, university/metro layers, radius search)                 | ✅ Shipped           |
+| **8**     | Docker Compose + production deployment + HTTPS                                                    | ⏳ Next — CI/CD done |
 
 ---
 
@@ -96,6 +106,7 @@
 - AI-powered room recommendations based on budget, area, and preferences
 - Advanced filters (area, type, price range, amenities, gender preference)
 - Geo search — filter by map viewport (`bbox`), radius around a point, or proximity to landmarks/metro stations
+- **Interactive map** (MapLibre GL) — price pins, radius search, university/metro layers, price heatmap
 - Wishlist rooms for later
 - Book rooms with one click
 - Real-time chat with landlords (WebSocket — typing, read receipts, file upload)
@@ -127,25 +138,26 @@
 
 ### Frontend
 
-| Technology             | Purpose                       |
-| ---------------------- | ----------------------------- |
-| React 18               | UI framework                  |
-| TypeScript (strict)    | Type safety                   |
-| Vite                   | Build tool                    |
-| TailwindCSS v4         | Styling                       |
-| shadcn/ui              | Component library             |
-| React Router v6        | Client-side routing           |
-| Zustand                | Client state management       |
-| TanStack Query         | Server state + caching        |
-| Axios                  | HTTP client with interceptors |
-| React Hook Form + Zod  | Form validation               |
-| Motion                 | Entrance/exit animation       |
-| zxcvbn-ts              | Password entropy + strength   |
-| Pwned Passwords (HIBP) | k-anonymity breach lookup     |
-| Sonner                 | Toast notifications           |
-| Vitest                 | Unit tests + coverage         || SHA-256 OTP challenge | Email 2FA (hashed codes)      |
-| py_webauthn           | WebAuthn/FIDO2 server-side     |
-| @simplewebauthn/browser | Passkey ceremony client      |
+| Technology              | Purpose                                    |
+| ----------------------- | ------------------------------------------ |
+| React 18                | UI framework                               |
+| TypeScript (strict)     | Type safety                                |
+| Vite                    | Build tool                                 |
+| TailwindCSS v4          | Styling                                    |
+| shadcn/ui               | Component library                          |
+| React Router v6         | Client-side routing                        |
+| Zustand                 | Client state management                    |
+| TanStack Query          | Server state + caching                     |
+| Axios                   | HTTP client with interceptors              |
+| React Hook Form + Zod   | Form validation                            |
+| Motion                  | Entrance/exit animation                    |
+| MapLibre GL JS          | Interactive map (markers, layers, heatmap) |
+| zxcvbn-ts               | Password entropy + strength                |
+| Pwned Passwords (HIBP)  | k-anonymity breach lookup                  |
+| Sonner                  | Toast notifications                        |
+| Vitest                  | Unit tests + coverage                      |     | SHA-256 OTP challenge | Email 2FA (hashed codes) |
+| py_webauthn             | WebAuthn/FIDO2 server-side                 |
+| @simplewebauthn/browser | Passkey ceremony client                    |
 
 ### Backend
 
@@ -247,12 +259,12 @@ Rentora/
 
 Quality is enforced **in CI and at commit time** — style or coverage drift fails the pipeline automatically.
 
-### Automated tests (220 total)
+### Automated tests (230 total)
 
 | Suite             | Count | Gate                                               |
 | ----------------- | ----- | -------------------------------------------------- |
 | Backend (Django)  | 122   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
-| Frontend (Vitest) | 98    | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
+| Frontend (Vitest) | 108   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
 
 ```bash
 # Backend
@@ -368,22 +380,22 @@ Frontend runs at `http://localhost:3000`
 
 ### Authentication
 
-| Method | Endpoint                      | Auth   | Description                                           |
-| ------ | ----------------------------- | ------ | ----------------------------------------------------- |
-| POST   | `/api/v1/auth/register/`      | Public | Register (email must be unique)                       |
-| POST   | `/api/v1/auth/login/`         | Public | Login with email or username (returns JWT)            |
-| POST   | `/api/v1/auth/logout/`        | Auth   | Logout (blacklist token)                              |
-| POST   | `/api/v1/auth/token/refresh/` | Public | Refresh access token                                  |
-| GET    | `/api/v1/auth/user/`          | Auth   | Get current user profile                              |
-| PATCH  | `/api/v1/auth/user/`          | Auth   | Update profile                                        |
-| POST   | `/api/v1/auth/otp/verify/`    | Public | Finish 2FA login: exchange (challenge, code) for JWTs; pass `recovery_code` instead to use a backup code |
-| POST   | `/api/v1/auth/otp/resend/`    | Public | Re-send the one-time code (cooldown-guarded)          |
-| POST   | `/api/v1/auth/otp/toggle/`    | Auth   | Disable 2FA, or begin enabling (password → emailed code) |
-| POST   | `/api/v1/auth/otp/confirm-enable/` | Auth | Confirm the emailed code → 2FA on + one-time recovery codes |
-| POST   | `/api/v1/auth/passkey/register/begin/`  | Auth   | Registration options for the browser ceremony        |
-| POST   | `/api/v1/auth/passkey/register/complete/`| Auth   | Verify + store the new passkey (public key only)     |
-| POST   | `/api/v1/auth/passkey/login/begin/`     | Public | Authentication options + `challenge_id` (conditional UI) |
-| POST   | `/api/v1/auth/passkey/login/complete/`  | Public | Verify the assertion → JWTs (or pending OTP for 2FA) |
+| Method | Endpoint                                  | Auth   | Description                                                                                              |
+| ------ | ----------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------- |
+| POST   | `/api/v1/auth/register/`                  | Public | Register (email must be unique)                                                                          |
+| POST   | `/api/v1/auth/login/`                     | Public | Login with email or username (returns JWT)                                                               |
+| POST   | `/api/v1/auth/logout/`                    | Auth   | Logout (blacklist token)                                                                                 |
+| POST   | `/api/v1/auth/token/refresh/`             | Public | Refresh access token                                                                                     |
+| GET    | `/api/v1/auth/user/`                      | Auth   | Get current user profile                                                                                 |
+| PATCH  | `/api/v1/auth/user/`                      | Auth   | Update profile                                                                                           |
+| POST   | `/api/v1/auth/otp/verify/`                | Public | Finish 2FA login: exchange (challenge, code) for JWTs; pass `recovery_code` instead to use a backup code |
+| POST   | `/api/v1/auth/otp/resend/`                | Public | Re-send the one-time code (cooldown-guarded)                                                             |
+| POST   | `/api/v1/auth/otp/toggle/`                | Auth   | Disable 2FA, or begin enabling (password → emailed code)                                                 |
+| POST   | `/api/v1/auth/otp/confirm-enable/`        | Auth   | Confirm the emailed code → 2FA on + one-time recovery codes                                              |
+| POST   | `/api/v1/auth/passkey/register/begin/`    | Auth   | Registration options for the browser ceremony                                                            |
+| POST   | `/api/v1/auth/passkey/register/complete/` | Auth   | Verify + store the new passkey (public key only)                                                         |
+| POST   | `/api/v1/auth/passkey/login/begin/`       | Public | Authentication options + `challenge_id` (conditional UI)                                                 |
+| POST   | `/api/v1/auth/passkey/login/complete/`    | Public | Verify the assertion → JWTs (or pending OTP for 2FA)                                                     |
 
 ### Rooms
 
@@ -573,6 +585,10 @@ Passwordless sign-in is live — the phishing-resistant successor to passwords +
 ---
 
 ## 🖼️ Screenshots
+
+**Interactive Map (MapLibre GL)** — price marker pins, university/metro landmark layers, radius search & price heatmap:
+
+<img width="1440" alt="Interactive Map" src="docs/screenshots/map-view.png" />
 
 **Roommate Matching** — find compatible flatmates by budget, area, lifestyle & gender preference:
 

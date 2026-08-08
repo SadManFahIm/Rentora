@@ -1,6 +1,6 @@
 import { api } from "./api";
 import { mapRoom, type ApiRoom, type Paginated } from "./mappers";
-import type { Room, RoomFilters, CreateRoomPayload, TierCatalog } from "../types";
+import type { Room, RoomFilters, CreateRoomPayload, TierCatalog, Landmark } from "../types";
 
 // ============================================================
 // ROOM SERVICE — real /rooms/ endpoints
@@ -19,6 +19,13 @@ function buildParams(filters: RoomFilters): Record<string, string> {
   if (filters.maxPrice) params.price__lte = filters.maxPrice;
   if (filters.available === "yes") params.is_available = "true";
   if (filters.owner != null) params.owner = String(filters.owner);
+
+  // Geo / map queries (Phase 7) — the backend supports bbox and a reference
+  // point (near_lat/near_lng or near_landmark) with radius_km.
+  if (filters.bbox) params.bbox = filters.bbox;
+  if (filters.nearLat != null) params.near_lat = String(filters.nearLat);
+  if (filters.nearLng != null) params.near_lng = String(filters.nearLng);
+  if (filters.radiusKm != null) params.radius_km = String(filters.radiusKm);
 
   switch (filters.sort) {
     case "price-asc":
@@ -54,6 +61,21 @@ export const roomService = {
     }
 
     return rooms;
+  },
+
+  /** GET /rooms/landmarks/ — public map landmark layers (universities + metro). */
+  async getLandmarks(): Promise<Landmark[]> {
+    const { data } =
+      await api.get<{ key: string; name: string; kind: string; lat: number; lng: number }[]>(
+        "/rooms/landmarks/"
+      );
+    return data.map((l) => ({
+      key: l.key,
+      name: l.name,
+      kind: l.kind === "university" ? "university" : "metro",
+      lat: l.lat,
+      lng: l.lng,
+    }));
   },
 
   /** GET /rooms/:id/ */
