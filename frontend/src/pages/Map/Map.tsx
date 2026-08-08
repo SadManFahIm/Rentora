@@ -54,6 +54,7 @@ import {
   tierColor,
   travelIsochrones,
   viewSummary,
+  type TravelMode,
 } from "../../lib/mapUtils";
 import { cn } from "../../lib/utils";
 
@@ -638,18 +639,35 @@ export default function Map() {
         room.distanceKm != null
           ? `<div class="map-popup__dist">📍 ${formatDistance(room.distanceKm)} away · ${formatTravelTime(room.distanceKm)} · ${formatDriveTime(room.distanceKm)}</div>`
           : "";
-      const directionsLink = `<a class="map-popup__dir" href="${directionsUrl(
-        { lat: room.lat, lng: room.lng },
-        radiusCenter
-      )}" target="_blank" rel="noopener noreferrer">Get Directions →</a>`;
-      const popup = new maplibregl.Popup({ offset: 22, closeButton: false, maxWidth: "260px" })
+      // Nearest MRT station with walking ETA — the "which line do I ride?"
+      // answer, straight from the backend's proximity annotation.
+      const metroLine = room.proximity?.nearestMetro
+        ? `<div class="map-popup__metro">🚇 ${esc(room.proximity.nearestMetro.name)} · ${formatDistance(
+            room.proximity.nearestMetro.distanceKm
+          )} · ${formatTravelTime(room.proximity.nearestMetro.distanceKm)}</div>`
+        : "";
+      // Travel-mode picker: each mode is its own Google Maps deep-link, so a
+      // tap opens the right route without any popup-state juggling.
+      const dirButton = (mode: TravelMode, label: string) =>
+        `<a class="map-popup__dir" href="${directionsUrl(
+          { lat: room.lat, lng: room.lng },
+          radiusCenter,
+          mode
+        )}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+      const directionsRow = `<div class="map-popup__dirs">
+          ${dirButton("walking", "🚶 Walk")}
+          ${dirButton("driving", "🚗 Drive")}
+          ${dirButton("transit", "🚇 Transit")}
+        </div>`;
+      const popup = new maplibregl.Popup({ offset: 22, closeButton: false, maxWidth: "290px" })
         .setHTML(`
         <div class="map-popup">
           <div class="map-popup__price">৳${room.price.toLocaleString()}<span>/mo</span></div>
           <div class="map-popup__name">${esc(room.name)}</div>
           <div class="map-popup__meta">${esc(room.area)} · ${esc(room.type)} · ★ ${room.rating} (${room.reviews})</div>
+          ${metroLine}
           ${distanceLine}
-          ${directionsLink}
+          ${directionsRow}
           <div class="map-popup__cta">View listing →</div>
         </div>
       `);
@@ -832,6 +850,17 @@ export default function Map() {
     const avg = summary?.avg_price ?? avgPrice(rooms);
     return { total, available, avg: avg != null ? Math.round(avg) : null };
   }, [rooms, summary]);
+
+  // Areas in the current viewport with their room counts — the map's quick
+  // "where are the rooms?" chips. Derived from the same /rooms/summary/ call
+  // that powers the badge, so no extra request.
+  const areaChips = useMemo(
+    () =>
+      (summary?.by_area ?? [])
+        .filter((a) => a.count > 0 && a.lat != null && a.lng != null)
+        .slice(0, 6),
+    [summary]
+  );
 
   // ---- street search handlers --------------------------------------------
   const pickSuggestion = (s: GeocodeSuggestion) => {
@@ -1085,6 +1114,29 @@ export default function Map() {
               </Button>
             </div>
           </div>
+
+          {/* Area count chips — tap to fly there and search near it */}
+          {!radiusCenter && areaChips.length > 0 && (
+            <div className="flex max-w-sm flex-wrap gap-1.5">
+              {areaChips.map((chip) => (
+                <button
+                  key={chip.area}
+                  onClick={() => {
+                    if (chip.lat == null || chip.lng == null) return;
+                    setRadiusCenter({ lat: chip.lat, lng: chip.lng, label: chip.area });
+                    mapRef.current?.flyTo({ center: [chip.lng, chip.lat], zoom: 13 });
+                  }}
+                  className="group flex items-center gap-1.5 rounded-full border border-gray-200 bg-white/95 py-1 pl-2.5 pr-1 text-xs font-medium text-gray-700 shadow-sm backdrop-blur transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-900/95 dark:text-gray-300 dark:hover:border-blue-600 dark:hover:bg-blue-950/40 dark:hover:text-blue-300"
+                >
+                  <MapPin className="size-3 text-blue-600 dark:text-blue-400" />
+                  {chip.area}
+                  <span className="flex size-5 items-center justify-center rounded-full bg-gray-100 text-[10px] font-bold text-gray-600 transition-colors group-hover:bg-blue-100 group-hover:text-blue-700 dark:bg-gray-800 dark:text-gray-300 dark:group-hover:bg-blue-900 dark:group-hover:text-blue-200">
+                    {chip.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Landmark quick-pick chips */}
           {!radiusCenter && (

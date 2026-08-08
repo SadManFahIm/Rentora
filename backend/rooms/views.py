@@ -30,7 +30,7 @@ from .serializers import (
     RoomDetailSerializer,
     RoomListSerializer,
 )
-from .streets import search_streets
+from .streets import area_center, search_streets
 
 
 class RoomFilter(django_filters.FilterSet):
@@ -433,8 +433,14 @@ class RoomViewSet(viewsets.ModelViewSet):
             min_price=models.Min("price"),
             max_price=models.Max("price"),
         )
+        # Count *available* rooms per area so the chips' numbers match the
+        # badge's "N of M available" framing — a chip showing "Dhanmondi 3"
+        # leads only to bookable listings.
         by_area = (
-            queryset.values("area").annotate(count=models.Count("id")).order_by("-count", "area")
+            queryset.filter(is_available=True)
+            .values("area")
+            .annotate(count=models.Count("id"))
+            .order_by("-count", "area")
         )
         return Response(
             {
@@ -445,7 +451,19 @@ class RoomViewSet(viewsets.ModelViewSet):
                 else None,
                 "min_price": float(agg["min_price"]) if agg["min_price"] is not None else None,
                 "max_price": float(agg["max_price"]) if agg["max_price"] is not None else None,
-                "by_area": [{"area": row["area"], "count": row["count"]} for row in by_area],
+                "by_area": [
+                    {
+                        "area": row["area"],
+                        "count": row["count"],
+                        # Fly-to point for the map's area chips, when known.
+                        **(
+                            {"lat": center[0], "lng": center[1]}
+                            if (center := area_center(row["area"]))
+                            else {}
+                        ),
+                    }
+                    for row in by_area
+                ],
             }
         )
 

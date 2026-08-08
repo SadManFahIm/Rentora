@@ -141,20 +141,55 @@
   font-weight: 600;
   color: #0d9488;
 }
-.map-popup__dir {
-  display: inline-block;
+.map-popup__metro {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #7c3aed;
+}
+/* Brighter accent lines on the dark popup card so the violet/teal stay
+   readable against #111827 (the class-based dark toggle applies here). */
+:is(.dark, [data-theme="dark"]) .map-popup__dist {
+  color: #2dd4bf;
+}
+:is(.dark, [data-theme="dark"]) .map-popup__metro {
+  color: #a78bfa;
+}
+.map-popup__dirs {
+  display: flex;
+  gap: 4px;
   margin-top: 8px;
+}
+.map-popup__dir {
+  flex: 1;
   border-radius: 8px;
   background: #0d9488;
-  padding: 6px 12px;
-  font-size: 11px;
+  padding: 6px 4px;
+  font-size: 10px;
   font-weight: 700;
   color: #fff;
+  text-align: center;
   text-decoration: none;
+  white-space: nowrap;
   transition: background 0.15s ease;
 }
 .map-popup__dir:hover {
   background: #0f766e;
+}
+.map-popup__dir:nth-child(2) {
+  background: #2563eb;
+}
+.map-popup__dir:nth-child(2):hover {
+  background: #1d4ed8;
+}
+.map-popup__dir:nth-child(3) {
+  background: #7c3aed;
+}
+.map-popup__dir:nth-child(3):hover {
+  background: #6d28d9;
 }
 .map-popup__cta {
   margin-top: 6px;
