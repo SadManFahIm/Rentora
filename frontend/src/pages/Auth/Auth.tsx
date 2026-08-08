@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,9 +15,9 @@ import { Input } from "../../components/ui/input";
 import { VisuallyHidden } from "../../components/ui/visually-hidden";
 import { cn } from "../../lib/utils";
 import {
+  analyzePassword,
+  checkPasswordBreached,
   passwordStrengthColor,
-  passwordStrengthLabel,
-  scorePassword,
 } from "../../lib/passwordStrength";
 
 interface AuthFormValues {
@@ -139,8 +139,28 @@ export default function Auth() {
   // Live values for the register-mode strength meter + match indicator.
   const passwordValue = watch("password") ?? "";
   const confirmValue = watch("confirmPassword") ?? "";
-  const strength = scorePassword(passwordValue);
+  const analysis = analyzePassword(passwordValue);
   const passwordsMatch = confirmValue.length > 0 && confirmValue === passwordValue;
+
+  // Debounced HaveIBeenPwned breach check (register mode only).
+  const [breach, setBreach] = useState<"idle" | "checking" | "safe" | "breached">("idle");
+  useEffect(() => {
+    if (isLogin || passwordValue.length < 8) {
+      setBreach("idle");
+      return;
+    }
+    let cancelled = false;
+    setBreach("checking");
+    const timer = setTimeout(async () => {
+      const found = await checkPasswordBreached(passwordValue);
+      if (cancelled) return;
+      setBreach(found === true ? "breached" : found === false ? "safe" : "idle");
+    }, 700);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [passwordValue, isLogin]);
 
   const rootError = login.isError || register.isError;
   const isBusy = isSubmitting || login.isPending || register.isPending;
@@ -332,16 +352,18 @@ export default function Auth() {
                     <span
                       className={cn(
                         "transition-colors",
-                        strength >= 3
+                        analysis.score >= 3
                           ? "text-emerald-600"
-                          : strength === 2
+                          : analysis.score === 2
                             ? "text-amber-600"
                             : "text-red-500"
                       )}
                     >
-                      Password strength: {passwordStrengthLabel(strength) || "Too short"}
+                      Password strength: {analysis.label}
                     </span>
-                    <span className="text-muted-foreground">{passwordValue.length}/12+</span>
+                    <span className="text-muted-foreground">
+                      {passwordValue.length}/12+ · ~10^{analysis.entropy}
+                    </span>
                   </div>
                   <div className="mt-1 flex h-1.5 gap-1 overflow-hidden rounded-full">
                     {[0, 1, 2, 3].map((i) => (
@@ -349,11 +371,34 @@ export default function Auth() {
                         key={i}
                         className={cn(
                           "h-full flex-1 rounded-full transition-all duration-300",
-                          i < strength ? passwordStrengthColor(strength) : "bg-muted"
+                          i < analysis.score ? passwordStrengthColor(analysis.score) : "bg-muted"
                         )}
                       />
                     ))}
                   </div>
+                  {/* zxcvbn feedback (e.g. "This is a top-10 common password") */}
+                  {analysis.warnings[0] && (
+                    <p className="mt-1.5 text-[11px] font-medium text-muted-foreground">
+                      {analysis.warnings[0]}
+                    </p>
+                  )}
+                  {/* HaveIBeenPwned breach status */}
+                  {breach === "checking" && (
+                    <p className="mt-1.5 text-[11px] text-muted-foreground">
+                      Checking known breaches…
+                    </p>
+                  )}
+                  {breach === "breached" && (
+                    <p className="mt-1.5 rounded-md border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] font-medium text-red-700 dark:border-red-500/30 dark:bg-red-950/40 dark:text-red-400">
+                      ⚠️ This password appears in known data breaches — please choose a different
+                      one.
+                    </p>
+                  )}
+                  {breach === "safe" && (
+                    <p className="mt-1.5 text-[11px] font-medium text-emerald-600">
+                      ✓ Not found in known breaches
+                    </p>
+                  )}
                 </div>
               )}
             </div>
