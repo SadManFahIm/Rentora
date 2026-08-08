@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-230%20(122%20BE%20%2B%20108%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-238%20(122%20BE%20%2B%20116%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -59,16 +59,23 @@
 
 - **MapLibre GL JS** map of Dhaka — OpenStreetMap tiles, key-free, with dark/light tile switching that follows the app theme
 - **Price marker pins** — every listing is a tappable pin showing its price (`৳12k`), coloured by tier (free orange / featured blue / premium amber) so promoted rooms pop exactly like the list
+- **Marker clustering** — with many listings in view, pins collapse into numbered cluster circles (click one to zoom in); toggle between **Clustered** and **Pins** modes
 - **Viewport sync** — panning/zooming refetches rooms inside the visible `bbox` (debounced 300ms), so the map and the room count always match what's on screen
 - **Radius search** — click a point on the map (or a university chip) and drag a slider to see rooms within 0.5–5 km, powered by the geo backend's `near_lat`/`near_lng` + `radius_km`
 - **Landmark layers** — toggle universities 🎓 and metro stations 🚇 on/off as map layers (from `/rooms/landmarks/`)
 - **Price heatmap** — green → amber → red circles scaled by rent, so expensive areas are visible at a glance
+- **Map + list split view** — a viewport-synced sidebar lists the rooms on screen (promoted first, then by price); on mobile it becomes a bottom sheet
 - Tapping a pin opens the room popup → full **RoomModal** (booking, chat, fraud badge, AI price insight)
+
+**Listing Location Picker (landlord)**
+
+- **List a Room** now opens a proper form with a **map picker** — click the map to pin the exact listing location (or "Use my location")
+- Coordinates are stored as `lat`/`lng`, powering the map view, geo search and price insight
 
 **Engineering**
 
 - **Coverage history per branch** — every PR and main push appends its own `history-<branch>.csv` + SVG chart to the `coverage-history` branch (viewable `index.html` linking all branches)
-- 230 automated tests (122 backend + 108 frontend) · coverage gates (BE ≥50%, FE ≥55%)
+- 238 automated tests (122 backend + 116 frontend) · coverage gates (BE ≥50%, FE ≥55%)
 - Ruff + ESLint + Prettier with husky/lint-staged pre-commit hooks
 - GitHub Actions CI (backend, frontend, lint, coverage-summary PR comment, per-branch coverage history)
 - Route-level code splitting (React.lazy) — smaller bundles
@@ -259,12 +266,12 @@ Rentora/
 
 Quality is enforced **in CI and at commit time** — style or coverage drift fails the pipeline automatically.
 
-### Automated tests (230 total)
+### Automated tests (238 total)
 
 | Suite             | Count | Gate                                               |
 | ----------------- | ----- | -------------------------------------------------- |
 | Backend (Django)  | 122   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
-| Frontend (Vitest) | 108   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
+| Frontend (Vitest) | 116   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
 
 ```bash
 # Backend
