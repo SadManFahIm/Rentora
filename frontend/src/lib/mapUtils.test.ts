@@ -251,6 +251,13 @@ describe("directionsUrl", () => {
     expect(url).toContain("destination=23.792611,90.416722");
     expect(url).not.toContain(".2222");
   });
+
+  it("defaults to walking and accepts driving/transit modes", () => {
+    const dest = { lat: 23.746, lng: 90.376 };
+    expect(directionsUrl(dest)).toContain("travelmode=walking");
+    expect(directionsUrl(dest, null, "driving")).toContain("travelmode=driving");
+    expect(directionsUrl(dest, null, "transit")).toContain("travelmode=transit");
+  });
 });
 
 describe("walkingIsochrone", () => {

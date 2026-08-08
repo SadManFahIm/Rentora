@@ -233,6 +233,9 @@ export function formatDriveTime(distanceKm: number): string {
   return `≈ ${minutes} min drive`;
 }
 
+/** Travel modes the directions deep-link supports (Google Maps travelmode). */
+export type TravelMode = "walking" | "driving" | "transit";
+
 /**
  * Google Maps directions deep-link between two points. Used by the map
  * popup's "Get Directions" action — opens Maps with the route pre-filled so
@@ -241,12 +244,13 @@ export function formatDriveTime(distanceKm: number): string {
  */
 export function directionsUrl(
   destination: { lat: number; lng: number },
-  origin?: { lat: number; lng: number } | null
+  origin?: { lat: number; lng: number } | null,
+  mode: TravelMode = "walking"
 ): string {
   const point = (p: { lat: number; lng: number }) => `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`;
   const dest = `destination=${point(destination)}`;
   const orig = origin ? `&origin=${point(origin)}` : "";
-  return `https://www.google.com/maps/dir/?api=1${orig}&${dest}&travelmode=walking`;
+  return `https://www.google.com/maps/dir/?api=1${orig}&${dest}&travelmode=${mode}`;
 }
 
 /**

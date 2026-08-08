@@ -114,6 +114,21 @@ STREETS: tuple[Street, ...] = (
 )
 
 
+_BY_NAME: dict[str, Street] = {street.name: street for street in STREETS}
+
+
+def area_center(area_name: str) -> tuple[float, float] | None:
+    """Center coordinates for a district/area name, if the gazetteer knows it.
+
+    Used to attach a fly-to point to each row of the room-count summary — so
+    an "areas in view" chip knows where to take the map when clicked.
+    """
+    street = _BY_NAME.get(area_name)
+    if street is None:
+        return None
+    return (street.lat, street.lng)
+
+
 def search_streets(query: str, limit: int = 8) -> list[Street]:
     """Ranked street/area suggestions for an autocomplete query.
 
