@@ -84,11 +84,6 @@ export interface ApiRoom {
   proximity?: ApiRoomProximity;
   distance_km?: number | null;
   created_at: string;
-  distance_km?: number | null;
-  proximity?: {
-    nearest_university: { key: string; name: string; distance_km: number } | null;
-    nearest_metro: { key: string; name: string; distance_km: number } | null;
-  } | null;
 }
 
 export interface ApiBooking {
