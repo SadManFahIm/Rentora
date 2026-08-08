@@ -32,7 +32,6 @@ export function useRooms(filters: RoomFilters = {}) {
   });
 }
 
-<<<<<<< HEAD
 /**
  * Fetch rooms within a map viewport (`bbox` from Leaflet). `bbox` null loads
  * the whole available set (initial map render). `keepPreviousData` keeps the
@@ -45,7 +44,6 @@ export function useRoomsInBounds(bbox: string | null, filters: RoomFilters = {})
     queryFn: () => roomService.getRoomsInBounds(bbox, filters),
     staleTime: 30_000,
     placeholderData: (previous) => previous,
-=======
 /** Create a new listing (landlord flow). Invalidates the room list cache. */
 export function useCreateRoom() {
   const queryClient = useQueryClient();
@@ -63,7 +61,6 @@ export function useLandmarks() {
     queryKey: [...roomKeys.all, "landmarks"] as const,
     queryFn: () => roomService.getLandmarks(),
     staleTime: 24 * 60 * 60 * 1000, // static data — cache for a day
->>>>>>> origin/main
   });
 }
 

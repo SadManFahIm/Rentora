@@ -271,30 +271,8 @@ export function mapRoom(api: ApiRoom): Room {
     ownerId: api.owner?.id ?? null,
     ownerAvatar: initials(owner),
     verified: api.verified,
-<<<<<<< HEAD
     proximity: mapProximity(api.proximity),
     distanceKm: api.distance_km ?? null,
-=======
-    distanceKm: api.distance_km != null ? Number(api.distance_km) : null,
-    proximity: api.proximity
-      ? {
-          nearestUniversity: api.proximity.nearest_university
-            ? {
-                key: api.proximity.nearest_university.key,
-                name: api.proximity.nearest_university.name,
-                distanceKm: Number(api.proximity.nearest_university.distance_km),
-              }
-            : null,
-          nearestMetro: api.proximity.nearest_metro
-            ? {
-                key: api.proximity.nearest_metro.key,
-                name: api.proximity.nearest_metro.name,
-                distanceKm: Number(api.proximity.nearest_metro.distance_km),
-              }
-            : null,
-        }
-      : null,
->>>>>>> origin/main
   };
 }
 
