@@ -24,3 +24,10 @@ backend/htmlcov/
 # Local tooling
 .tmp-chrome-profile/
 .freebuff/
+.agents/
+
+# Skills install lockfile (local tooling)
+skills-lock.json
+
+# Vite cache
+frontend/.vite/

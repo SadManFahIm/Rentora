@@ -5,6 +5,10 @@
 export type RoomType = "Single" | "Shared" | "Studio";
 export type GenderPref = "Any" | "Male" | "Female";
 
+/** Paid listing tier (monetization): free is the default; featured/premium
+ * are unlocked via a promotion payment and expire. */
+export type ListingTier = "free" | "featured" | "premium";
+
 export interface Room {
   id: number;
   name: string;
@@ -20,12 +24,35 @@ export interface Room {
   gender: GenderPref;
   available: boolean;
   featured: boolean;
+  tier: ListingTier;
+  tierExpiresAt: string | null;
   description: string;
   size: number;
   owner: string;
   ownerId: number | null;
   ownerAvatar: string;
   verified: boolean;
+  /** Distance (km) from the query's reference point — set on radius/map queries. */
+  distanceKm?: number | null;
+  /** Nearest university + metro to this listing, each with distance in km. */
+  proximity?: {
+    nearestUniversity: { key: string; name: string; distanceKm: number } | null;
+    nearestMetro: { key: string; name: string; distanceKm: number } | null;
+  } | null;
+}
+
+/** Public tier catalog from GET /rooms/tier-catalog/. */
+export interface TierInfo {
+  tier: ListingTier;
+  label: string;
+  price: number;
+  benefits: string[];
+}
+
+export interface TierCatalog {
+  tiers: TierInfo[];
+  durationDays: number;
+  currency: string;
 }
 
 export type UserRole = "tenant" | "landlord" | "admin";
@@ -42,6 +69,17 @@ export interface User {
   phone?: string;
   bio?: string;
   nidVerified?: boolean;
+  /** Email-OTP two-factor authentication is enabled for this account. */
+  otpEnabled?: boolean;
+  /** Registered WebAuthn passkeys (from the user detail payload). */
+  passkeys?: PasskeyInfo[];
+}
+
+export interface PasskeyInfo {
+  id: string;
+  name: string;
+  created_at: string;
+  last_used_at: string | null;
 }
 
 export interface Notification {
@@ -128,7 +166,51 @@ export interface Filters {
 }
 
 // Filters as sent to the service layer — every field optional.
-export type RoomFilters = Partial<Filters>;
+export type RoomFilters = Partial<Filters> & {
+  owner?: number;
+  /** Map viewport, GeoJSON order: minLng,minLat,maxLng,maxLat. */
+  bbox?: string;
+  /** Reference-point latitude (pair with nearLng). */
+  nearLat?: number;
+  /** Reference-point longitude (pair with nearLat). */
+  nearLng?: number;
+  /** Keep only rooms within this many km of the reference point. */
+  radiusKm?: number;
+};
+
+/** A university or metro station from GET /rooms/landmarks/. */
+export interface Landmark {
+  key: string;
+  name: string;
+  kind: "university" | "metro";
+  lat: number;
+  lng: number;
+}
+
+/** A place suggestion from the map's street-search autocomplete. */
+export interface GeocodeSuggestion {
+  key: string;
+  label: string;
+  kind: "street" | "area" | "university" | "metro";
+  lat: number;
+  lng: number;
+}
+
+/** Aggregate room counts from GET /rooms/summary/ (map badge + area chips). */
+export interface MapSummary {
+  total: number;
+  available: number;
+  avg_price: number | null;
+  min_price: number | null;
+  max_price: number | null;
+  by_area: {
+    area: string;
+    count: number;
+    /** Fly-to point for the area chip, when the gazetteer knows the area. */
+    lat?: number;
+    lng?: number;
+  }[];
+}
 
 // ---- API payloads ----
 export type CreateRoomPayload = Omit<Room, "id" | "rating" | "reviews">;
@@ -149,6 +231,22 @@ export interface AuthResult {
   user: User;
   access: string;
   refresh: string;
+}
+
+/** Response from login when the account has email-OTP 2FA enabled. */
+export interface OtpPending {
+  otpRequired: true;
+  challenge: string;
+  destinationMasked: string;
+  expiresIn: number;
+  user: User;
+}
+
+/** Login either completes with JWTs or demands a one-time code. */
+export type LoginResult = AuthResult | OtpPending;
+
+export function isOtpPending(result: LoginResult): result is OtpPending {
+  return "otpRequired" in result && result.otpRequired === true;
 }
 
 export interface CreateBookingPayload {
@@ -181,7 +279,8 @@ export type PaymentGateway = "sslcommerz" | "bkash";
 
 export type PaymentMethod = PaymentGateway | "nagad" | "manual";
 
-export type PaymentType = "booking_deposit" | "monthly_rent" | "security_deposit";
+export type PaymentType =
+  "booking_deposit" | "monthly_rent" | "security_deposit" | "listing_feature" | "listing_premium";
 
 export type PaymentStatus =
   "initiated" | "pending" | "success" | "failed" | "cancelled" | "refunded";

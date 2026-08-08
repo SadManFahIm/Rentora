@@ -27,7 +27,12 @@ User = get_user_model()
 
 
 def make_user(username, gender="male"):
-    return User.objects.create_user(username=username, password="test12345", gender=gender)
+    return User.objects.create_user(
+        username=username,
+        email=f"{username}@example.com",
+        password="test12345",
+        gender=gender,
+    )
 
 
 def make_profile(

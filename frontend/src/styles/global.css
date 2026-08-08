@@ -32,3 +32,174 @@
     border-radius: 2px;
   }
 }
+
+/* ============================================================
+   MAP (Phase 7) — marker pins + popups for MapLibre GL
+   ============================================================ */
+.map-marker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 28px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 999px 999px 999px 5px;
+  background: #ea580c;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  box-shadow:
+    0 2px 6px rgb(0 0 0 / 0.25),
+    0 0 0 2px rgb(255 255 255 / 0.85);
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.map-marker::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 0;
+  height: 0;
+  margin-left: -5px;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid #ea580c;
+}
+.map-marker--premium {
+  background: #f59e0b;
+}
+.map-marker--premium::after {
+  border-top-color: #f59e0b;
+}
+.map-marker--featured {
+  background: #3b82f6;
+}
+.map-marker--featured::after {
+  border-top-color: #3b82f6;
+}
+.map-marker--active {
+  z-index: 999;
+  transform: scale(1.3);
+  box-shadow:
+    0 0 0 4px rgb(255 255 255 / 0.95),
+    0 4px 16px rgb(0 0 0 / 0.4);
+}
+.map-marker:hover {
+  transform: scale(1.15);
+  box-shadow:
+    0 4px 12px rgb(0 0 0 / 0.35),
+    0 0 0 3px rgb(255 255 255 / 0.95);
+}
+
+.maplibregl-popup-content {
+  border-radius: 12px;
+  padding: 0;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 0.18);
+}
+.maplibregl-popup-tip {
+  display: none;
+}
+.map-popup {
+  min-width: 180px;
+  padding: 12px 14px;
+}
+.map-popup__price {
+  font-family: var(--font-display, inherit);
+  font-size: 16px;
+  font-weight: 800;
+  color: #ea580c;
+}
+.map-popup__price span {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-muted, #6b7280);
+}
+.map-popup__name {
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--foreground, #111827);
+}
+.map-popup__meta {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--color-muted, #6b7280);
+}
+.map-popup__dist {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #0d9488;
+}
+.map-popup__metro {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #7c3aed;
+}
+/* Brighter accent lines on the dark popup card so the violet/teal stay
+   readable against #111827 (the class-based dark toggle applies here). */
+:is(.dark, [data-theme="dark"]) .map-popup__dist {
+  color: #2dd4bf;
+}
+:is(.dark, [data-theme="dark"]) .map-popup__metro {
+  color: #a78bfa;
+}
+.map-popup__dirs {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+.map-popup__dir {
+  flex: 1;
+  border-radius: 8px;
+  background: #0d9488;
+  padding: 6px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+}
+.map-popup__dir:hover {
+  background: #0f766e;
+}
+.map-popup__dir:nth-child(2) {
+  background: #2563eb;
+}
+.map-popup__dir:nth-child(2):hover {
+  background: #1d4ed8;
+}
+.map-popup__dir:nth-child(3) {
+  background: #7c3aed;
+}
+.map-popup__dir:nth-child(3):hover {
+  background: #6d28d9;
+}
+.map-popup__cta {
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ea580c;
+}
+/* The app toggles dark mode via a `.dark` class on <html> (Tailwind class
+   strategy), so popup theming follows the app toggle — not the OS setting. */
+:is(.dark, [data-theme="dark"]) .maplibregl-popup-content {
+  background: #111827;
+  color: #f3f4f6;
+}
