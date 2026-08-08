@@ -32,6 +32,13 @@ export interface Room {
   ownerId: number | null;
   ownerAvatar: string;
   verified: boolean;
+  /** Distance (km) from the query's reference point — set on radius/map queries. */
+  distanceKm?: number | null;
+  /** Nearest university + metro to this listing, each with distance in km. */
+  proximity?: {
+    nearestUniversity: { key: string; name: string; distanceKm: number } | null;
+    nearestMetro: { key: string; name: string; distanceKm: number } | null;
+  } | null;
 }
 
 /** Public tier catalog from GET /rooms/tier-catalog/. */
