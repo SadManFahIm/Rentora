@@ -7,8 +7,10 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 import { ArrowLeft, Home, Loader2 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
-import { useLogin, useRegister } from "../../hooks/useAuth";
+import { useLogin, useRegister, useVerifyOtp } from "../../hooks/useAuth";
+import { authService } from "../../services/authService";
 import { getApiErrorMessage } from "../../services/errors";
+import { isOtpPending, type OtpPending } from "../../types";
 import { Dialog, DialogContent, DialogTitle } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -67,6 +69,13 @@ export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const login = useLogin();
   const register = useRegister();
+  const verifyOtp = useVerifyOtp();
+
+  // When login reports a pending email-OTP challenge (2FA account), the
+  // form is replaced by a verification-code step.
+  const [otpStep, setOtpStep] = useState<OtpPending | null>(null);
+  const [otpCode, setOtpCode] = useState("");
+  const [resending, setResending] = useState(false);
 
   // Single schema whose rules depend on the current mode:
   //  - Login:    email/username (non-empty) + password (min 6)
@@ -165,13 +174,53 @@ export default function Auth() {
   const rootError = login.isError || register.isError;
   const isBusy = isSubmitting || login.isPending || register.isPending;
 
+  const submitOtp = () => {
+    if (!otpStep || otpCode.trim().length === 0) return;
+    verifyOtp.mutate(
+      { challenge: otpStep.challenge, code: otpCode.trim() },
+      {
+        onSuccess: (user) => {
+          toast.success(`Welcome back, ${user.name}!`);
+          navigate("/dashboard");
+        },
+        onError: (error) =>
+          toast.error(getApiErrorMessage(error, "That code was not accepted. Try again.")),
+      }
+    );
+  };
+
+  const resendOtp = async () => {
+    if (!otpStep) return;
+    setResending(true);
+    try {
+      await authService.resendOtp(otpStep.challenge);
+      toast.success("A new code has been sent to your email.");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Could not resend the code yet."));
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const backToLogin = () => {
+    setOtpStep(null);
+    setOtpCode("");
+    login.reset();
+  };
+
   const onSubmit = handleSubmit((values) => {
     if (isLogin) {
       login.mutate(
         { email: values.email, password: values.password },
         {
-          onSuccess: (user) => {
-            toast.success(`Welcome back, ${user.name}!`);
+          onSuccess: (result) => {
+            if (isOtpPending(result)) {
+              // 2FA enabled — collect the emailed code before any tokens.
+              setOtpStep(result);
+              setOtpCode("");
+              return;
+            }
+            toast.success(`Welcome back, ${result.user.name}!`);
             navigate("/dashboard");
           },
           onError: (error) => toast.error(getApiErrorMessage(error, "Invalid email or password.")),
@@ -274,249 +323,334 @@ export default function Auth() {
         {/* ---------- Form body (frosted panel) ---------- */}
         <div className="relative bg-background px-8 pb-8 pt-6">
           <VisuallyHidden>
-            <DialogTitle>{isLogin ? "Welcome Back!" : "Create Account"}</DialogTitle>
+            <DialogTitle>
+              {otpStep ? "Two-step verification" : isLogin ? "Welcome Back!" : "Create Account"}
+            </DialogTitle>
           </VisuallyHidden>
 
-          <form onSubmit={onSubmit} noValidate className="flex flex-col gap-3.5">
-            {rootError && (
+          {otpStep && (
+            <div className="flex flex-col gap-4">
               <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                className="overflow-hidden rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-950/40 dark:text-red-400"
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={spring}
+                className="flex flex-col items-center text-center"
               >
-                Something went wrong. Please check your details and try again.
+                <span className="mb-3 inline-flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-2xl shadow-lg shadow-emerald-900/30">
+                  🔐
+                </span>
+                <h3 className="font-display text-lg font-extrabold tracking-tight text-foreground">
+                  Two-step verification
+                </h3>
+                <p className="mt-1.5 max-w-xs text-sm text-muted-foreground">
+                  We emailed a 6-digit code to{" "}
+                  <span className="font-semibold text-foreground">{otpStep.destinationMasked}</span>
+                  . Enter it below to finish signing in.
+                </p>
               </motion.div>
-            )}
 
-            <AnimatePresence initial={false} mode="popLayout">
-              {!isLogin && (
-                <motion.div
-                  key="name"
-                  initial={{ opacity: 0, height: 0, marginBottom: 0 }}
-                  animate={{ opacity: 1, height: "auto", marginBottom: 14 }}
-                  exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                  transition={{ duration: 0.22 }}
-                  className="overflow-hidden"
+              <label className="text-sm font-semibold text-muted-foreground">
+                Verification code
+              </label>
+              <Input
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                onKeyDown={(e) => e.key === "Enter" && submitOtp()}
+                inputMode="numeric"
+                autoFocus
+                maxLength={6}
+                placeholder="••••••"
+                className="text-center font-display text-2xl tracking-[0.5em]"
+                aria-label="6-digit verification code"
+              />
+
+              {verifyOtp.isPending && (
+                <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" /> Verifying…
+                </p>
+              )}
+
+              <Button
+                type="button"
+                variant="brand"
+                size="lg"
+                className="w-full rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 font-semibold text-white shadow-lg shadow-emerald-600/25"
+                onClick={submitOtp}
+                disabled={verifyOtp.isPending || otpCode.length < 6}
+              >
+                {verifyOtp.isPending ? "Verifying…" : "Verify & Sign In"}
+              </Button>
+
+              <div className="flex items-center justify-between text-sm">
+                <button
+                  type="button"
+                  onClick={backToLogin}
+                  className="flex items-center gap-1 font-medium text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  <label className="mb-1.5 block text-sm font-semibold text-muted-foreground">
-                    Full Name
-                  </label>
-                  <Input placeholder="Your name" aria-invalid={!!errors.name} {...field("name")} />
-                  {errors.name && (
-                    <span className="mt-1.5 block text-xs font-medium text-red-600">
-                      {errors.name.message}
-                    </span>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold text-muted-foreground">
-                {isLogin ? "Email or Username" : "Email Address"}
-              </label>
-              <Input
-                type="text"
-                inputMode="email"
-                placeholder={isLogin ? "you@email.com or rahim.hossain" : "you@email.com"}
-                autoComplete="username"
-                aria-invalid={!!errors.email}
-                {...field("email")}
-              />
-              {errors.email && (
-                <span className="mt-1.5 block text-xs font-medium text-red-600">
-                  {errors.email.message}
-                </span>
-              )}
+                  <ArrowLeft className="size-3.5" /> Use another account
+                </button>
+                <button
+                  type="button"
+                  onClick={resendOtp}
+                  disabled={resending}
+                  className="font-semibold text-brand hover:underline disabled:opacity-50"
+                >
+                  {resending ? "Sending…" : "Resend code"}
+                </button>
+              </div>
             </div>
+          )}
 
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold text-muted-foreground">
-                Password
-              </label>
-              <Input
-                type="password"
-                placeholder="••••••••"
-                aria-invalid={!!errors.password}
-                {...field("password")}
-              />
-              {errors.password && (
-                <span className="mt-1.5 block text-xs font-medium text-red-600">
-                  {errors.password.message}
-                </span>
-              )}
-              {/* Live strength meter (register mode only) */}
-              {!isLogin && passwordValue.length > 0 && (
-                <div className="mt-2" aria-live="polite">
-                  <div className="flex items-center justify-between text-[11px] font-medium">
-                    <span
-                      className={cn(
-                        "transition-colors",
-                        analysis.score >= 3
-                          ? "text-emerald-600"
-                          : analysis.score === 2
-                            ? "text-amber-600"
-                            : "text-red-500"
-                      )}
+          <form onSubmit={onSubmit} noValidate className="flex flex-col gap-3.5">
+            {!otpStep && (
+              <>
+                {rootError && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    className="overflow-hidden rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-950/40 dark:text-red-400"
+                  >
+                    Something went wrong. Please check your details and try again.
+                  </motion.div>
+                )}
+
+                <AnimatePresence initial={false} mode="popLayout">
+                  {!isLogin && (
+                    <motion.div
+                      key="name"
+                      initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                      animate={{ opacity: 1, height: "auto", marginBottom: 14 }}
+                      exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                      transition={{ duration: 0.22 }}
+                      className="overflow-hidden"
                     >
-                      Password strength: {analysis.label}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {passwordValue.length}/12+ · ~10^{analysis.entropy}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex h-1.5 gap-1 overflow-hidden rounded-full">
-                    {[0, 1, 2, 3].map((i) => (
-                      <span
-                        key={i}
-                        className={cn(
-                          "h-full flex-1 rounded-full transition-all duration-300",
-                          i < analysis.score ? passwordStrengthColor(analysis.score) : "bg-muted"
-                        )}
+                      <label className="mb-1.5 block text-sm font-semibold text-muted-foreground">
+                        Full Name
+                      </label>
+                      <Input
+                        placeholder="Your name"
+                        aria-invalid={!!errors.name}
+                        {...field("name")}
                       />
-                    ))}
-                  </div>
-                  {/* zxcvbn feedback (e.g. "This is a top-10 common password") */}
-                  {analysis.warnings[0] && (
-                    <p className="mt-1.5 text-[11px] font-medium text-muted-foreground">
-                      {analysis.warnings[0]}
-                    </p>
+                      {errors.name && (
+                        <span className="mt-1.5 block text-xs font-medium text-red-600">
+                          {errors.name.message}
+                        </span>
+                      )}
+                    </motion.div>
                   )}
-                  {/* HaveIBeenPwned breach status */}
-                  {breach === "checking" && (
-                    <p className="mt-1.5 text-[11px] text-muted-foreground">
-                      Checking known breaches…
-                    </p>
-                  )}
-                  {breach === "breached" && (
-                    <p className="mt-1.5 rounded-md border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] font-medium text-red-700 dark:border-red-500/30 dark:bg-red-950/40 dark:text-red-400">
-                      ⚠️ This password appears in known data breaches — please choose a different
-                      one.
-                    </p>
-                  )}
-                  {breach === "safe" && (
-                    <p className="mt-1.5 text-[11px] font-medium text-emerald-600">
-                      ✓ Not found in known breaches
-                    </p>
+                </AnimatePresence>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold text-muted-foreground">
+                    {isLogin ? "Email or Username" : "Email Address"}
+                  </label>
+                  <Input
+                    type="text"
+                    inputMode="email"
+                    placeholder={isLogin ? "you@email.com or rahim.hossain" : "you@email.com"}
+                    autoComplete="username"
+                    aria-invalid={!!errors.email}
+                    {...field("email")}
+                  />
+                  {errors.email && (
+                    <span className="mt-1.5 block text-xs font-medium text-red-600">
+                      {errors.email.message}
+                    </span>
                   )}
                 </div>
-              )}
-            </div>
 
-            <AnimatePresence initial={false} mode="popLayout">
-              {!isLogin && (
-                <motion.div
-                  key="confirm"
-                  initial={{ opacity: 0, height: 0, marginBottom: 0 }}
-                  animate={{ opacity: 1, height: "auto", marginBottom: 14 }}
-                  exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                  transition={{ duration: 0.22 }}
-                  className="overflow-hidden"
-                >
+                <div>
                   <label className="mb-1.5 block text-sm font-semibold text-muted-foreground">
-                    Confirm Password
+                    Password
                   </label>
                   <Input
                     type="password"
                     placeholder="••••••••"
-                    aria-invalid={!!errors.confirmPassword}
-                    {...field("confirmPassword")}
+                    aria-invalid={!!errors.password}
+                    {...field("password")}
                   />
-                  {errors.confirmPassword && (
+                  {errors.password && (
                     <span className="mt-1.5 block text-xs font-medium text-red-600">
-                      {errors.confirmPassword.message}
+                      {errors.password.message}
                     </span>
                   )}
-                  {/* Live match indicator */}
-                  {confirmValue.length > 0 && (
-                    <span
-                      aria-live="polite"
-                      className={cn(
-                        "mt-1.5 flex items-center gap-1 text-xs font-medium",
-                        passwordsMatch ? "text-emerald-600" : "text-red-500"
+                  {/* Live strength meter (register mode only) */}
+                  {!isLogin && passwordValue.length > 0 && (
+                    <div className="mt-2" aria-live="polite">
+                      <div className="flex items-center justify-between text-[11px] font-medium">
+                        <span
+                          className={cn(
+                            "transition-colors",
+                            analysis.score >= 3
+                              ? "text-emerald-600"
+                              : analysis.score === 2
+                                ? "text-amber-600"
+                                : "text-red-500"
+                          )}
+                        >
+                          Password strength: {analysis.label}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {passwordValue.length}/12+ · ~10^{analysis.entropy}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex h-1.5 gap-1 overflow-hidden rounded-full">
+                        {[0, 1, 2, 3].map((i) => (
+                          <span
+                            key={i}
+                            className={cn(
+                              "h-full flex-1 rounded-full transition-all duration-300",
+                              i < analysis.score
+                                ? passwordStrengthColor(analysis.score)
+                                : "bg-muted"
+                            )}
+                          />
+                        ))}
+                      </div>
+                      {/* zxcvbn feedback (e.g. "This is a top-10 common password") */}
+                      {analysis.warnings[0] && (
+                        <p className="mt-1.5 text-[11px] font-medium text-muted-foreground">
+                          {analysis.warnings[0]}
+                        </p>
                       )}
+                      {/* HaveIBeenPwned breach status */}
+                      {breach === "checking" && (
+                        <p className="mt-1.5 text-[11px] text-muted-foreground">
+                          Checking known breaches…
+                        </p>
+                      )}
+                      {breach === "breached" && (
+                        <p className="mt-1.5 rounded-md border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] font-medium text-red-700 dark:border-red-500/30 dark:bg-red-950/40 dark:text-red-400">
+                          ⚠️ This password appears in known data breaches — please choose a
+                          different one.
+                        </p>
+                      )}
+                      {breach === "safe" && (
+                        <p className="mt-1.5 text-[11px] font-medium text-emerald-600">
+                          ✓ Not found in known breaches
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <AnimatePresence initial={false} mode="popLayout">
+                  {!isLogin && (
+                    <motion.div
+                      key="confirm"
+                      initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                      animate={{ opacity: 1, height: "auto", marginBottom: 14 }}
+                      exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                      transition={{ duration: 0.22 }}
+                      className="overflow-hidden"
                     >
-                      {passwordsMatch ? "✓ Passwords match" : "✕ Passwords do not match"}
+                      <label className="mb-1.5 block text-sm font-semibold text-muted-foreground">
+                        Confirm Password
+                      </label>
+                      <Input
+                        type="password"
+                        placeholder="••••••••"
+                        aria-invalid={!!errors.confirmPassword}
+                        {...field("confirmPassword")}
+                      />
+                      {errors.confirmPassword && (
+                        <span className="mt-1.5 block text-xs font-medium text-red-600">
+                          {errors.confirmPassword.message}
+                        </span>
+                      )}
+                      {/* Live match indicator */}
+                      {confirmValue.length > 0 && (
+                        <span
+                          aria-live="polite"
+                          className={cn(
+                            "mt-1.5 flex items-center gap-1 text-xs font-medium",
+                            passwordsMatch ? "text-emerald-600" : "text-red-500"
+                          )}
+                        >
+                          {passwordsMatch ? "✓ Passwords match" : "✕ Passwords do not match"}
+                        </span>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ ...spring, delay: 0.12 }}
+                  className="flex items-center justify-between"
+                >
+                  {isLogin ? (
+                    <span className="cursor-pointer text-sm font-medium text-brand hover:underline">
+                      Forgot password?
+                    </span>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">
+                      Password must be 6+ characters
                     </span>
                   )}
                 </motion.div>
-              )}
-            </AnimatePresence>
 
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ ...spring, delay: 0.12 }}
-              className="flex items-center justify-between"
-            >
-              {isLogin ? (
-                <span className="cursor-pointer text-sm font-medium text-brand hover:underline">
-                  Forgot password?
-                </span>
-              ) : (
-                <span className="text-sm text-muted-foreground">
-                  Password must be 6+ characters
-                </span>
-              )}
-            </motion.div>
+                <motion.div
+                  whileHover={{ scale: 1.015 }}
+                  whileTap={{ scale: 0.985 }}
+                  transition={spring}
+                >
+                  <Button
+                    type="submit"
+                    variant="brand"
+                    size="lg"
+                    className="w-full rounded-xl bg-gradient-to-r from-orange-600 to-orange-500 font-semibold text-white shadow-lg shadow-orange-600/25 hover:from-orange-600 hover:to-orange-500 hover:shadow-orange-600/35"
+                    disabled={isBusy}
+                  >
+                    {isBusy ? (
+                      <>
+                        <Loader2 className="size-4 animate-spin" /> Please wait…
+                      </>
+                    ) : isLogin ? (
+                      "Sign In"
+                    ) : (
+                      "Create Account"
+                    )}
+                  </Button>
+                </motion.div>
 
-            <motion.div
-              whileHover={{ scale: 1.015 }}
-              whileTap={{ scale: 0.985 }}
-              transition={spring}
-            >
-              <Button
-                type="submit"
-                variant="brand"
-                size="lg"
-                className="w-full rounded-xl bg-gradient-to-r from-orange-600 to-orange-500 font-semibold text-white shadow-lg shadow-orange-600/25 hover:from-orange-600 hover:to-orange-500 hover:shadow-orange-600/35"
-                disabled={isBusy}
-              >
-                {isBusy ? (
-                  <>
-                    <Loader2 className="size-4 animate-spin" /> Please wait…
-                  </>
-                ) : isLogin ? (
-                  "Sign In"
-                ) : (
-                  "Create Account"
-                )}
-              </Button>
-            </motion.div>
+                <p className="text-center text-sm text-muted-foreground">
+                  {isLogin ? "Don't have an account? " : "Already have an account? "}
+                  <button
+                    type="button"
+                    className="cursor-pointer font-semibold text-brand hover:underline"
+                    onClick={switchMode}
+                  >
+                    {isLogin ? "Sign Up" : "Sign In"}
+                  </button>
+                </p>
 
-            <p className="text-center text-sm text-muted-foreground">
-              {isLogin ? "Don't have an account? " : "Already have an account? "}
-              <button
-                type="button"
-                className="cursor-pointer font-semibold text-brand hover:underline"
-                onClick={switchMode}
-              >
-                {isLogin ? "Sign Up" : "Sign In"}
-              </button>
-            </p>
+                {/* divider + social login (matches the current product's look) */}
+                <div className="my-1 flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="h-px flex-1 bg-border" />
+                  or continue with
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Button type="button" variant="outline" className="justify-center gap-2">
+                    <span className="text-base">🔵</span> Google
+                  </Button>
+                  <Button type="button" variant="outline" className="justify-center gap-2">
+                    <span className="text-base">🟦</span> Facebook
+                  </Button>
+                </div>
 
-            {/* divider + social login (matches the current product's look) */}
-            <div className="my-1 flex items-center gap-3 text-xs text-muted-foreground">
-              <span className="h-px flex-1 bg-border" />
-              or continue with
-              <span className="h-px flex-1 bg-border" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Button type="button" variant="outline" className="justify-center gap-2">
-                <span className="text-base">🔵</span> Google
-              </Button>
-              <Button type="button" variant="outline" className="justify-center gap-2">
-                <span className="text-base">🟦</span> Facebook
-              </Button>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => navigate("/")}
-              className="mx-auto flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ArrowLeft className="size-3.5" /> Back to Home
-            </button>
+                <button
+                  type="button"
+                  onClick={() => navigate("/")}
+                  className="mx-auto flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <ArrowLeft className="size-3.5" /> Back to Home
+                </button>
+              </>
+            )}
           </form>
         </div>
       </DialogContent>

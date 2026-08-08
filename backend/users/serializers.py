@@ -32,6 +32,7 @@ class UserSerializer(serializers.ModelSerializer):
             "nid_verified",
             "bio",
             "date_of_birth",
+            "otp_enabled",
             "date_joined",
         ]
         read_only_fields = ["id", "date_joined", "nid_verified"]
@@ -55,6 +56,7 @@ class CustomUserDetailsSerializer(UserDetailsSerializer):
             "nid_verified",
             "bio",
             "date_of_birth",
+            "otp_enabled",
         )
         read_only_fields = ("email", "nid_verified")
 
@@ -105,3 +107,19 @@ class CustomRegisterSerializer(RegisterSerializer):
         user.role = self.cleaned_data.get("role", User.Role.TENANT)
         user.save(update_fields=["first_name", "phone", "role"])
         return user
+
+
+# ============================================================
+# Email-OTP two-factor authentication
+# ============================================================
+
+
+class OTPSerializer(serializers.Serializer):
+    """Shared input for the verify/resend/toggle-OTP endpoints."""
+
+    challenge = serializers.CharField(required=False, allow_blank=True)
+    code = serializers.CharField(required=False, allow_blank=True, max_length=10)
+    password = serializers.CharField(
+        required=False, allow_blank=True, write_only=True, style={"input_type": "password"}
+    )
+    enable = serializers.BooleanField(required=False, default=True)
