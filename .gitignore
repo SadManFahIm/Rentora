@@ -31,3 +31,6 @@ CLAUDE.md
 
 # Skills install lockfile (local tooling)
 skills-lock.json
+
+# Vite cache
+frontend/.vite/
