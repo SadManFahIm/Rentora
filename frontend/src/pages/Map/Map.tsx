@@ -12,10 +12,12 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import { useSearchParams } from "react-router-dom";
 import * as maplibregl from "maplibre-gl";
 import type { StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
+  Check,
   Crosshair,
   Footprints,
   GraduationCap,
@@ -24,6 +26,7 @@ import {
   Map as MapIcon,
   MapPin,
   Search,
+  Share2,
   TrainFront,
   Thermometer,
   Users as UsersIcon,
@@ -38,6 +41,7 @@ import type { GeocodeSuggestion, Room } from "../../types";
 import {
   avgPrice,
   buildBbox,
+  buildMapViewUrl,
   directionsUrl,
   formatDistance,
   formatDriveTime,
@@ -48,6 +52,7 @@ import {
   markerClassName,
   markerPrice,
   metroRouteFeatureCollection,
+  parseMapViewUrl,
   quantizeBounds,
   roomsToFeatureCollection,
   sortRoomsForList,
@@ -63,14 +68,24 @@ const DHAKA_CENTER: [number, number] = [90.4125, 23.8103];
 const DHAKA_ZOOM = 11.2;
 
 // Key-free raster tiles (OSM/CARTO). Light/dark follow the app theme.
+// Raster is used deliberately over a vector style: vector tile CDNs
+// (e.g. OpenFreeMap) serve their .pbf through a redirect that some networks
+// and embedded webviews block, which leaves the map a silent black canvas —
+// whereas raster PNG tiles load everywhere. CARTO's dark tiles carry
+// real street labels, and the paint boost below lifts their contrast so the
+// map stays readable in dark mode instead of dissolving into near-black.
 const TILE_LIGHT = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const TILE_DARK = "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png";
 
-// Dimmed OSM raster fallback for dark mode. CARTO's CDN is occasionally
-// unreachable (some ISPs/regions), which would leave a black, unreadable
-// map — so when dark tiles fail we re-render the map on plain OSM tiles
-// darkened with raster paint properties (labels stay visible).
-const MAP_STYLE = (tiles: string, dimForDark: boolean): StyleSpecification => ({
+// Raster style. `mode` is "light" | "dark" | "dark-fallback":
+//  - light: plain OSM tiles.
+//  - dark: CARTO dark tiles with a gentle lift (brightness + contrast) so
+//    roads and street labels stay legible instead of dissolving into
+//    near-black (the original complaint).
+//  - dark-fallback: dimmed plain OSM tiles when CARTO's CDN is unreachable,
+//    kept dark enough to match the theme but with labels intact.
+type RasterMode = "light" | "dark" | "dark-fallback";
+const MAP_STYLE = (tiles: string, mode: RasterMode): StyleSpecification => ({
   version: 8,
   sources: {
     osm: {
@@ -86,14 +101,22 @@ const MAP_STYLE = (tiles: string, dimForDark: boolean): StyleSpecification => ({
       id: "osm",
       type: "raster",
       source: "osm",
-      paint: dimForDark
-        ? {
-            "raster-brightness-min": 0.02,
-            "raster-brightness-max": 0.42,
-            "raster-saturation": -0.85,
-            "raster-contrast": 0.25,
-          }
-        : {},
+      paint:
+        mode === "dark"
+          ? {
+              "raster-brightness-min": 0.12,
+              "raster-brightness-max": 0.72,
+              "raster-saturation": 0.15,
+              "raster-contrast": 0.4,
+            }
+          : mode === "dark-fallback"
+            ? {
+                "raster-brightness-min": 0.08,
+                "raster-brightness-max": 0.6,
+                "raster-saturation": -0.5,
+                "raster-contrast": 0.3,
+              }
+            : {},
     },
   ],
 });
@@ -123,6 +146,7 @@ export default function Map() {
   // a stale "N rooms here" bubble can't linger over changed geometry.
   const clusterPopupRef = useRef<maplibregl.Popup | null>(null);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
   const [showLandmarks, setShowLandmarks] = useState<Record<MapLayerId, boolean>>({
     universities: true,
     metro: true,
@@ -153,6 +177,14 @@ export default function Map() {
   const [radiusKm, setRadiusKm] = useState(2);
   const [viewbox, setViewbox] = useState<string | null>(null);
 
+  // Shareable map links: the view state (centre/zoom/radius/label) lives in
+  // the URL (?center=lat,lng&zoom=z&r=km&q=label), so a link always opens the
+  // exact map view it was copied from. `urlAppliedRef` guards the one-time
+  // initial read so a later manual pan doesn't re-apply the old params.
+  const [, setSearchParams] = useSearchParams();
+  const urlAppliedRef = useRef(false);
+  const mapReadyRef = useRef(false);
+
   // Debounced viewport: fires ~300ms after the user stops panning/zooming.
   const debouncedViewbox = useDebouncedValue(viewbox, 300);
   const debouncedRadiusCenter = useDebouncedValue(radiusCenter, 300);
@@ -160,6 +192,25 @@ export default function Map() {
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 250);
 
   const { data: suggestions = [], isFetching: searching } = useGeocode(debouncedSearchQuery);
+
+  // Keep the URL in sync with the map view so links are shareable. Runs on
+  // viewport settles (debounced bbox) and radius changes — `replace: true`
+  // means panning across Dhaka doesn't litter the history stack.
+  useEffect(() => {
+    if (!mapReady || !urlAppliedRef.current) return;
+    const map = mapRef.current;
+    if (!map) return;
+    const c = map.getCenter();
+    setSearchParams(
+      buildMapViewUrl({
+        center: { lat: c.lat, lng: c.lng },
+        zoom: map.getZoom(),
+        radiusKm: radiusCenter ? radiusKm : null,
+        label: radiusCenter?.label ?? null,
+      }),
+      { replace: true }
+    );
+  }, [debouncedViewbox, radiusCenter, radiusKm, mapReady, setSearchParams]);
 
   const filters = useMemo(() => {
     const f: {
@@ -189,15 +240,22 @@ export default function Map() {
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
-    const tiles = darkMode ? (darkTileFallback ? TILE_LIGHT : TILE_DARK) : TILE_LIGHT;
+    // Raster tiles: CARTO dark / OSM light. CARTO's CDN is occasionally
+    // unreachable, so `darkTileFallback` re-renders on dimmed OSM tiles.
+    const style = darkTileFallback
+      ? MAP_STYLE(darkMode ? TILE_LIGHT : TILE_LIGHT, darkMode ? "dark-fallback" : "light")
+      : MAP_STYLE(darkMode ? TILE_DARK : TILE_LIGHT, darkMode ? "dark" : "light");
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: MAP_STYLE(tiles, darkMode && darkTileFallback),
+      style,
       center: DHAKA_CENTER,
       zoom: DHAKA_ZOOM,
       attributionControl: { compact: true },
     });
     mapRef.current = map;
+    // Mark the URL as read as soon as this map owns the container — the
+    // load-handler guard below is only about applying shared-link params.
+    urlAppliedRef.current = true;
     map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "top-right");
     map.addControl(
       new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true } })
@@ -222,10 +280,46 @@ export default function Map() {
       );
     };
 
-    map.on("load", () => {
+    const applyUrlView = () => {
+      // Apply a shared-link view (?center=...,&zoom=...,&r=...,&q=...) once.
+      // The map is constructed with the Dhaka default, so if the URL carries
+      // a view we jump to it before syncing the viewport.
+      const urlView = parseMapViewUrl(window.location.search);
+      if (urlView.center) {
+        map.jumpTo({ center: [urlView.center[1], urlView.center[0]] });
+      }
+      if (urlView.zoom != null) {
+        map.setZoom(urlView.zoom);
+      }
+      if (urlView.radiusKm != null && urlView.query) {
+        setRadiusKm(urlView.radiusKm);
+        setRadiusCenter({
+          lat: (urlView.center ?? [DHAKA_CENTER[1], DHAKA_CENTER[0]])[0],
+          lng: (urlView.center ?? [DHAKA_CENTER[1], DHAKA_CENTER[0]])[1],
+          label: urlView.query,
+        });
+      }
+    };
+    const finishLoad = () => {
+      if (mapReadyRef.current) return; // guard: only once per map instance
+      mapReadyRef.current = true;
+      urlAppliedRef.current = true;
       setMapReady(true);
-      // Sync the viewport once the map has its initial position.
       syncViewbox();
+    };
+    map.on("load", finishLoad);
+    // Apply a URL-carried view once the style is up (before the first
+    // viewport sync so the badge/bbox match the shared link).
+    map.once("styledata", applyUrlView);
+    map.once("load", applyUrlView);
+    // Safety net: some embedded webviews never fire the map's `load` event
+    // (e.g. the tile CDN's .pbf requests are blocked, so `loaded()` never
+    // returns true even though the style + sprites rendered). Waiting for
+    // `styledata` and then declaring the map ready lets the room layers,
+    // URL handling and radius search come up anyway — the GeoJSON layers we
+    // add don't need basemap tiles to function.
+    map.once("styledata", () => {
+      window.setTimeout(finishLoad, 250);
     });
     map.on("moveend", syncViewbox);
 
@@ -238,12 +332,13 @@ export default function Map() {
     });
 
     map.on("error", (e) => {
-      // Raster tiles sometimes 404 for a single tile (benign). Only treat
-      // real fetch/network failures as a problem.
+      // A single raster tile 404 is benign; only real fetch/network failures
+      // matter. When the vector style CDN is unreachable we rebuild the map
+      // on raster tiles (dimmed OSM in dark mode) instead of showing a black,
+      // unreadable canvas.
       const msg = (e?.error as Error | undefined)?.message ?? "";
       if (/Failed to fetch|NetworkError|timeout|ERR_/i.test(msg)) {
-        if (darkMode && !darkTileFallback) {
-          // CARTO dark CDN unreachable — re-render on dimmed OSM tiles.
+        if (!darkTileFallback) {
           setDarkTileFallback(true);
         } else {
           setMapError("Map tiles could not be loaded — check your connection.");
@@ -256,6 +351,7 @@ export default function Map() {
       markersRef.current = [];
       map.remove();
       mapRef.current = null;
+      mapReadyRef.current = false;
       // Force dependent effects (markers, layers, heatmap) to re-run against
       // the fresh map instance when the map is recreated (e.g. dark-mode
       // tile switch) — without this, mapReady stays true and the new map
@@ -453,6 +549,11 @@ export default function Map() {
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
 
+      // Insert the cluster layers BELOW the landmark layers so toggling
+      // Universities/Metro always shows their dots on top of the big orange
+      // cluster circles (layer order = insertion order in MapLibre).
+      const beforeId = map.getLayer("universities") ? "universities" : undefined;
+
       try {
         if (!map.getSource(CLUSTER_SOURCE)) {
           map.addSource(CLUSTER_SOURCE, {
@@ -470,75 +571,84 @@ export default function Map() {
               price_max: ["max", ["get", "price"]],
             },
           });
-          map.addLayer({
-            id: CLUSTER_LAYER,
-            type: "circle",
-            source: CLUSTER_SOURCE,
-            filter: ["has", "point_count"],
-            paint: {
-              "circle-color": [
-                "step",
-                ["get", "point_count"],
-                "#f97316",
-                10,
-                "#ea580c",
-                50,
-                "#c2410c",
-              ],
-              "circle-radius": ["step", ["get", "point_count"], 24, 10, 32, 50, 40],
-              "circle-opacity": 0.9,
-              "circle-stroke-color": "#ffffff",
-              "circle-stroke-width": 2,
-            },
-          });
-          map.addLayer({
-            id: CLUSTER_COUNT,
-            type: "symbol",
-            source: CLUSTER_SOURCE,
-            filter: ["has", "point_count"],
-            layout: {
-              // Count on the first line, average rent on the second —
-              // "12 rooms · avg ৳10k" at a glance. Colors chosen to stay
-              // readable on both light and dark basemaps.
-              "text-field": [
-                "format",
-                ["get", "point_count_abbreviated"],
-                { "font-scale": 1.1 },
-                "\n",
-                {},
-                [
-                  "concat",
-                  "৳",
-                  ["to-string", ["round", ["/", ["get", "price_sum"], ["get", "point_count"]]]],
+          map.addLayer(
+            {
+              id: CLUSTER_LAYER,
+              type: "circle",
+              source: CLUSTER_SOURCE,
+              filter: ["has", "point_count"],
+              paint: {
+                "circle-color": [
+                  "step",
+                  ["get", "point_count"],
+                  "#f97316",
+                  10,
+                  "#ea580c",
+                  50,
+                  "#c2410c",
                 ],
-                { "font-scale": 0.8 },
-              ],
-              "text-size": 12,
-              "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
-              "text-line-height": 1.25,
+                "circle-radius": ["step", ["get", "point_count"], 24, 10, 32, 50, 40],
+                "circle-opacity": 0.9,
+                "circle-stroke-color": "#ffffff",
+                "circle-stroke-width": 2,
+              },
             },
-            paint: { "text-color": "#ffffff" },
-          });
-          map.addLayer({
-            id: UNCLUSTERED,
-            type: "circle",
-            source: CLUSTER_SOURCE,
-            filter: ["!", ["has", "point_count"]],
-            paint: {
-              "circle-radius": 8,
-              "circle-color": [
-                "match",
-                ["get", "tier"],
-                "premium",
-                "#f59e0b",
-                "featured",
-                "#3b82f6",
-                "#ea580c",
-              ],
-              "circle-stroke-color": "#ffffff",
-              "circle-stroke-width": 2,
+            beforeId
+          );
+          map.addLayer(
+            {
+              id: CLUSTER_COUNT,
+              type: "symbol",
+              source: CLUSTER_SOURCE,
+              filter: ["has", "point_count"],
+              layout: {
+                // Count on the first line, average rent on the second —
+                // "12 rooms · avg ৳10k" at a glance. Colors chosen to stay
+                // readable on both light and dark basemaps.
+                "text-field": [
+                  "format",
+                  ["get", "point_count_abbreviated"],
+                  { "font-scale": 1.1 },
+                  "\n",
+                  {},
+                  [
+                    "concat",
+                    "৳",
+                    ["to-string", ["round", ["/", ["get", "price_sum"], ["get", "point_count"]]]],
+                  ],
+                  { "font-scale": 0.8 },
+                ],
+                "text-size": 12,
+                "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
+                "text-line-height": 1.25,
+              },
+              paint: { "text-color": "#ffffff" },
             },
-          });
+            beforeId
+          );
+          map.addLayer(
+            {
+              id: UNCLUSTERED,
+              type: "circle",
+              source: CLUSTER_SOURCE,
+              filter: ["!", ["has", "point_count"]],
+              paint: {
+                "circle-radius": 8,
+                "circle-color": [
+                  "match",
+                  ["get", "tier"],
+                  "premium",
+                  "#f59e0b",
+                  "featured",
+                  "#3b82f6",
+                  "#ea580c",
+                ],
+                "circle-stroke-color": "#ffffff",
+                "circle-stroke-width": 2,
+              },
+            },
+            beforeId
+          );
         } else {
           (map.getSource(CLUSTER_SOURCE) as maplibregl.GeoJSONSource).setData(
             roomsToFeatureCollection(rooms)
@@ -851,6 +961,19 @@ export default function Map() {
     return { total, available, avg: avg != null ? Math.round(avg) : null };
   }, [rooms, summary]);
 
+  // Badge copy that matches the current query mode: during a radius search
+  // "1 of 1 rooms in view" is meaningless (the viewport never changed), so
+  // say how many rooms are within the chosen radius instead.
+  const badgeLabel = useMemo(() => {
+    if (radiusCenter) {
+      const n = counts.available;
+      return `${n} room${n === 1 ? "" : "s"} within ${radiusKm} km of ${radiusCenter.label}`;
+    }
+    const n = counts.available;
+    if (counts.total === n) return `${n} room${n === 1 ? "" : "s"} in view`;
+    return `${n} of ${counts.total} rooms in view`;
+  }, [radiusCenter, radiusKm, counts]);
+
   // Areas in the current viewport with their room counts — the map's quick
   // "where are the rooms?" chips. Derived from the same /rooms/summary/ call
   // that powers the badge, so no extra request.
@@ -1027,7 +1150,13 @@ export default function Map() {
                 "gap-1.5 rounded-lg",
                 heatmap && "bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300"
               )}
-              onClick={() => setHeatmap((h) => !h)}
+              onClick={() => {
+                // Heatmap and clustering are two views of the same rooms —
+                // turning one on turns the other off so they never fight
+                // for the same layer stack.
+                setHeatmap((h) => !h);
+                setClustering(false);
+              }}
             >
               <Thermometer className="size-4" /> Price heatmap
             </Button>
@@ -1038,7 +1167,10 @@ export default function Map() {
                 "gap-1.5 rounded-lg",
                 clustering && "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
               )}
-              onClick={() => setClustering((c) => !c)}
+              onClick={() => {
+                setClustering((c) => !c);
+                setHeatmap(false);
+              }}
             >
               <UsersIcon className="size-4" /> {clustering ? "Clustered" : "Pins"}
             </Button>
@@ -1160,20 +1292,66 @@ export default function Map() {
           )}
         </div>
 
-        {/* Loading badge */}
-        {isLoading && (
-          <div className="absolute right-4 top-4 z-10">
+        {/* Loading badge + share-link button */}
+        <div className="absolute right-4 top-4 z-10 flex flex-col items-end gap-2">
+          {isLoading && (
             <Badge className="animate-pulse bg-white/90 text-gray-700 shadow dark:bg-gray-900/90 dark:text-gray-300">
               Loading rooms…
             </Badge>
-          </div>
-        )}
+          )}
+          <button
+            onClick={() => {
+              // Build the share link from the LIVE map state, not the URL bar:
+              // the URL-sync effect only runs after a map move, so on a fresh
+              // load the address may still be bare /map. Building from the map
+              // guarantees a copied link always carries the exact view.
+              const map = mapRef.current;
+              if (!map) return;
+              const c = map.getCenter();
+              const url =
+                window.location.origin +
+                window.location.pathname +
+                buildMapViewUrl({
+                  center: { lat: c.lat, lng: c.lng },
+                  zoom: map.getZoom(),
+                  radiusKm: radiusCenter ? radiusKm : null,
+                  label: radiusCenter?.label ?? null,
+                });
+              const done = () => {
+                setShareCopied(true);
+                window.setTimeout(() => setShareCopied(false), 1800);
+              };
+              // Clipboard API needs a secure context (https or localhost) —
+              // fall back to a temporary textarea copy on plain http.
+              if (navigator.clipboard?.writeText) {
+                void navigator.clipboard.writeText(url).then(done, () => fallbackCopy(url, done));
+              } else {
+                fallbackCopy(url, done);
+              }
+            }}
+            aria-label="Copy link to this map view"
+            title="Copy link to this map view"
+            className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white/95 px-2.5 py-1.5 text-xs font-medium text-gray-600 shadow backdrop-blur transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-900/95 dark:text-gray-300 dark:hover:border-blue-600 dark:hover:bg-blue-950/40 dark:hover:text-blue-300"
+          >
+            {shareCopied ? (
+              <>
+                <Check className="size-3.5 text-green-600 dark:text-green-400" />
+                Copied!
+              </>
+            ) : (
+              <>
+                <Share2 className="size-3.5" />
+                Share
+              </>
+            )}
+          </button>
+        </div>
 
         {/* Room count summary — authoritative server count (not capped by pagination) */}
         <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2">
           <Badge className="gap-1.5 bg-white/95 px-3 py-1.5 text-sm shadow dark:bg-gray-900/95">
             <MapIcon className="size-3.5" />
-            {counts.available} of {counts.total} rooms in view
+            {badgeLabel}
             {counts.avg != null && (
               <span className="text-gray-500 dark:text-gray-400">
                 · avg ৳{counts.avg.toLocaleString()}
@@ -1182,27 +1360,46 @@ export default function Map() {
           </Badge>
         </div>
 
-        {/* Legend */}
+        {/* Legend — switches to the heatmap scale when the price heatmap is on */}
         <div className="absolute bottom-4 right-4 z-10 hidden rounded-lg border border-gray-200 bg-white/95 px-3 py-2 text-xs shadow backdrop-blur sm:block dark:border-gray-800 dark:bg-gray-900/95">
-          <div className="mb-1 font-semibold text-foreground">Legend</div>
-          <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-            <span className="inline-block size-2.5 rounded-full bg-[#ea580c]" /> Free
-          </div>
-          <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-            <span className="inline-block size-2.5 rounded-full bg-[#3b82f6]" /> Featured
-          </div>
-          <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-            <span className="inline-block size-2.5 rounded-full bg-[#f59e0b]" /> Premium
-          </div>
-          <div className="mt-1.5 flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-            <span className="inline-block size-2.5 rounded-full bg-[#7c3aed]" /> University
-          </div>
-          <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-            <span className="inline-block size-2.5 rounded-full bg-[#0d9488]" /> Metro
-          </div>
-          <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-            <span className="inline-block h-0.5 w-4 rounded bg-[#0d9488]" /> MRT Line 6
-          </div>
+          {heatmap ? (
+            <>
+              <div className="mb-1 font-semibold text-foreground">Rent heatmap</div>
+              <div
+                className="h-2 w-36 rounded-full"
+                style={{
+                  background: "linear-gradient(90deg, #22c55e 0%, #f59e0b 50%, #ef4444 100%)",
+                }}
+              />
+              <div className="mt-0.5 flex justify-between text-[10px] text-gray-500 dark:text-gray-400">
+                <span>৳5k</span>
+                <span>৳15k</span>
+                <span>৳30k+</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="mb-1 font-semibold text-foreground">Legend</div>
+              <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                <span className="inline-block size-2.5 rounded-full bg-[#ea580c]" /> Free
+              </div>
+              <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                <span className="inline-block size-2.5 rounded-full bg-[#3b82f6]" /> Featured
+              </div>
+              <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                <span className="inline-block size-2.5 rounded-full bg-[#f59e0b]" /> Premium
+              </div>
+              <div className="mt-1.5 flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                <span className="inline-block size-2.5 rounded-full bg-[#7c3aed]" /> University
+              </div>
+              <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                <span className="inline-block size-2.5 rounded-full bg-[#0d9488]" /> Metro
+              </div>
+              <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                <span className="inline-block h-0.5 w-4 rounded bg-[#0d9488]" /> MRT Line 6
+              </div>
+            </>
+          )}
         </div>
 
         {selectedRoom && <RoomModal room={selectedRoom} onClose={() => setSelectedRoom(null)} />}
@@ -1249,6 +1446,28 @@ export default function Map() {
       )}
     </div>
   );
+}
+
+/**
+ * Clipboard fallback for non-secure contexts (plain http) where
+ * navigator.clipboard is unavailable — a temporary textarea + execCommand.
+ */
+function fallbackCopy(text: string, onDone: () => void) {
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    onDone();
+  } catch {
+    // Copy failed (e.g. blocked) — surface the URL in the address bar instead.
+    window.prompt("Copy this map link:", text);
+  }
 }
 
 function SuggestionIcon({ kind }: { kind: GeocodeSuggestion["kind"] }) {
