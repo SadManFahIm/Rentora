@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-260%20(133%20BE%20%2B%20127%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-268%20(136%20BE%20%2B%20132%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -59,11 +59,12 @@
 
 - **MapLibre GL JS** map of Dhaka — OpenStreetMap tiles, key-free, with dark/light tile switching that follows the app theme
 - **Price marker pins** — every listing is a tappable pin showing its price (`৳12k`), coloured by tier (free orange / featured blue / premium amber) so promoted rooms pop exactly like the list
-- **Marker clustering** — with many listings in view, pins collapse into numbered cluster circles (click one to zoom in); toggle between **Clustered** and **Pins** modes
+- **Marker clustering** — with many listings in view, pins collapse into numbered cluster circles that show the **room count + average rent** (click one for a count/price-range popup, then it zooms in); toggle between **Clustered** and **Pins** modes
 - **Viewport sync** — panning/zooming refetches rooms inside the visible `bbox` (debounced 300ms), so the map and the room count always match what's on screen
 - **Radius search** — click a point on the map (or a university chip) and drag a slider to see rooms within 0.5–5 km, powered by the geo backend's `near_lat`/`near_lng` + `radius_km`
 - **Travel-time overlay** — with a search point active, toggle **Travel** to draw walking isochrones (10/20/30 min bands, green → amber → red) so tenants see how far they can get on foot from a university, metro or office
-- **Street search + autocomplete** — type a street, area or station ("gulshan", "mirpur road", "shahbagh") and pick a suggestion to fly there and start a radius search, powered by the curated Dhaka gazetteer (`/rooms/geocode/`)
+- **Street search + autocomplete** — type a street, area or station ("gulshan", "mirpur road", "shahbagh") and pick a suggestion to fly there and start a radius search, powered by the curated Dhaka gazetteer **with an OpenStreetMap Nominatim fallback** (`/rooms/geocode/`) so even streets outside the curated list geocode
+- **Get Directions + ETA** — every room popup shows walking **and** driving ETA ("≈ 8 min walk · ≈ 2 min drive") plus a **Get Directions** button that opens Google Maps with the route pre-filled (origin = your search point)
 - **Metro route corridor** — MRT Line 6 is drawn as a polyline through its stations (Uttara → Motijheel), visible with the Metro toggle or whenever the travel overlay is active; stations within a 30-minute walk of the search point get a highlighted ring
 - **Room-count API badge** — the "N of M rooms in view" badge reads the authoritative server count (`/rooms/summary/` — COUNT/AVG with the same geo filters), so it is never capped by list pagination
 - **Distance markers** — every listing in a radius search shows `formatDistance` + walking time ("1.2 km away · ≈ 16 min walk") in its map popup and the side list, from the backend's `distance_km` annotation
@@ -82,7 +83,7 @@
 **Engineering**
 
 - **Coverage history per branch** — every PR and main push appends its own `history-<branch>.csv` + SVG chart to the `coverage-history` branch (viewable `index.html` linking all branches)
-- 260 automated tests (133 backend + 127 frontend) · coverage gates (BE ≥50%, FE ≥55%)
+- 268 automated tests (136 backend + 132 frontend) · coverage gates (BE ≥50%, FE ≥55%)
 - Ruff + ESLint + Prettier with husky/lint-staged pre-commit hooks
 - GitHub Actions CI (backend, frontend, lint, coverage-summary PR comment, per-branch coverage history)
 - Route-level code splitting (React.lazy) — smaller bundles
@@ -277,8 +278,8 @@ Quality is enforced **in CI and at commit time** — style or coverage drift fai
 
 | Suite             | Count | Gate                                               |
 | ----------------- | ----- | -------------------------------------------------- |
-| Backend (Django)  | 133   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
-| Frontend (Vitest) | 127   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
+| Backend (Django)  | 136   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
+| Frontend (Vitest) | 132   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
 
 ```bash
 # Backend
