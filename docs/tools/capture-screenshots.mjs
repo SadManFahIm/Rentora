@@ -30,13 +30,16 @@ const FRONTEND = process.env.FRONTEND_URL ?? "http://localhost:3001";
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8000";
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? "demo12345";
 const DBG_PORT = Number(process.env.CHROME_DBG_PORT ?? 9333);
-const OUT_DIR = process.env.OUT_DIR ?? path.join(process.cwd(), "docs", "screenshots");
+const OUT_DIR =
+  process.env.OUT_DIR ?? path.join(process.cwd(), "docs", "screenshots");
 
 const ROOT = path.join(import.meta.dirname, "..", ".."); // repo root
 const MANAGE_PY = path.join(ROOT, "backend", "manage.py");
-const PY = process.env.PYTHON ?? (process.platform === "win32"
-  ? path.join(ROOT, "backend", "venv", "Scripts", "python.exe")
-  : path.join(ROOT, "backend", "venv", "bin", "python"));
+const PY =
+  process.env.PYTHON ??
+  (process.platform === "win32"
+    ? path.join(ROOT, "backend", "venv", "Scripts", "python.exe")
+    : path.join(ROOT, "backend", "venv", "bin", "python"));
 
 /** A single capture: login user, route, click optional tab, output file. */
 const CAPTURES = [
@@ -47,12 +50,61 @@ const CAPTURES = [
     waitMs: 4500,
   },
   {
+    // Public: no token needed — MapLibre map with room markers + landmarks,
+    // street-search autocomplete open to show the new Phase 7 search box.
+    user: null,
+    route: "/map",
+    out: "map-view.png",
+    waitMs: 10000,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+    afterLoad: `(() => {
+      const input = document.querySelector('input[aria-label="Search for a street, area or station"]');
+      if (!input) return 'no-input';
+      input.focus();
+      input.value = 'gulshan';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      return 'typed';
+    })()`,
+    afterLoadMs: 1400,
+  },
+  {
+    // Dark theme variant — prefs stored under the same key the UI store uses.
+    user: null,
+    route: "/map",
+    out: "map-view-dark.png",
+    waitMs: 10000,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: true }, version: 0 }));
+      return 'dark';
+    })()`,
+  },
+  {
     user: "tanvir.islam",
     route: "/dashboard",
     click: "fraud",
     out: "fraud-detection.png",
     waitMs: 4000,
     afterClickMs: 3000,
+  },
+  // No token: the auth dialog shows in its logged-out state.
+  {
+    user: null,
+    route: "/auth",
+    out: "auth-login.png",
+    waitMs: 3500,
+  },
+  // Email-OTP 2FA step: enable 2FA, sign in through the REAL login form
+  // (token injection would bypass the challenge), screenshot the code step,
+  // then disable 2FA again so the demo accounts stay in their default state.
+  {
+    otpLogin: { username: "rahim.hossain", password: DEMO_PASSWORD },
+    out: "otp-verification.png",
+    waitMs: 4500,
   },
 ];
 
@@ -78,8 +130,22 @@ function findChrome() {
     }
   }
   throw new Error(
-    "Chrome not found — set CHROME_PATH or install Google Chrome."
+    "Chrome not found — set CHROME_PATH or install Google Chrome.",
   );
+}
+
+/** Enable/disable email-OTP 2FA for a user via Django shell. */
+function setUserOtp(username, enabled) {
+  const script = [
+    "from django.contrib.auth import get_user_model;",
+    `u = get_user_model().objects.get(username='${username}');`,
+    `u.otp_enabled = ${enabled ? "True" : "False"};`,
+    "u.save(update_fields=['otp_enabled'])",
+  ].join(" ");
+  execSync(`"${PY}" "${MANAGE_PY}" shell -c "${script}"`, {
+    encoding: "utf8",
+    cwd: path.join(ROOT, "backend"),
+  });
 }
 
 /** Mint a JWT access token for a user via Django shell (bypasses login rate limits). */
@@ -110,13 +176,17 @@ async function main() {
       `--remote-debugging-port=${DBG_PORT}`,
       "--no-first-run",
       "--no-default-browser-check",
-      "--disable-gpu",
+      // MapLibre renders through WebGL — headless needs software GL
+      // (SwiftShader) or the vector-tile map captures as a black canvas.
+      "--use-gl=angle",
+      "--use-angle=swiftshader",
+      "--enable-unsafe-swiftshader",
       "--disable-dev-shm-usage",
       "--user-data-dir=" + path.join(process.cwd(), ".tmp-chrome-profile"),
       "--window-size=1440,1100",
       "about:blank",
     ],
-    { stdio: "ignore" }
+    { stdio: "ignore" },
   );
 
   let ready = false;
@@ -133,7 +203,7 @@ async function main() {
 
   const target = await fetch(
     `http://127.0.0.1:${DBG_PORT}/json/new?about:blank`,
-    { method: "PUT" }
+    { method: "PUT" },
   ).then((r) => r.json());
 
   const ws = new WebSocket(target.webSocketDebuggerUrl);
@@ -195,11 +265,74 @@ async function main() {
       return 'ok';
     })()`);
 
+  // React controlled inputs need the native value setter + input event.
+  const fillLoginForm = async (username, password) => {
+    await evaluate(`(() => {
+      const setVal = (el, val) => {
+        const proto = Object.getPrototypeOf(el);
+        Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, val);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      };
+      const inputs = [...document.querySelectorAll('input')];
+      const email = inputs.find(i => i.placeholder && i.placeholder.includes('email'));
+      const pw = inputs.find(i => i.type === 'password');
+      if (email) setVal(email, '${username}');
+      if (pw) setVal(pw, '${password}');
+      return 'filled';
+    })()`);
+    await sleep(400);
+    const clicked = await evaluate(`(() => {
+      const btn = [...document.querySelectorAll('button')]
+        .find(b => b.textContent.trim() === 'Sign In');
+      if (btn) { btn.click(); return 'clicked'; }
+      return 'not-found';
+    })()`);
+    if (clicked !== "clicked") console.warn("⚠️  Sign In button not found");
+  };
+
   for (const cap of CAPTURES) {
-    const token = mintToken(cap.user);
+    // 2FA OTP step — sign in through the real form.
+    if (cap.otpLogin) {
+      const { username, password } = cap.otpLogin;
+      setUserOtp(username, true);
+      try {
+        await navigate(`${FRONTEND}/`, 2500);
+        await evaluate(`(() => {
+          localStorage.removeItem('rentora_access');
+          localStorage.removeItem('rentora_refresh');
+          return 'cleared';
+        })()`);
+        await navigate(`${FRONTEND}/auth`, cap.waitMs ?? 4000);
+        await fillLoginForm(username, password);
+        await sleep(2500);
+        await shot(cap.out);
+      } finally {
+        setUserOtp(username, false);
+      }
+      continue;
+    }
+
     await navigate(`${FRONTEND}/`, 2500);
-    await injectToken(token);
+    if (cap.user) {
+      const token = mintToken(cap.user);
+      await injectToken(token);
+    } else {
+      // Logged-out capture: make sure no stale session survives.
+      await evaluate(`(() => {
+        localStorage.removeItem('rentora_access');
+        localStorage.removeItem('rentora_refresh');
+        return 'cleared';
+      })()`);
+    }
+    if (cap.beforeCapture) {
+      await evaluate(cap.beforeCapture);
+    }
     await navigate(`${FRONTEND}${cap.route}`, cap.waitMs ?? 4000);
+
+    if (cap.afterLoad) {
+      await evaluate(cap.afterLoad);
+      await sleep(cap.afterLoadMs ?? 1200);
+    }
 
     if (cap.click) {
       const label = cap.click;

@@ -13,6 +13,8 @@ from drf_spectacular.views import (
 )
 
 from config.auth_views import ThrottledLoginView, ThrottledRegisterView
+from users import otp_views as users_otp_views
+from users import passkey_views as users_passkey_views
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -35,6 +37,36 @@ urlpatterns = [
         "api/v1/auth/register/",
         ThrottledRegisterView.as_view(),
         name="rest_register",
+    ),
+    # Email-OTP two-factor authentication (see users/otp_views.py).
+    path("api/v1/auth/otp/verify/", users_otp_views.OTPVerifyView.as_view(), name="otp_verify"),
+    path("api/v1/auth/otp/resend/", users_otp_views.OTPResendView.as_view(), name="otp_resend"),
+    path("api/v1/auth/otp/toggle/", users_otp_views.OTPToggleView.as_view(), name="otp_toggle"),
+    path(
+        "api/v1/auth/otp/confirm-enable/",
+        users_otp_views.OTPConfirmEnableView.as_view(),
+        name="otp_confirm_enable",
+    ),
+    # WebAuthn / passkeys (see users/passkey_views.py).
+    path(
+        "api/v1/auth/passkey/register/begin/",
+        users_passkey_views.PasskeyRegisterBeginView.as_view(),
+        name="passkey_register_begin",
+    ),
+    path(
+        "api/v1/auth/passkey/register/complete/",
+        users_passkey_views.PasskeyRegisterCompleteView.as_view(),
+        name="passkey_register_complete",
+    ),
+    path(
+        "api/v1/auth/passkey/login/begin/",
+        users_passkey_views.PasskeyLoginBeginView.as_view(),
+        name="passkey_login_begin",
+    ),
+    path(
+        "api/v1/auth/passkey/login/complete/",
+        users_passkey_views.PasskeyLoginCompleteView.as_view(),
+        name="passkey_login_complete",
     ),
     # dj-rest-auth: logout/, user/ (GET+PUT), token/refresh/ (JWT enabled),
     # password/reset/, password/change/, etc. (login/ overridden above).
