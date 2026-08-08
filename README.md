@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-199%20(108%20BE%20%2B%2091%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-220%20(122%20BE%20%2B%2098%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -40,13 +40,17 @@
 
 - Fresh **login/register redesign** (animated Dribbble-style auth page)
 - **Deep password strength meter** — zxcvbn-ts engine: real entropy (`~10^N` guesses), common-password detection ("top-10 common password" warnings), 4-segment meter, live confirm-match indicator
-- **HaveIBeenPwned breach check** — k-anonymity lookup (only the first 5 chars of the SHA-1 hash leave the device); shows ⚠️ breached / ✓ safe / unknown status on the register form
-
-**Two-Factor Authentication (email OTP)**
-
-- Password + one-time code — enabled per account from the Dashboard (current password required to enable)
+- **HaveIBeenPwned breach check** — k-anonymity lookup (only the first 5 chars of the SHA-1 hash leave the device); shows ⚠️ breached / ✓ safe / unknown status on the register form**Two-Factor Authentication (email OTP)**
+- Password + one-time code — enabled per account from the Dashboard; **enabling is email-verified**: password first, then a code emailed to the address must be confirmed, so an account can never be locked behind an unreachable inbox
+- **10 one-time recovery codes** minted at enable (shown exactly once, stored hashed) — sign in with one if you lose email access; deleted when 2FA is disabled
 - OTP codes stored **hashed** (SHA-256) in the DB; 10-minute TTL, 5-attempt lockout, 30s resend cooldown, stale challenges auto-invalidated on re-login
 - Login returns a pending challenge (masked destination, e.g. `r***@rentora.com`); tokens are only issued after the code verifies — no tokens leak at the password step
+
+**Passkeys (WebAuthn / FIDO2)**
+- Passwordless sign-in with a fingerprint, face, or device PIN — `py_webauthn` server-side, `@simplewebauthn/browser` client-side
+- **Conditional UI** on the login form: passkeys surface in the browser's native autofill; a manual "Sign in with a passkey" button is the fallback
+- Only **public keys** stored; sign counters tracked for clone/replay protection; 2FA-enabled accounts still get the email-OTP step after the passkey
+- Register/revoke from the Dashboard → Security → Passkeys
 - Sign in with **username or email**; **duplicate-email registration now blocked** (serializer + DB unique constraint) with a readable error message
 - Already-logged-in users are redirected from `/auth` to their dashboard
 
@@ -54,7 +58,7 @@
 
 - **Coverage history per branch** — every PR and main push appends its own `history-<branch>.csv` + SVG chart to the `coverage-history` branch (viewable `index.html` linking all branches)
 - **Engineering**
-- 199 automated tests (108 backend + 91 frontend) · coverage gates (BE ≥50%, FE ≥55%)
+- 220 automated tests (122 backend + 98 frontend) · coverage gates (BE ≥50%, FE ≥55%)
 - Ruff + ESLint + Prettier with husky/lint-staged pre-commit hooks
 - GitHub Actions CI (backend, frontend, lint, coverage-summary PR comment, per-branch coverage history)
 - Route-level code splitting (React.lazy) — smaller bundles
@@ -75,9 +79,9 @@
 | **6**     | AI — recommendation engine (content/collaborative/hybrid) + price insight + fair-price prediction | ✅ Shipped              |
 | **Bonus** | Roommate matching (profile + scoring + request flow)                                              | ✅ Shipped              |
 | **Bonus** | Fraud engine (6 detectors, auto-scan, review queue)                                               | ✅ Shipped              |
-| **Bonus** | Paid listing tiers (Free/Featured/Premium monetization)                                           | ✅ Shipped              |
-| **Bonus** | Two-factor authentication (email OTP, password-gated enable)                                      | ✅ Shipped              |
-| **Bonus** | Passkeys / WebAuthn (phishing-resistant passwordless login)                                       | ⏳ Researched — Phase 9 |
+| **Bonus** | Paid listing tiers (Free/Featured/Premium monetization)                                           | ✅ Shipped              || **Bonus** | Two-factor authentication (email OTP, password-gated enable)                                       | ✅ Shipped              |
+| **Bonus** | 2FA recovery codes (10 one-time backups) + email-verified enable                                    | ✅ Shipped              |
+| **Bonus** | Passkeys / WebAuthn (passwordless login, conditional UI)                                            | ✅ Shipped              |
 | **Bonus** | Geo backend (bbox / radius / landmark queries)                                                    | ✅ Shipped              |
 | **7**     | Map frontend (Leaflet, heatmap, university/metro proximity)                                       | ⏳ Next — geo API ready |
 | **8**     | Docker Compose + production deployment + HTTPS                                                    | ⏳ Next — CI/CD done    |
@@ -139,8 +143,9 @@
 | zxcvbn-ts              | Password entropy + strength   |
 | Pwned Passwords (HIBP) | k-anonymity breach lookup     |
 | Sonner                 | Toast notifications           |
-| Vitest                 | Unit tests + coverage         |
-| SHA-256 OTP challenge  | Email 2FA (hashed codes)      |
+| Vitest                 | Unit tests + coverage         || SHA-256 OTP challenge | Email 2FA (hashed codes)      |
+| py_webauthn           | WebAuthn/FIDO2 server-side     |
+| @simplewebauthn/browser | Passkey ceremony client      |
 
 ### Backend
 
@@ -242,12 +247,12 @@ Rentora/
 
 Quality is enforced **in CI and at commit time** — style or coverage drift fails the pipeline automatically.
 
-### Automated tests (199 total)
+### Automated tests (220 total)
 
 | Suite             | Count | Gate                                               |
 | ----------------- | ----- | -------------------------------------------------- |
-| Backend (Django)  | 108   | ✅ passing · coverage ≥ 50% lines (currently ~60%) |
-| Frontend (Vitest) | 91    | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
+| Backend (Django)  | 122   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
+| Frontend (Vitest) | 98    | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
 
 ```bash
 # Backend
@@ -371,9 +376,14 @@ Frontend runs at `http://localhost:3000`
 | POST   | `/api/v1/auth/token/refresh/` | Public | Refresh access token                                  |
 | GET    | `/api/v1/auth/user/`          | Auth   | Get current user profile                              |
 | PATCH  | `/api/v1/auth/user/`          | Auth   | Update profile                                        |
-| POST   | `/api/v1/auth/otp/verify/`    | Public | Finish 2FA login: exchange (challenge, code) for JWTs |
+| POST   | `/api/v1/auth/otp/verify/`    | Public | Finish 2FA login: exchange (challenge, code) for JWTs; pass `recovery_code` instead to use a backup code |
 | POST   | `/api/v1/auth/otp/resend/`    | Public | Re-send the one-time code (cooldown-guarded)          |
-| POST   | `/api/v1/auth/otp/toggle/`    | Auth   | Enable (needs current password) / disable 2FA         |
+| POST   | `/api/v1/auth/otp/toggle/`    | Auth   | Disable 2FA, or begin enabling (password → emailed code) |
+| POST   | `/api/v1/auth/otp/confirm-enable/` | Auth | Confirm the emailed code → 2FA on + one-time recovery codes |
+| POST   | `/api/v1/auth/passkey/register/begin/`  | Auth   | Registration options for the browser ceremony        |
+| POST   | `/api/v1/auth/passkey/register/complete/`| Auth   | Verify + store the new passkey (public key only)     |
+| POST   | `/api/v1/auth/passkey/login/begin/`     | Public | Authentication options + `challenge_id` (conditional UI) |
+| POST   | `/api/v1/auth/passkey/login/complete/`  | Public | Verify the assertion → JWTs (or pending OTP for 2FA) |
 
 ### Rooms
 
@@ -518,20 +528,22 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 - **Fraud engine** auto-scans every new listing — flagged listings go into an admin review queue
 - **Password hygiene on register** — zxcvbn-ts entropy scoring rejects trivially guessable passwords with actionable warnings; HaveIBeenPwned k-anonymity check warns when the chosen password appears in known data breaches (nothing but a 5-char hash prefix ever leaves the device)
 - **Two-factor authentication (email OTP)** — challenge codes are stored hashed, TTL-bounded (10 min), attempt-limited (5 → lock) and cooldown-guarded; the login endpoint never returns tokens for a 2FA account until the code is verified
+- **2FA enable is email-verified** — password + emailed code are both required before `otp_enabled` flips, and **recovery codes** (10, hashed, single-use) are minted at that moment; disabling deletes them
+- **Passkeys** — public-key only storage, sign-counter replay protection, conditional UI on login
 
-## 🔑 Passkeys / WebAuthn — Researched (next auth milestone)
+## 🔑 Passkeys / WebAuthn — Shipped
 
-Researched as the phishing-resistant successor to passwords + OTP. Summary for the product/eng roadmap:
+Passwordless sign-in is live — the phishing-resistant successor to passwords + OTP:
 
-| Aspect              | TOTP/OTP (current)                              | Passkeys (WebAuthn)                             |
+| Aspect              | TOTP/OTP (email)                                | Passkeys (WebAuthn)                             |
 | ------------------- | ----------------------------------------------- | ----------------------------------------------- |
-| UX friction         | Open app, copy 6-digit code                     | One tap / biometric (Touch ID, Windows Hello)   |
+| UX friction         | Open email, copy 6-digit code                   | One tap / biometric (Touch ID, Windows Hello)   |
 | Phishing resistance | Vulnerable (codes can be typed into fake sites) | **Immune** — bound to the exact origin (`rpId`) |
 | Secrets             | Shared secret stored server-side                | Server stores **public keys only**              |
 
-**Recommended architecture** (when building): `py_webauthn` (Duo Labs, v2.2+) server-side + `@simplewebauthn/browser` client-side. Four DRF endpoints: `passkey/register/begin` → `passkey/register/complete` (JWT-authed), `passkey/login/begin` → `passkey/login/complete` (issues JWTs). Enable **conditional UI** (`mediation: 'conditional'`) on the login form for autofill-style sign-in, and **conditional create** right after a successful password login to let password managers save a passkey.
+**Implemented with** `py_webauthn` (webauthn 3.x, Duo Labs) server-side + `@simplewebauthn/browser` client-side. Four DRF endpoints: `passkey/register/begin` → `passkey/register/complete` (JWT-authed), `passkey/login/begin` → `passkey/login/complete` (issues JWTs). Conditional UI (`mediation: 'conditional'`) surfaces passkeys in the browser's native autofill; a manual **"Sign in with a passkey"** button is the fallback. Register/revoke from Dashboard → Security → Passkeys.
 
-**Gotchas:** WebAuthn requires a secure origin (`localhost` is fine; IP addresses are not); frontend/backend should share a registrable domain in production (e.g. `app.example.com` + `api.example.com` with `rpId: example.com`); use `AbortController` so a pending conditional ceremony is cancelled when the user submits the password form.
+**Gotchas handled:** WebAuthn requires a secure origin (`localhost` is fine; IP addresses are not); frontend/backend should share a registrable domain in production (e.g. `app.example.com` + `api.example.com` with `rpId: example.com`); an `AbortController` cancels a pending conditional ceremony when the user submits the password form.
 
 ---
 
@@ -553,7 +565,8 @@ Researched as the phishing-resistant successor to passwords + OTP. Summary for t
 - Sign in with the **username** (e.g. `rahim.hossain`) **or** the email address (e.g. `rahim.hossain@rentora.com`) — both work.
 - `rahim.hossain` has a roommate profile — log in and open **Roommates** to see live match scores.
 - `tanvir.islam` has listings — open **Dashboard → Fraud** to see the risk cards and try **Re-scan**.
-- **Try 2FA:** Dashboard → **Two-Factor Authentication** → **Enable 2FA** (enter your current password). Next sign-in will ask for the emailed 6-digit code. In development the code is printed to the backend console (console email backend); in production it goes to the account's email.
+- **Try 2FA:** Dashboard → **Two-Factor Authentication** → **Enable 2FA** (current password → emailed code → save your **recovery codes**). Next sign-in asks for the emailed code (or a recovery code). In development the code prints to the backend console; in production it goes to the account's email.
+- **Try passkeys:** Dashboard → Security → **Passkeys** → **Register a passkey** (your device's biometric/PIN), then sign out and use the login page's passkey autofill or the **"Sign in with a passkey"** button.
 
 > 💡 Screenshots can be regenerated with [`docs/tools/capture-screenshots.mjs`](docs/tools/capture-screenshots.mjs) — it drives headless Chrome, mints demo tokens via Django, and saves fresh PNGs into `docs/screenshots/`.
 

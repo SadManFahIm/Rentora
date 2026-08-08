@@ -145,6 +145,12 @@ export interface ApiUser {
   bio?: string;
   date_of_birth?: string | null;
   otp_enabled?: boolean;
+  passkeys?: {
+    id: string;
+    name: string;
+    created_at: string;
+    last_used_at: string | null;
+  }[];
 }
 
 // ---- helpers ----
@@ -306,5 +312,6 @@ export function mapUser(api: ApiUser): User {
     bio: api.bio,
     nidVerified: api.nid_verified,
     otpEnabled: api.otp_enabled ?? false,
+    passkeys: api.passkeys,
   };
 }

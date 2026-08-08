@@ -5,9 +5,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
-import { ArrowLeft, Home, Loader2 } from "lucide-react";
+import {
+  startAuthentication,
+  type PublicKeyCredentialRequestOptionsJSON,
+} from "@simplewebauthn/browser";
+import { ArrowLeft, Home, KeyRound, Loader2 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
-import { useLogin, useRegister, useVerifyOtp } from "../../hooks/useAuth";
+import { useLogin, usePasskeyLogin, useRegister, useVerifyOtp } from "../../hooks/useAuth";
 import { authService } from "../../services/authService";
 import { getApiErrorMessage } from "../../services/errors";
 import { isOtpPending, type OtpPending } from "../../types";
@@ -76,6 +80,67 @@ export default function Auth() {
   const [otpStep, setOtpStep] = useState<OtpPending | null>(null);
   const [otpCode, setOtpCode] = useState("");
   const [resending, setResending] = useState(false);
+  const [useRecovery, setUseRecovery] = useState(false);
+  const passkeyLogin = usePasskeyLogin();
+
+  /** Shared handling for a completed passkey assertion. */
+  const finishPasskey = (result: Awaited<ReturnType<typeof authService.passkeyLoginComplete>>) => {
+    if (isOtpPending(result)) {
+      setOtpStep(result);
+      setOtpCode("");
+      setUseRecovery(false);
+      return;
+    }
+    toast.success(`Welcome back, ${result.user.name}!`);
+    navigate("/dashboard");
+  };
+
+  /** Run the browser WebAuthn ceremony (optionally as conditional autofill). */
+  const runPasskeyFlow = async (conditional = false) => {
+    try {
+      const options = await authService.passkeyLoginBegin();
+      const { challenge_id: challengeId, ...publicKeyOptions } = options;
+      const credential = await startAuthentication({
+        optionsJSON: publicKeyOptions as unknown as PublicKeyCredentialRequestOptionsJSON,
+        useBrowserAutofill: conditional,
+      });
+      if (!credential) return;
+      passkeyLogin.mutate(
+        {
+          challengeId,
+          response: credential as unknown as Record<string, unknown>,
+        },
+        {
+          onSuccess: finishPasskey,
+          onError: (error) =>
+            toast.error(getApiErrorMessage(error, "Passkey sign-in did not complete.")),
+        }
+      );
+    } catch {
+      // Conditional autofill aborts silently when no passkey is available or
+      // the user ignores it — the password form remains the fallback.
+      if (!conditional) {
+        toast.error("Passkey sign-in is not available right now. Use your password instead.");
+      }
+    }
+  };
+
+  // Conditional UI: arm a silent passkey autofill while the login form is
+  // shown. When the browser offers the passkey and the user picks it, the
+  // ceremony completes without touching the password fields.
+  useEffect(() => {
+    if (!isLogin || otpStep) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      void runPasskeyFlow(true);
+    }, 600);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- options are fetched inside
+  }, [isLogin, otpStep]);
 
   // Single schema whose rules depend on the current mode:
   //  - Login:    email/username (non-empty) + password (min 6)
@@ -177,7 +242,9 @@ export default function Auth() {
   const submitOtp = () => {
     if (!otpStep || otpCode.trim().length === 0) return;
     verifyOtp.mutate(
-      { challenge: otpStep.challenge, code: otpCode.trim() },
+      useRecovery
+        ? { challenge: otpStep.challenge, recoveryCode: otpCode.trim() }
+        : { challenge: otpStep.challenge, code: otpCode.trim() },
       {
         onSuccess: (user) => {
           toast.success(`Welcome back, ${user.name}!`);
@@ -205,7 +272,13 @@ export default function Auth() {
   const backToLogin = () => {
     setOtpStep(null);
     setOtpCode("");
+    setUseRecovery(false);
     login.reset();
+  };
+
+  const toggleRecoveryMode = () => {
+    setUseRecovery((v) => !v);
+    setOtpCode("");
   };
 
   const onSubmit = handleSubmit((values) => {
@@ -350,19 +423,48 @@ export default function Auth() {
               </motion.div>
 
               <label className="text-sm font-semibold text-muted-foreground">
-                Verification code
+                {useRecovery ? "Recovery code" : "Verification code"}
               </label>
               <Input
                 value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                onChange={(e) =>
+                  setOtpCode(
+                    useRecovery
+                      ? e.target.value.toUpperCase().slice(0, 14)
+                      : e.target.value.replace(/\D/g, "").slice(0, 6)
+                  )
+                }
                 onKeyDown={(e) => e.key === "Enter" && submitOtp()}
-                inputMode="numeric"
+                inputMode={useRecovery ? undefined : "numeric"}
                 autoFocus
-                maxLength={6}
-                placeholder="••••••"
-                className="text-center font-display text-2xl tracking-[0.5em]"
-                aria-label="6-digit verification code"
+                maxLength={useRecovery ? 14 : 6}
+                placeholder={useRecovery ? "XXXX-XXXX-XXXX" : "••••••"}
+                className={
+                  useRecovery
+                    ? "text-center font-display text-xl tracking-widest"
+                    : "text-center font-display text-2xl tracking-[0.5em]"
+                }
+                aria-label={useRecovery ? "Recovery code" : "6-digit verification code"}
               />
+              <p className="text-center text-xs text-muted-foreground">
+                {useRecovery ? (
+                  <>
+                    A recovery code works once. Request a new batch by disabling and re-enabling
+                    2FA.
+                  </>
+                ) : (
+                  <>
+                    Lost your email?{" "}
+                    <button
+                      type="button"
+                      onClick={toggleRecoveryMode}
+                      className="font-semibold text-brand hover:underline"
+                    >
+                      Use a recovery code
+                    </button>
+                  </>
+                )}
+              </p>
 
               {verifyOtp.isPending && (
                 <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -389,14 +491,24 @@ export default function Auth() {
                 >
                   <ArrowLeft className="size-3.5" /> Use another account
                 </button>
-                <button
-                  type="button"
-                  onClick={resendOtp}
-                  disabled={resending}
-                  className="font-semibold text-brand hover:underline disabled:opacity-50"
-                >
-                  {resending ? "Sending…" : "Resend code"}
-                </button>
+                {useRecovery ? (
+                  <button
+                    type="button"
+                    onClick={toggleRecoveryMode}
+                    className="font-semibold text-brand hover:underline"
+                  >
+                    Use emailed code
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={resendOtp}
+                    disabled={resending}
+                    className="font-semibold text-brand hover:underline disabled:opacity-50"
+                  >
+                    {resending ? "Sending…" : "Resend code"}
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -615,6 +727,25 @@ export default function Auth() {
                     )}
                   </Button>
                 </motion.div>
+
+                {isLogin && (
+                  <motion.button
+                    type="button"
+                    onClick={() => void runPasskeyFlow(false)}
+                    disabled={passkeyLogin.isPending}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ ...spring, delay: 0.16 }}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                  >
+                    {passkeyLogin.isPending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <KeyRound className="size-4 text-emerald-600" />
+                    )}
+                    Sign in with a passkey
+                  </motion.button>
+                )}
 
                 <p className="text-center text-sm text-muted-foreground">
                   {isLogin ? "Don't have an account? " : "Already have an account? "}

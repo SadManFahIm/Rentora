@@ -51,15 +51,42 @@ export function useLogin() {
   });
 }
 
-/** Verify the emailed one-time code and finish the 2FA login. */
+/** Verify the emailed one-time code (or a recovery code) and finish 2FA login. */
 export function useVerifyOtp() {
   const { setUser } = useApp();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ challenge, code }: { challenge: string; code: string }) =>
-      authService.verifyOtp(challenge, code),
+    mutationFn: ({
+      challenge,
+      code,
+      recoveryCode = "",
+    }: {
+      challenge: string;
+      code?: string;
+      recoveryCode?: string;
+    }) => authService.verifyOtp(challenge, code ?? "", recoveryCode),
     onSuccess: async (user) => {
       await completeAuth(user, queryClient, setUser);
+    },
+  });
+}
+
+/** Sign in with a passkey (WebAuthn assertion already collected client-side). */
+export function usePasskeyLogin() {
+  const { setUser } = useApp();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      challengeId,
+      response,
+    }: {
+      challengeId: string;
+      response: Record<string, unknown>;
+    }) => authService.passkeyLoginComplete(challengeId, response),
+    onSuccess: async (result: LoginResult) => {
+      // 2FA account: the passkey only gets us to the OTP step.
+      if (isOtpPending(result)) return;
+      await completeAuth(result.user, queryClient, setUser);
     },
   });
 }
