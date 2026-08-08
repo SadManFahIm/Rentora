@@ -216,6 +216,39 @@ export function formatTravelTime(distanceKm: number): string {
   return `≈ ${minutes} min walk`;
 }
 
+// Typical Dhaka driving speed used for ETA estimates (km/h) — urban traffic
+// keeps it far below highway speeds; deliberately conservative.
+const DRIVING_SPEED_KMH = 18;
+
+/** Driving minutes for a straight-line distance in km (urban estimate). */
+export function drivingMinutes(distanceKm: number): number {
+  if (distanceKm <= 0) return 0;
+  return Math.round((distanceKm / DRIVING_SPEED_KMH) * 60);
+}
+
+/** "≈ 12 min drive" travel-time label. */
+export function formatDriveTime(distanceKm: number): string {
+  const minutes = drivingMinutes(distanceKm);
+  if (minutes < 1) return "< 1 min drive";
+  return `≈ ${minutes} min drive`;
+}
+
+/**
+ * Google Maps directions deep-link between two points. Used by the map
+ * popup's "Get Directions" action — opens Maps with the route pre-filled so
+ * tenants can get turn-by-turn directions + live ETA without leaving the app.
+ * Coordinates are rounded to 6 decimals (~0.1 m) to keep the URL short.
+ */
+export function directionsUrl(
+  destination: { lat: number; lng: number },
+  origin?: { lat: number; lng: number } | null
+): string {
+  const point = (p: { lat: number; lng: number }) => `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`;
+  const dest = `destination=${point(destination)}`;
+  const orig = origin ? `&origin=${point(origin)}` : "";
+  return `https://www.google.com/maps/dir/?api=1${orig}&${dest}&travelmode=walking`;
+}
+
 /**
  * Approximate isochrone circle: a GeoJSON polygon approximating the set of
  * points reachable within `radiusKm` of a centre by walking (straight-line

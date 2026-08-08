@@ -141,15 +141,30 @@
   font-weight: 600;
   color: #0d9488;
 }
+.map-popup__dir {
+  display: inline-block;
+  margin-top: 8px;
+  border-radius: 8px;
+  background: #0d9488;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+.map-popup__dir:hover {
+  background: #0f766e;
+}
 .map-popup__cta {
   margin-top: 6px;
   font-size: 11px;
   font-weight: 700;
   color: #ea580c;
 }
-@media (prefers-color-scheme: dark) {
-  .maplibregl-popup-content {
-    background: #111827;
-    color: #f3f4f6;
-  }
+/* The app toggles dark mode via a `.dark` class on <html> (Tailwind class
+   strategy), so popup theming follows the app toggle — not the OS setting. */
+:is(.dark, [data-theme="dark"]) .maplibregl-popup-content {
+  background: #111827;
+  color: #f3f4f6;
 }
