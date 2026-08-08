@@ -14,6 +14,11 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { VisuallyHidden } from "../../components/ui/visually-hidden";
 import { cn } from "../../lib/utils";
+import {
+  passwordStrengthColor,
+  passwordStrengthLabel,
+  scorePassword,
+} from "../../lib/passwordStrength";
 
 interface AuthFormValues {
   name: string;
@@ -120,6 +125,7 @@ export default function Auth() {
     register: field,
     handleSubmit,
     reset,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<AuthFormValues>({
     resolver: zodResolver(schema),
@@ -129,6 +135,12 @@ export default function Auth() {
     shouldUnregister: false,
     mode: "onTouched",
   });
+
+  // Live values for the register-mode strength meter + match indicator.
+  const passwordValue = watch("password") ?? "";
+  const confirmValue = watch("confirmPassword") ?? "";
+  const strength = scorePassword(passwordValue);
+  const passwordsMatch = confirmValue.length > 0 && confirmValue === passwordValue;
 
   const rootError = login.isError || register.isError;
   const isBusy = isSubmitting || login.isPending || register.isPending;
@@ -313,6 +325,37 @@ export default function Auth() {
                   {errors.password.message}
                 </span>
               )}
+              {/* Live strength meter (register mode only) */}
+              {!isLogin && passwordValue.length > 0 && (
+                <div className="mt-2" aria-live="polite">
+                  <div className="flex items-center justify-between text-[11px] font-medium">
+                    <span
+                      className={cn(
+                        "transition-colors",
+                        strength >= 3
+                          ? "text-emerald-600"
+                          : strength === 2
+                            ? "text-amber-600"
+                            : "text-red-500"
+                      )}
+                    >
+                      Password strength: {passwordStrengthLabel(strength) || "Too short"}
+                    </span>
+                    <span className="text-muted-foreground">{passwordValue.length}/12+</span>
+                  </div>
+                  <div className="mt-1 flex h-1.5 gap-1 overflow-hidden rounded-full">
+                    {[0, 1, 2, 3].map((i) => (
+                      <span
+                        key={i}
+                        className={cn(
+                          "h-full flex-1 rounded-full transition-all duration-300",
+                          i < strength ? passwordStrengthColor(strength) : "bg-muted"
+                        )}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <AnimatePresence initial={false} mode="popLayout">
@@ -337,6 +380,18 @@ export default function Auth() {
                   {errors.confirmPassword && (
                     <span className="mt-1.5 block text-xs font-medium text-red-600">
                       {errors.confirmPassword.message}
+                    </span>
+                  )}
+                  {/* Live match indicator */}
+                  {confirmValue.length > 0 && (
+                    <span
+                      aria-live="polite"
+                      className={cn(
+                        "mt-1.5 flex items-center gap-1 text-xs font-medium",
+                        passwordsMatch ? "text-emerald-600" : "text-red-500"
+                      )}
+                    >
+                      {passwordsMatch ? "✓ Passwords match" : "✕ Passwords do not match"}
                     </span>
                   )}
                 </motion.div>
