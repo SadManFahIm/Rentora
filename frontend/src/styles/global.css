@@ -32,3 +32,108 @@
     border-radius: 2px;
   }
 }
+
+/* ============================================================
+   MAP (Phase 7) — marker pins + popups for MapLibre GL
+   ============================================================ */
+.map-marker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 28px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 999px 999px 999px 5px;
+  background: #ea580c;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  box-shadow:
+    0 2px 6px rgb(0 0 0 / 0.25),
+    0 0 0 2px rgb(255 255 255 / 0.85);
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.map-marker::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 0;
+  height: 0;
+  margin-left: -5px;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid #ea580c;
+}
+.map-marker--premium {
+  background: #f59e0b;
+}
+.map-marker--premium::after {
+  border-top-color: #f59e0b;
+}
+.map-marker--featured {
+  background: #3b82f6;
+}
+.map-marker--featured::after {
+  border-top-color: #3b82f6;
+}
+.map-marker:hover {
+  transform: scale(1.15);
+  box-shadow:
+    0 4px 12px rgb(0 0 0 / 0.35),
+    0 0 0 3px rgb(255 255 255 / 0.95);
+}
+
+.maplibregl-popup-content {
+  border-radius: 12px;
+  padding: 0;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 0.18);
+}
+.maplibregl-popup-tip {
+  display: none;
+}
+.map-popup {
+  min-width: 180px;
+  padding: 12px 14px;
+}
+.map-popup__price {
+  font-family: var(--font-display, inherit);
+  font-size: 16px;
+  font-weight: 800;
+  color: #ea580c;
+}
+.map-popup__price span {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-muted, #6b7280);
+}
+.map-popup__name {
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--foreground, #111827);
+}
+.map-popup__meta {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--color-muted, #6b7280);
+}
+.map-popup__cta {
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ea580c;
+}
+@media (prefers-color-scheme: dark) {
+  .maplibregl-popup-content {
+    background: #111827;
+    color: #f3f4f6;
+  }
+}

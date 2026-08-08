@@ -30,13 +30,16 @@ const FRONTEND = process.env.FRONTEND_URL ?? "http://localhost:3001";
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8000";
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? "demo12345";
 const DBG_PORT = Number(process.env.CHROME_DBG_PORT ?? 9333);
-const OUT_DIR = process.env.OUT_DIR ?? path.join(process.cwd(), "docs", "screenshots");
+const OUT_DIR =
+  process.env.OUT_DIR ?? path.join(process.cwd(), "docs", "screenshots");
 
 const ROOT = path.join(import.meta.dirname, "..", ".."); // repo root
 const MANAGE_PY = path.join(ROOT, "backend", "manage.py");
-const PY = process.env.PYTHON ?? (process.platform === "win32"
-  ? path.join(ROOT, "backend", "venv", "Scripts", "python.exe")
-  : path.join(ROOT, "backend", "venv", "bin", "python"));
+const PY =
+  process.env.PYTHON ??
+  (process.platform === "win32"
+    ? path.join(ROOT, "backend", "venv", "Scripts", "python.exe")
+    : path.join(ROOT, "backend", "venv", "bin", "python"));
 
 /** A single capture: login user, route, click optional tab, output file. */
 const CAPTURES = [
@@ -45,6 +48,13 @@ const CAPTURES = [
     route: "/roommates",
     out: "roommates-matching.png",
     waitMs: 4500,
+  },
+  {
+    // Public: no token needed — MapLibre map with room markers + landmarks.
+    user: null,
+    route: "/map",
+    out: "map-view.png",
+    waitMs: 6000,
   },
   {
     user: "tanvir.islam",
@@ -93,7 +103,7 @@ function findChrome() {
     }
   }
   throw new Error(
-    "Chrome not found — set CHROME_PATH or install Google Chrome."
+    "Chrome not found — set CHROME_PATH or install Google Chrome.",
   );
 }
 
@@ -145,7 +155,7 @@ async function main() {
       "--window-size=1440,1100",
       "about:blank",
     ],
-    { stdio: "ignore" }
+    { stdio: "ignore" },
   );
 
   let ready = false;
@@ -162,7 +172,7 @@ async function main() {
 
   const target = await fetch(
     `http://127.0.0.1:${DBG_PORT}/json/new?about:blank`,
-    { method: "PUT" }
+    { method: "PUT" },
   ).then((r) => r.json());
 
   const ws = new WebSocket(target.webSocketDebuggerUrl);
