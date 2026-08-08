@@ -71,7 +71,6 @@ export const roomService = {
     return rooms;
   },
 
-<<<<<<< HEAD
   /**
    * GET /rooms/?bbox=... — rooms whose location falls inside a map viewport.
    * `bbox` is Leaflet's `LatLngBounds.toBBoxString()` (minLng,minLat,maxLng,maxLat).
@@ -87,7 +86,6 @@ export const roomService = {
     if (bbox) params.bbox = bbox;
     const { data } = await api.get<Paginated<ApiRoom>>("/rooms/", { params });
     return data.results.map(mapRoom);
-=======
   /** GET /rooms/landmarks/ — public map landmark layers (universities + metro). */
   async getLandmarks(): Promise<Landmark[]> {
     const { data } =
@@ -101,7 +99,6 @@ export const roomService = {
       lat: l.lat,
       lng: l.lng,
     }));
->>>>>>> origin/main
   },
 
   /** GET /rooms/:id/ */
