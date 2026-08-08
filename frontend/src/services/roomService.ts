@@ -1,6 +1,14 @@
 import { api } from "./api";
 import { mapRoom, type ApiRoom, type Paginated } from "./mappers";
-import type { Room, RoomFilters, CreateRoomPayload, TierCatalog, Landmark } from "../types";
+import type {
+  GeocodeSuggestion,
+  Room,
+  RoomFilters,
+  CreateRoomPayload,
+  TierCatalog,
+  Landmark,
+  MapSummary,
+} from "../types";
 
 // ============================================================
 // ROOM SERVICE — real /rooms/ endpoints
@@ -82,6 +90,32 @@ export const roomService = {
   async getRoomById(id: number): Promise<Room> {
     const { data } = await api.get<ApiRoom>(`/rooms/${id}/`);
     return mapRoom(data);
+  },
+
+  /** GET /rooms/geocode/ — street/area/landmark autocomplete for the map search box. */
+  async geocode(query: string): Promise<GeocodeSuggestion[]> {
+    const { data } = await api.get<
+      { key: string; label: string; kind: string; lat: number; lng: number }[]
+    >("/rooms/geocode/", { params: { q: query } });
+    return data.map((s) => ({
+      key: s.key,
+      label: s.label,
+      kind: s.kind as GeocodeSuggestion["kind"],
+      lat: Number(s.lat),
+      lng: Number(s.lng),
+    }));
+  },
+
+  /**
+   * GET /rooms/summary/ — aggregate room counts for the current map viewport
+   * (total/available/price stats), so the map badge doesn't need the full
+   * paginated list. Accepts the same geo filters as getRooms.
+   */
+  async getMapSummary(filters: RoomFilters = {}): Promise<MapSummary> {
+    const { data } = await api.get<MapSummary>("/rooms/summary/", {
+      params: buildParams(filters),
+    });
+    return data;
   },
 
   /** GET /rooms/tier-catalog/ — public paid-tier pricing/benefits. */

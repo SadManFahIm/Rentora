@@ -143,6 +143,113 @@ class RoomGeoAPITests(APITestCase):
         self.assertIn("mrt_mirpur_10", nearby_keys)
 
 
+class RoomGeocodeTests(APITestCase):
+    def test_geocode_finds_street_by_prefix(self):
+        res = self.client.get("/api/v1/rooms/geocode/", {"q": "mirpur road"})
+        self.assertEqual(res.status_code, 200)
+        labels = [s["label"] for s in res.data]
+        self.assertTrue(any("Mirpur Road" in label for label in labels))
+        suggestion = next(s for s in res.data if "Mirpur Road" in s["label"])
+        self.assertEqual(suggestion["kind"], "street")
+        self.assertIsInstance(suggestion["lat"], float)
+        self.assertIsInstance(suggestion["lng"], float)
+
+    def test_geocode_finds_area_and_landmark(self):
+        res = self.client.get("/api/v1/rooms/geocode/", {"q": "gulshan"})
+        labels = [s["label"] for s in res.data]
+        self.assertTrue(any("Gulshan" in label for label in labels))
+        self.assertTrue(any(s["kind"] == "area" for s in res.data))
+
+        res = self.client.get("/api/v1/rooms/geocode/", {"q": "mirpur 10"})
+        self.assertTrue(any("Mirpur 10" in s["label"] for s in res.data))
+
+    def test_geocode_empty_query_returns_empty(self):
+        res = self.client.get("/api/v1/rooms/geocode/")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data, [])
+
+    def test_geocode_unknown_query_returns_empty(self):
+        res = self.client.get("/api/v1/rooms/geocode/", {"q": "zzzznope"})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data, [])
+
+    def test_geocode_limits_to_8(self):
+        # A broad query like "d" should not return more than 8 suggestions.
+        res = self.client.get("/api/v1/rooms/geocode/", {"q": "d"})
+        self.assertEqual(res.status_code, 200)
+        self.assertLessEqual(len(res.data), 8)
+
+
+class RoomSummaryAPITests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(
+            username="summarized", email="sum@example.com", password="pw12345!"
+        )
+        cls.mirpur = Room.objects.create(
+            title="Summary Mirpur",
+            description="test",
+            room_type=Room.RoomType.SINGLE,
+            price=7000,
+            area="Mirpur",
+            address="somewhere",
+            lat=23.8069,
+            lng=90.3687,
+            size_sqft=200,
+            owner=cls.owner,
+            is_available=False,
+        )
+        cls.dhanmondi = Room.objects.create(
+            title="Summary Dhanmondi",
+            description="test",
+            room_type=Room.RoomType.SINGLE,
+            price=11000,
+            area="Dhanmondi",
+            address="somewhere",
+            lat=23.7461,
+            lng=90.3742,
+            size_sqft=200,
+            owner=cls.owner,
+            is_available=True,
+        )
+
+    def test_summary_counts_all(self):
+        res = self.client.get("/api/v1/rooms/summary/")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["total"], 2)
+        self.assertEqual(res.data["available"], 1)
+        self.assertEqual(res.data["avg_price"], 9000.0)
+        self.assertEqual(res.data["min_price"], 7000.0)
+        self.assertEqual(res.data["max_price"], 11000.0)
+
+    def test_summary_respects_bbox(self):
+        # A tight box around Mirpur excludes the Dhanmondi room.
+        res = self.client.get("/api/v1/rooms/summary/?bbox=90.36,23.80,90.37,23.82")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["total"], 1)
+        self.assertIn("Mirpur", {row["area"] for row in res.data["by_area"]})
+
+    def test_summary_respects_area_filter(self):
+        res = self.client.get("/api/v1/rooms/summary/?area=Dhanmondi")
+        self.assertEqual(res.data["total"], 1)
+        self.assertEqual(res.data["avg_price"], 11000.0)
+
+    def test_summary_respects_radius(self):
+        res = self.client.get("/api/v1/rooms/summary/?near_landmark=mrt_mirpur_10&radius_km=3")
+        self.assertEqual(res.data["total"], 1)
+        self.assertEqual(res.data["by_area"][0]["area"], "Mirpur")
+
+    def test_summary_invalid_bbox_returns_400(self):
+        res = self.client.get("/api/v1/rooms/summary/?bbox=bad")
+        self.assertEqual(res.status_code, 400)
+
+    def test_summary_empty_area_breakdown(self):
+        res = self.client.get("/api/v1/rooms/summary/?area=NoSuchArea")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["total"], 0)
+        self.assertEqual(res.data["by_area"], [])
+
+
 class RoomTierAPITests(APITestCase):
     """Paid listing tiers — serialization, ordering, and the catalog."""
 

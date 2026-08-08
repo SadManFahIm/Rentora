@@ -84,6 +84,32 @@ export function landmarksToFeatureCollection(landmarks: Landmark[]): GeoJSON.Fea
 }
 
 /**
+ * Metro-route polyline: a single LineString threading the metro stations
+ * north-to-south (MRT Line 6 runs Uttara → Motijheel), so the map can draw
+ * the rail corridor the stations sit on — not just isolated dots. The
+ * stations in `landmarks` are unordered, so we sort by latitude first.
+ */
+export function metroRouteFeatureCollection(metroStations: Landmark[]): GeoJSON.FeatureCollection {
+  const ordered = [...metroStations].sort((a, b) => b.lat - a.lat);
+  if (ordered.length < 2) {
+    return { type: "FeatureCollection", features: [] };
+  }
+  return {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        geometry: {
+          type: "LineString",
+          coordinates: ordered.map((s) => [s.lng, s.lat]),
+        },
+        properties: { name: "MRT Line 6" },
+      },
+    ],
+  };
+}
+
+/**
  * Marker + heatmap colour for a room's tier. Free listings get the brand
  * orange; paid promotions get distinct accent colours so promoted rooms pop
  * on the map exactly like they do in the list.

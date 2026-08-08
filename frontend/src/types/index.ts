@@ -187,6 +187,25 @@ export interface Landmark {
   lng: number;
 }
 
+/** A place suggestion from the map's street-search autocomplete. */
+export interface GeocodeSuggestion {
+  key: string;
+  label: string;
+  kind: "street" | "area" | "university" | "metro";
+  lat: number;
+  lng: number;
+}
+
+/** Aggregate room counts from GET /rooms/summary/ (map badge). */
+export interface MapSummary {
+  total: number;
+  available: number;
+  avg_price: number | null;
+  min_price: number | null;
+  max_price: number | null;
+  by_area: { area: string; count: number }[];
+}
+
 // ---- API payloads ----
 export type CreateRoomPayload = Omit<Room, "id" | "rating" | "reviews">;
 export type UpdateRoomPayload = Partial<CreateRoomPayload>;

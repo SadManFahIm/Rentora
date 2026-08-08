@@ -7,8 +7,10 @@ import {
   formatTravelTime,
   haversineKm,
   landmarkToFeature,
+  landmarksToFeatureCollection,
   markerClassName,
   markerPrice,
+  metroRouteFeatureCollection,
   quantizeBounds,
   roomToFeature,
   roomsToFeatureCollection,
@@ -222,6 +224,38 @@ describe("walkingIsochrone", () => {
     expect(first).toEqual(ring[ring.length - 1]); // closed
     // East-west half-width ~1 km at Dhaka latitude.
     expect(Math.abs(ring[12][0] - first[0])).toBeGreaterThan(0.008);
+  });
+});
+
+describe("metroRouteFeatureCollection", () => {
+  const stations = [
+    { key: "mrt_motijheel", name: "Motijheel", kind: "metro" as const, lat: 23.727, lng: 90.418 },
+    {
+      key: "mrt_uttara_north",
+      name: "Uttara North",
+      kind: "metro" as const,
+      lat: 23.869,
+      lng: 90.369,
+    },
+    { key: "mrt_shahbagh", name: "Shahbagh", kind: "metro" as const, lat: 23.739, lng: 90.396 },
+  ];
+
+  it("threads stations north-to-south in one LineString", () => {
+    const fc = metroRouteFeatureCollection(stations);
+    const line = fc.features[0] as GeoJSON.Feature<GeoJSON.LineString>;
+    const coords = line.geometry.coordinates;
+    expect(coords[0]).toEqual([90.369, 23.869]); // Uttara North first (northernmost)
+    expect(coords[2]).toEqual([90.418, 23.727]); // Motijheel last (southernmost)
+  });
+
+  it("returns no features with fewer than two stations", () => {
+    const fc = metroRouteFeatureCollection([stations[0]]);
+    expect(fc.features).toHaveLength(0);
+  });
+
+  it("leaves landmarksToFeatureCollection intact for point layers", () => {
+    const fc = landmarksToFeatureCollection(stations);
+    expect(fc.features).toHaveLength(3);
   });
 });
 

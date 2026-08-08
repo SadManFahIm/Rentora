@@ -5,35 +5,47 @@
 // existing RoomModal, and landmarks (universities + metro stations) can be
 // toggled as layers. A radius search lets tenants pick a point on the map
 // (a university, metro station, or their office) and see rooms within N km.
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import * as maplibregl from "maplibre-gl";
 import type { StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
   Crosshair,
   Footprints,
+  GraduationCap,
   Landmark as LandmarkIcon,
   List as ListIcon,
   Map as MapIcon,
+  MapPin,
+  Search,
   TrainFront,
   Thermometer,
   Users as UsersIcon,
   X,
 } from "lucide-react";
-import { useLandmarks, useRooms } from "../../hooks/useRooms";
+import { useGeocode, useLandmarks, useMapSummary, useRooms } from "../../hooks/useRooms";
 import RoomModal from "../../components/RoomModal/RoomModal";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { useUiStore } from "../../stores/uiStore";
-import type { Room } from "../../types";
+import type { GeocodeSuggestion, Room } from "../../types";
 import {
   avgPrice,
   buildBbox,
   formatDistance,
   formatTravelTime,
+  haversineKm,
+  landmarkToFeature,
   landmarksToFeatureCollection,
   markerClassName,
   markerPrice,
+  metroRouteFeatureCollection,
   quantizeBounds,
   roomsToFeatureCollection,
   sortRoomsForList,
@@ -114,6 +126,12 @@ export default function Map() {
   const [listOpen, setListOpen] = useState(false);
   const [showTravel, setShowTravel] = useState(false);
   const [activeRoomId, setActiveRoomId] = useState<number | null>(null);
+
+  // ---- street search / autocomplete state --------------------------------
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(0);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   // When dark tiles (CARTO CDN) fail to load, fall back to dimmed OSM tiles
@@ -132,6 +150,10 @@ export default function Map() {
   // Debounced viewport: fires ~300ms after the user stops panning/zooming.
   const debouncedViewbox = useDebouncedValue(viewbox, 300);
   const debouncedRadiusCenter = useDebouncedValue(radiusCenter, 300);
+  // Debounced street-search query — autocomplete fires 250ms after typing stops.
+  const debouncedSearchQuery = useDebouncedValue(searchQuery, 250);
+
+  const { data: suggestions = [], isFetching: searching } = useGeocode(debouncedSearchQuery);
 
   const filters = useMemo(() => {
     const f: {
@@ -152,6 +174,9 @@ export default function Map() {
 
   const { data: rooms = [], isLoading } = useRooms(filters);
   const { data: landmarks = [] } = useLandmarks();
+  // Authoritative room counts for the badge (COUNT/AVG server-side — the
+  // paginated list caps at one page, so client-side counting undercounts).
+  const { data: summary } = useMapSummary(filters);
   roomsRef.current = rooms;
 
   // ---- map bootstrap ---------------------------------------------------
@@ -278,6 +303,70 @@ export default function Map() {
         map.setLayoutProperty(id, "visibility", showLandmarks[id] ? "visible" : "none");
     });
   }, [showLandmarks, mapReady]);
+
+  // ---- metro route corridor -----------------------------------------------
+  // A polyline threading the MRT Line 6 stations (Uttara → Motijheel) so the
+  // rail corridor is visible, not just isolated station dots. Follows the
+  // Metro toggle; also shown while the travel overlay is active so tenants
+  // can see which corridor they'd ride to/from their radius search.
+  //
+  // Layering: the white casing is added FIRST (bottom) and the teal core
+  // SECOND (top) with a `line-gap-width` — the transparent gap around the
+  // core lets the casing show through, so the corridor reads as a teal line
+  // with a white halo on both light and dark basemaps. (Adding the casing
+  // on top would have hidden the core entirely; ordering matters.)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const id = "metro-route";
+    const casingId = `${id}-casing`;
+    try {
+      const metro = landmarks.filter((l) => l.kind === "metro");
+      const data = metroRouteFeatureCollection(metro);
+      const visible = showLandmarks.metro || showTravel;
+      const setVisibility = () => {
+        // Update BOTH layers on every run — the existing-layer branch below
+        // re-runs when the Metro toggle or travel overlay flips, and the
+        // casing must stay in sync with the core.
+        [id, casingId].forEach((l) => {
+          if (map.getLayer(l)) map.setLayoutProperty(l, "visibility", visible ? "visible" : "none");
+        });
+      };
+      if (map.getLayer(id)) {
+        setVisibility();
+        (map.getSource(id) as maplibregl.GeoJSONSource).setData(data);
+      } else if (data.features.length > 0) {
+        map.addSource(id, { type: "geojson", data });
+        // Casing first (bottom), then core on top with a gap to reveal it.
+        map.addLayer({
+          id: casingId,
+          type: "line",
+          source: id,
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: {
+            "line-color": "#ffffff",
+            "line-width": 8,
+            "line-opacity": 0.55,
+          },
+        });
+        map.addLayer({
+          id,
+          type: "line",
+          source: id,
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: {
+            "line-color": "#0d9488",
+            "line-width": 4,
+            "line-opacity": 0.9,
+            "line-gap-width": 3,
+          },
+        });
+        setVisibility();
+      }
+    } catch {
+      // Rapid theme/state changes during layer juggling — safe to ignore.
+    }
+  }, [landmarks, mapReady, showLandmarks.metro, showTravel]);
 
   // ---- heatmap layer -----------------------------------------------------
   useEffect(() => {
@@ -629,19 +718,88 @@ export default function Map() {
             properties: { band: i },
           })),
         });
-      } else if (map.getLayer(`${id}-0`)) {
+
+        // Metro stations within a 30-minute walk of the search point get a
+        // highlighted ring — the stations a tenant could actually reach on
+        // foot, feeding the "which line do I ride from here?" story.
+        const reachId = "metro-reach";
+        const reachable = landmarks
+          .filter((l) => l.kind === "metro")
+          .filter((l) => haversineKm(radiusCenter.lat, radiusCenter.lng, l.lat, l.lng) <= 2.25) // ~30 min walk
+          .map(landmarkToFeature);
+        if (!map.getSource(reachId)) {
+          map.addSource(reachId, {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] },
+          });
+          map.addLayer({
+            id: reachId,
+            type: "circle",
+            source: reachId,
+            paint: {
+              "circle-radius": 12,
+              "circle-color": "#0d9488",
+              "circle-stroke-color": "#ffffff",
+              "circle-stroke-width": 2.5,
+              "circle-opacity": 0.9,
+            },
+          });
+        }
+        (map.getSource(reachId) as maplibregl.GeoJSONSource).setData({
+          type: "FeatureCollection",
+          features: reachable,
+        });
+      } else {
         removeAll();
+        if (map.getLayer("metro-reach")) {
+          map.removeLayer("metro-reach");
+          map.removeSource("metro-reach");
+        }
       }
     } catch {
       // no-op during rapid state changes
     }
-  }, [showTravel, radiusCenter, mapReady]);
+  }, [showTravel, radiusCenter, mapReady, landmarks]);
 
+  // Room-count badge: prefer the authoritative server summary (COUNT/AVG over
+  // every row in view, not just page 1); fall back to the client-side list
+  // while the summary request is in flight or when it isn't available.
   const counts = useMemo(() => {
-    const total = rooms.length;
-    const available = rooms.filter((r) => r.available).length;
-    return { total, available, avg: avgPrice(rooms) };
-  }, [rooms]);
+    const total = summary?.total ?? rooms.length;
+    const available = summary?.available ?? rooms.filter((r) => r.available).length;
+    const avg = summary?.avg_price ?? avgPrice(rooms);
+    return { total, available, avg: avg != null ? Math.round(avg) : null };
+  }, [rooms, summary]);
+
+  // ---- street search handlers --------------------------------------------
+  const pickSuggestion = (s: GeocodeSuggestion) => {
+    setSearchQuery(s.label);
+    setSearchOpen(false);
+    setRadiusCenter({ lat: s.lat, lng: s.lng, label: s.label });
+    mapRef.current?.flyTo({ center: [s.lng, s.lat], zoom: 14 });
+  };
+
+  const onSearchKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape") {
+      setSearchOpen(false);
+      return;
+    }
+    if (e.key === "Enter") {
+      const hit = suggestions[activeSuggestion] ?? suggestions[0];
+      if (hit) {
+        e.preventDefault();
+        pickSuggestion(hit);
+      }
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveSuggestion((i) => Math.min(i + 1, Math.max(suggestions.length - 1, 0)));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveSuggestion((i) => Math.max(i - 1, 0));
+    }
+  };
 
   return (
     <div className="relative flex h-[calc(100vh-5rem)] min-h-[560px] w-full overflow-hidden">
@@ -667,6 +825,82 @@ export default function Map() {
             {mapError}
           </div>
         )}
+
+        {/* Street search + autocomplete */}
+        <div className="absolute left-1/2 top-4 z-20 w-[min(22rem,calc(100%-2rem))] -translate-x-1/2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
+            <input
+              ref={searchInputRef}
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setSearchOpen(true);
+                setActiveSuggestion(0);
+              }}
+              onFocus={() => setSearchOpen(true)}
+              onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
+              onKeyDown={onSearchKeyDown}
+              placeholder="Search streets, areas, stations…"
+              aria-label="Search for a street, area or station"
+              className="h-11 w-full rounded-xl border border-gray-200 bg-white/95 pl-10 pr-9 text-sm shadow-lg backdrop-blur transition-colors placeholder:text-gray-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200 dark:border-gray-700 dark:bg-gray-900/95 dark:placeholder:text-gray-500 dark:focus:border-violet-500 dark:focus:ring-violet-900"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => {
+                  setSearchQuery("");
+                  setSearchOpen(false);
+                  searchInputRef.current?.focus();
+                }}
+                aria-label="Clear search"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+              >
+                <X className="size-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Autocomplete dropdown */}
+          {searchOpen && debouncedSearchQuery.trim().length >= 2 && (
+            <div className="absolute inset-x-0 top-full z-20 mt-1.5 overflow-hidden rounded-xl border border-gray-200 bg-white/95 shadow-xl backdrop-blur dark:border-gray-700 dark:bg-gray-900/95">
+              {searching ? (
+                <div className="flex items-center gap-2 px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                  <span className="size-3 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+                  Searching…
+                </div>
+              ) : suggestions.length === 0 ? (
+                <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                  No places found — try “Gulshan”, “Mirpur Road” or “Shahbagh”.
+                </div>
+              ) : (
+                <ul role="listbox" aria-label="Search suggestions">
+                  {suggestions.map((s, i) => (
+                    <li key={s.key}>
+                      <button
+                        role="option"
+                        aria-selected={i === activeSuggestion}
+                        onMouseEnter={() => setActiveSuggestion(i)}
+                        onClick={() => pickSuggestion(s)}
+                        className={cn(
+                          "flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors",
+                          i === activeSuggestion
+                            ? "bg-violet-50 dark:bg-violet-950/40"
+                            : "hover:bg-gray-50 dark:hover:bg-gray-800/60"
+                        )}
+                      >
+                        <SuggestionIcon kind={s.kind} />
+                        <span className="min-w-0 flex-1 truncate text-foreground">{s.label}</span>
+                        <span className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                          {s.kind}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Toolbar */}
         <div className="absolute left-4 top-4 z-10 flex max-w-[calc(100%-2rem)] flex-col gap-3">
@@ -821,11 +1055,11 @@ export default function Map() {
           </div>
         )}
 
-        {/* Room count summary */}
+        {/* Room count summary — authoritative server count (not capped by pagination) */}
         <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2">
           <Badge className="gap-1.5 bg-white/95 px-3 py-1.5 text-sm shadow dark:bg-gray-900/95">
             <MapIcon className="size-3.5" />
-            {counts.available} rooms in view
+            {counts.available} of {counts.total} rooms in view
             {counts.avg != null && (
               <span className="text-gray-500 dark:text-gray-400">
                 · avg ৳{counts.avg.toLocaleString()}
@@ -851,6 +1085,9 @@ export default function Map() {
           </div>
           <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
             <span className="inline-block size-2.5 rounded-full bg-[#0d9488]" /> Metro
+          </div>
+          <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+            <span className="inline-block h-0.5 w-4 rounded bg-[#0d9488]" /> MRT Line 6
           </div>
         </div>
 
@@ -898,6 +1135,20 @@ export default function Map() {
       )}
     </div>
   );
+}
+
+function SuggestionIcon({ kind }: { kind: GeocodeSuggestion["kind"] }) {
+  const cls = "size-4 shrink-0";
+  switch (kind) {
+    case "university":
+      return <GraduationCap className={cn(cls, "text-violet-600 dark:text-violet-400")} />;
+    case "metro":
+      return <TrainFront className={cn(cls, "text-teal-600 dark:text-teal-400")} />;
+    case "area":
+      return <MapPin className={cn(cls, "text-orange-600 dark:text-orange-400")} />;
+    default:
+      return <MapPin className={cn(cls, "text-blue-600 dark:text-blue-400")} />;
+  }
 }
 
 interface MapSidebarProps {
