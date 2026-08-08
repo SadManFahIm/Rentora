@@ -159,7 +159,26 @@ export interface Filters {
 }
 
 // Filters as sent to the service layer — every field optional.
-export type RoomFilters = Partial<Filters> & { owner?: number };
+export type RoomFilters = Partial<Filters> & {
+  owner?: number;
+  /** Map viewport, GeoJSON order: minLng,minLat,maxLng,maxLat. */
+  bbox?: string;
+  /** Reference-point latitude (pair with nearLng). */
+  nearLat?: number;
+  /** Reference-point longitude (pair with nearLat). */
+  nearLng?: number;
+  /** Keep only rooms within this many km of the reference point. */
+  radiusKm?: number;
+};
+
+/** A university or metro station from GET /rooms/landmarks/. */
+export interface Landmark {
+  key: string;
+  name: string;
+  kind: "university" | "metro";
+  lat: number;
+  lng: number;
+}
 
 // ---- API payloads ----
 export type CreateRoomPayload = Omit<Room, "id" | "rating" | "reviews">;

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { roomService } from "../services/roomService";
-import type { Room, RoomFilters, TierCatalog } from "../types";
+import type { Landmark, Room, RoomFilters, TierCatalog } from "../types";
 
 // ============================================================
 // ROOM QUERY HOOKS
@@ -19,6 +19,15 @@ export function useRooms(filters: RoomFilters = {}) {
     queryKey: roomKeys.list(filters),
     queryFn: () => roomService.getRooms(filters),
     staleTime: 60_000,
+  });
+}
+
+/** Fetch map landmarks (universities + metro stations) for the map view. */
+export function useLandmarks() {
+  return useQuery<Landmark[]>({
+    queryKey: [...roomKeys.all, "landmarks"] as const,
+    queryFn: () => roomService.getLandmarks(),
+    staleTime: 24 * 60 * 60 * 1000, // static data — cache for a day
   });
 }
 
