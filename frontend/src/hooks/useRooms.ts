@@ -1,6 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { roomService } from "../services/roomService";
-import type { Landmark, Room, RoomFilters, TierCatalog } from "../types";
+import type { CreateRoomPayload, Landmark, Room, RoomFilters, TierCatalog } from "../types";
 
 // ============================================================
 // ROOM QUERY HOOKS
@@ -19,6 +19,17 @@ export function useRooms(filters: RoomFilters = {}) {
     queryKey: roomKeys.list(filters),
     queryFn: () => roomService.getRooms(filters),
     staleTime: 60_000,
+  });
+}
+
+/** Create a new listing (landlord flow). Invalidates the room list cache. */
+export function useCreateRoom() {
+  const queryClient = useQueryClient();
+  return useMutation<Room, Error, CreateRoomPayload>({
+    mutationFn: (payload) => roomService.createRoom(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: roomKeys.all });
+    },
   });
 }
 

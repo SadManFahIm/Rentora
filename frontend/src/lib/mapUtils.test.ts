@@ -8,7 +8,10 @@ import {
   markerPrice,
   roomToFeature,
   roomsToFeatureCollection,
+  shouldCluster,
+  sortRoomsForList,
   tierColor,
+  viewSummary,
 } from "./mapUtils";
 
 function makeRoom(overrides: Partial<Room> = {}): Room {
@@ -116,5 +119,57 @@ describe("avgPrice", () => {
 
   it("rounds the mean", () => {
     expect(avgPrice([makeRoom({ price: 10000 }), makeRoom({ price: 15000 })])).toBe(12500);
+  });
+});
+
+describe("shouldCluster", () => {
+  it("keeps individual pins for small lists", () => {
+    expect(shouldCluster(5)).toBe(false);
+  });
+
+  it("clusters once listings grow past the threshold", () => {
+    expect(shouldCluster(12)).toBe(true);
+    expect(shouldCluster(40, 30)).toBe(true);
+  });
+});
+
+describe("sortRoomsForList", () => {
+  it("orders premium > featured > free, then price ascending", () => {
+    const rooms = [
+      makeRoom({ id: 1, tier: "free", price: 8000 }),
+      makeRoom({ id: 2, tier: "premium", price: 20000 }),
+      makeRoom({ id: 3, tier: "featured", price: 15000 }),
+    ];
+    expect(sortRoomsForList(rooms).map((r) => r.id)).toEqual([2, 3, 1]);
+  });
+
+  it("pushes unavailable rooms to the end", () => {
+    const rooms = [
+      makeRoom({ id: 1, available: false, price: 5000 }),
+      makeRoom({ id: 2, available: true, price: 9000 }),
+    ];
+    expect(sortRoomsForList(rooms).map((r) => r.id)).toEqual([2, 1]);
+  });
+
+  it("does not mutate the input", () => {
+    const rooms = [makeRoom({ id: 2 }), makeRoom({ id: 1 })];
+    sortRoomsForList(rooms);
+    expect(rooms.map((r) => r.id)).toEqual([2, 1]);
+  });
+});
+
+describe("viewSummary", () => {
+  it("handles the empty state", () => {
+    expect(viewSummary([])).toBe("No rooms in view");
+  });
+
+  it("counts available vs total", () => {
+    expect(viewSummary([makeRoom({ available: true }), makeRoom({ available: false })])).toBe(
+      "1 of 2 rooms available"
+    );
+  });
+
+  it("handles the singular", () => {
+    expect(viewSummary([makeRoom()])).toBe("1 of 1 room available");
   });
 });

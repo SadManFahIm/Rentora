@@ -12,9 +12,12 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import {
   Crosshair,
   Landmark as LandmarkIcon,
+  List as ListIcon,
   Map as MapIcon,
   TrainFront,
   Thermometer,
+  Users as UsersIcon,
+  X,
 } from "lucide-react";
 import { useLandmarks, useRooms } from "../../hooks/useRooms";
 import RoomModal from "../../components/RoomModal/RoomModal";
@@ -29,6 +32,9 @@ import {
   markerClassName,
   markerPrice,
   roomsToFeatureCollection,
+  sortRoomsForList,
+  tierColor,
+  viewSummary,
 } from "../../lib/mapUtils";
 import { cn } from "../../lib/utils";
 
@@ -73,12 +79,19 @@ export default function Map() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
+  // Live rooms for the once-per-map event handlers (see clustering effect).
+  const roomsRef = useRef<Room[]>([]);
+  // Guards the once-per-map registration of cluster click/hover handlers.
+  const clusterHandlersRef = useRef<maplibregl.Map | null>(null);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [showLandmarks, setShowLandmarks] = useState<Record<MapLayerId, boolean>>({
     universities: true,
     metro: true,
   });
   const [heatmap, setHeatmap] = useState(false);
+  const [clustering, setClustering] = useState(true);
+  const [listOpen, setListOpen] = useState(false);
+  const [activeRoomId, setActiveRoomId] = useState<number | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
 
@@ -114,6 +127,7 @@ export default function Map() {
 
   const { data: rooms = [], isLoading } = useRooms(filters);
   const { data: landmarks = [] } = useLandmarks();
+  roomsRef.current = rooms;
 
   // ---- map bootstrap ---------------------------------------------------
   useEffect(() => {
@@ -152,9 +166,12 @@ export default function Map() {
     });
     map.on("moveend", syncViewbox);
 
-    // Clicking empty map space clears the radius search.
+    // Clicking empty map space clears the radius search and the active pin.
     map.on("click", (e: maplibregl.MapMouseEvent) => {
-      if (e.originalEvent.target === map.getCanvas()) setRadiusCenter(null);
+      if (e.originalEvent.target === map.getCanvas()) {
+        setRadiusCenter(null);
+        setActiveRoomId(null);
+      }
     });
 
     map.on("error", () => {
@@ -274,24 +291,162 @@ export default function Map() {
     }
   }, [heatmap, rooms, mapReady]);
 
-  // ---- custom price markers ----------------------------------------------
+  // ---- custom price markers / clustered layer ------------------------------
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
 
-    markersRef.current.forEach((m) => m.remove());
-    markersRef.current = [];
+    const CLUSTER_SOURCE = "rooms-clusters";
+    const CLUSTER_LAYER = "rooms-clusters-layer";
+    const CLUSTER_COUNT = "rooms-cluster-count";
+    const UNCLUSTERED = "rooms-unclustered-point";
 
     // Escape user-generated text before it enters popup HTML — the backend
     // sanitizes titles, but defence-in-depth keeps stored-XSS out of popups.
     const esc = (s: string) =>
       s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+    const openRoom = (room: Room) => {
+      setSelectedRoom(room);
+      setActiveRoomId(room.id);
+    };
+
+    // ---- clustering mode: GeoJSON cluster source + layers ----
+    if (clustering) {
+      // Remove custom markers; the layers replace them.
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
+
+      try {
+        if (!map.getSource(CLUSTER_SOURCE)) {
+          map.addSource(CLUSTER_SOURCE, {
+            type: "geojson",
+            data: roomsToFeatureCollection(rooms),
+            cluster: true,
+            clusterMaxZoom: 14,
+            clusterRadius: 50,
+          });
+          map.addLayer({
+            id: CLUSTER_LAYER,
+            type: "circle",
+            source: CLUSTER_SOURCE,
+            filter: ["has", "point_count"],
+            paint: {
+              "circle-color": [
+                "step",
+                ["get", "point_count"],
+                "#f97316",
+                10,
+                "#ea580c",
+                50,
+                "#c2410c",
+              ],
+              "circle-radius": ["step", ["get", "point_count"], 20, 10, 28, 50, 36],
+              "circle-opacity": 0.9,
+              "circle-stroke-color": "#ffffff",
+              "circle-stroke-width": 2,
+            },
+          });
+          map.addLayer({
+            id: CLUSTER_COUNT,
+            type: "symbol",
+            source: CLUSTER_SOURCE,
+            filter: ["has", "point_count"],
+            layout: {
+              "text-field": ["get", "point_count_abbreviated"],
+              "text-size": 12,
+              "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
+            },
+            paint: { "text-color": "#ffffff" },
+          });
+          map.addLayer({
+            id: UNCLUSTERED,
+            type: "circle",
+            source: CLUSTER_SOURCE,
+            filter: ["!", ["has", "point_count"]],
+            paint: {
+              "circle-radius": 8,
+              "circle-color": [
+                "match",
+                ["get", "tier"],
+                "premium",
+                "#f59e0b",
+                "featured",
+                "#3b82f6",
+                "#ea580c",
+              ],
+              "circle-stroke-color": "#ffffff",
+              "circle-stroke-width": 2,
+            },
+          });
+        } else {
+          (map.getSource(CLUSTER_SOURCE) as maplibregl.GeoJSONSource).setData(
+            roomsToFeatureCollection(rooms)
+          );
+        }
+
+        // Interactive handlers are registered ONCE per map instance.
+        // MapLibre's .on() does not dedupe — the effect re-runs on every
+        // rooms refetch, so re-registering would stack duplicate listeners.
+        // Handlers read live data through roomsRef instead of the closure.
+        if (clusterHandlersRef.current !== map) {
+          clusterHandlersRef.current = map;
+
+          // Cluster click -> zoom in on the cluster.
+          map.on("click", CLUSTER_LAYER, (e) => {
+            const feature = e.features?.[0];
+            if (!feature) return;
+            const clusterId = feature.properties?.cluster_id as number;
+            (map.getSource(CLUSTER_SOURCE) as maplibregl.GeoJSONSource)
+              .getClusterExpansionZoom(clusterId)
+              .then((zoom) => {
+                map.easeTo({
+                  center: (feature.geometry as GeoJSON.Point).coordinates as [number, number],
+                  zoom: zoom + 1,
+                });
+              });
+          });
+
+          // Unclustered point click -> open the room.
+          map.on("click", UNCLUSTERED, (e) => {
+            const feature = e.features?.[0];
+            if (!feature) return;
+            const roomId = feature.properties?.id as number;
+            const room = roomsRef.current.find((r) => r.id === roomId);
+            if (room) openRoom(room);
+          });
+
+          // Hover pointer for interactive layers.
+          map.on("mouseenter", CLUSTER_LAYER, () => (map.getCanvas().style.cursor = "pointer"));
+          map.on("mouseleave", CLUSTER_LAYER, () => (map.getCanvas().style.cursor = ""));
+          map.on("mouseenter", UNCLUSTERED, () => (map.getCanvas().style.cursor = "pointer"));
+          map.on("mouseleave", UNCLUSTERED, () => (map.getCanvas().style.cursor = ""));
+        }
+      } catch {
+        // Layer juggling during rapid toggle — safe to ignore.
+      }
+      return;
+    }
+
+    // ---- marker mode: custom HTML price pins ----
+    try {
+      [CLUSTER_LAYER, CLUSTER_COUNT, UNCLUSTERED].forEach((id) => {
+        if (map.getLayer(id)) map.removeLayer(id);
+      });
+      if (map.getSource(CLUSTER_SOURCE)) map.removeSource(CLUSTER_SOURCE);
+    } catch {
+      // no-op
+    }
+
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current = [];
+
     rooms.forEach((room) => {
       if (!room.available) return;
       const el = document.createElement("button");
       el.className = markerClassName(room.tier);
       el.setAttribute("aria-label", `View ${room.name}`);
+      el.setAttribute("data-room-id", String(room.id));
       el.innerHTML = markerPrice(room.price);
 
       const popup = new maplibregl.Popup({ offset: 22, closeButton: false, maxWidth: "260px" })
@@ -309,10 +464,19 @@ export default function Map() {
         .setPopup(popup)
         .addTo(map);
 
-      el.addEventListener("click", () => setSelectedRoom(room));
+      el.addEventListener("click", () => openRoom(room));
       markersRef.current.push(marker);
     });
-  }, [rooms, mapReady]);
+  }, [rooms, mapReady, clustering]);
+
+  // Keep the active room highlighted without re-creating all markers
+  // (re-creating on activeRoomId change would detach the open popup).
+  useEffect(() => {
+    markersRef.current.forEach((m) => {
+      const id = m.getElement().dataset.roomId;
+      m.getElement().classList.toggle("map-marker--active", Number(id) === activeRoomId);
+    });
+  }, [activeRoomId, mapReady]);
 
   // ---- radius circle -------------------------------------------------------
   useEffect(() => {
@@ -375,156 +539,298 @@ export default function Map() {
   }, [rooms]);
 
   return (
-    <div className="relative h-[calc(100vh-5rem)] min-h-[560px] w-full overflow-hidden">
-      {/* Map canvas */}
-      <div ref={containerRef} className="absolute inset-0" />
+    <div className="relative flex h-[calc(100vh-5rem)] min-h-[560px] w-full overflow-hidden">
+      {/* Map area (collapses when the list panel is open on desktop) */}
+      <div
+        className={cn(
+          "relative min-w-0 flex-1 transition-[width]",
+          listOpen && "lg:max-w-[calc(100%-24rem)]"
+        )}
+      >
+        {/* Map canvas — inline position/height overrides MapLibre's own
+            `.maplibregl-map { position: relative }` rule, which would
+            otherwise collapse the container to height 0 and render nothing. */}
+        <div
+          ref={containerRef}
+          className="absolute inset-0"
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+        />
 
-      {/* Map error overlay */}
-      {mapError && (
-        <div className="absolute inset-x-0 top-4 z-20 mx-auto w-fit max-w-lg rounded-xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-medium text-red-700 shadow-lg dark:border-red-800 dark:bg-red-950/60 dark:text-red-300">
-          {mapError}
-        </div>
-      )}
-
-      {/* Toolbar */}
-      <div className="absolute left-4 top-4 z-10 flex max-w-[calc(100%-2rem)] flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white/95 p-2 shadow-lg backdrop-blur dark:border-gray-800 dark:bg-gray-900/95">
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn(
-              "gap-1.5 rounded-lg",
-              showLandmarks.universities &&
-                "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
-            )}
-            onClick={() => setShowLandmarks((s) => ({ ...s, universities: !s.universities }))}
-          >
-            <LandmarkIcon className="size-4" /> Universities
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn(
-              "gap-1.5 rounded-lg",
-              showLandmarks.metro &&
-                "bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300"
-            )}
-            onClick={() => setShowLandmarks((s) => ({ ...s, metro: !s.metro }))}
-          >
-            <TrainFront className="size-4" /> Metro
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn(
-              "gap-1.5 rounded-lg",
-              heatmap && "bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300"
-            )}
-            onClick={() => setHeatmap((h) => !h)}
-          >
-            <Thermometer className="size-4" /> Price heatmap
-          </Button>
-        </div>
-
-        {/* Radius search */}
-        <div className="rounded-xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur dark:border-gray-800 dark:bg-gray-900/95">
-          <div className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Crosshair className="size-4 text-blue-600" />
-            {radiusCenter ? (
-              <span>
-                Near {radiusCenter.label} · <span className="text-blue-600">{radiusKm} km</span>
-              </span>
-            ) : (
-              <span>Click the map to search near a point</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="range"
-              min={0.5}
-              max={5}
-              step={0.5}
-              value={radiusKm}
-              onChange={(e) => setRadiusKm(Number(e.target.value))}
-              className="h-2 w-full cursor-pointer accent-blue-600"
-              aria-label="Search radius in km"
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              className="shrink-0 rounded-lg text-xs"
-              onClick={() => setRadiusCenter(null)}
-            >
-              Clear
-            </Button>
-          </div>
-        </div>
-
-        {/* Landmark quick-pick chips */}
-        {!radiusCenter && (
-          <div className="flex max-w-sm flex-wrap gap-1.5">
-            {landmarks
-              .filter((l) => l.kind === "university")
-              .slice(0, 6)
-              .map((l) => (
-                <button
-                  key={l.key}
-                  onClick={() => {
-                    setRadiusCenter({ lat: l.lat, lng: l.lng, label: l.name });
-                    mapRef.current?.flyTo({ center: [l.lng, l.lat], zoom: 13 });
-                  }}
-                  className="rounded-full border border-gray-200 bg-white/95 px-3 py-1 text-xs font-medium text-gray-700 shadow-sm backdrop-blur transition-colors hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700 dark:border-gray-700 dark:bg-gray-900/95 dark:text-gray-300 dark:hover:border-violet-600 dark:hover:bg-violet-950/40 dark:hover:text-violet-300"
-                >
-                  🎓 {l.name}
-                </button>
-              ))}
+        {/* Map error overlay */}
+        {mapError && (
+          <div className="absolute inset-x-0 top-4 z-20 mx-auto w-fit max-w-lg rounded-xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-medium text-red-700 shadow-lg dark:border-red-800 dark:bg-red-950/60 dark:text-red-300">
+            {mapError}
           </div>
         )}
-      </div>
 
-      {/* Loading badge */}
-      {isLoading && (
-        <div className="absolute right-4 top-4 z-10">
-          <Badge className="animate-pulse bg-white/90 text-gray-700 shadow dark:bg-gray-900/90 dark:text-gray-300">
-            Loading rooms…
+        {/* Toolbar */}
+        <div className="absolute left-4 top-4 z-10 flex max-w-[calc(100%-2rem)] flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white/95 p-2 shadow-lg backdrop-blur dark:border-gray-800 dark:bg-gray-900/95">
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "gap-1.5 rounded-lg",
+                showLandmarks.universities &&
+                  "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+              )}
+              onClick={() => setShowLandmarks((s) => ({ ...s, universities: !s.universities }))}
+            >
+              <LandmarkIcon className="size-4" /> Universities
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "gap-1.5 rounded-lg",
+                showLandmarks.metro &&
+                  "bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300"
+              )}
+              onClick={() => setShowLandmarks((s) => ({ ...s, metro: !s.metro }))}
+            >
+              <TrainFront className="size-4" /> Metro
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "gap-1.5 rounded-lg",
+                heatmap && "bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300"
+              )}
+              onClick={() => setHeatmap((h) => !h)}
+            >
+              <Thermometer className="size-4" /> Price heatmap
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "gap-1.5 rounded-lg",
+                clustering && "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+              )}
+              onClick={() => setClustering((c) => !c)}
+            >
+              <UsersIcon className="size-4" /> {clustering ? "Clustered" : "Pins"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "gap-1.5 rounded-lg",
+                listOpen && "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+              )}
+              onClick={() => setListOpen((o) => !o)}
+            >
+              <ListIcon className="size-4" /> List
+            </Button>
+          </div>
+
+          {/* Radius search */}
+          <div className="rounded-xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur dark:border-gray-800 dark:bg-gray-900/95">
+            <div className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Crosshair className="size-4 text-blue-600" />
+              {radiusCenter ? (
+                <span>
+                  Near {radiusCenter.label} · <span className="text-blue-600">{radiusKm} km</span>
+                </span>
+              ) : (
+                <span>Click the map to search near a point</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min={0.5}
+                max={5}
+                step={0.5}
+                value={radiusKm}
+                onChange={(e) => setRadiusKm(Number(e.target.value))}
+                className="h-2 w-full cursor-pointer accent-blue-600"
+                aria-label="Search radius in km"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 rounded-lg text-xs"
+                onClick={() => setRadiusCenter(null)}
+              >
+                Clear
+              </Button>
+            </div>
+          </div>
+
+          {/* Landmark quick-pick chips */}
+          {!radiusCenter && (
+            <div className="flex max-w-sm flex-wrap gap-1.5">
+              {landmarks
+                .filter((l) => l.kind === "university")
+                .slice(0, 6)
+                .map((l) => (
+                  <button
+                    key={l.key}
+                    onClick={() => {
+                      setRadiusCenter({ lat: l.lat, lng: l.lng, label: l.name });
+                      mapRef.current?.flyTo({ center: [l.lng, l.lat], zoom: 13 });
+                    }}
+                    className="rounded-full border border-gray-200 bg-white/95 px-3 py-1 text-xs font-medium text-gray-700 shadow-sm backdrop-blur transition-colors hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700 dark:border-gray-700 dark:bg-gray-900/95 dark:text-gray-300 dark:hover:border-violet-600 dark:hover:bg-violet-950/40 dark:hover:text-violet-300"
+                  >
+                    🎓 {l.name}
+                  </button>
+                ))}
+            </div>
+          )}
+        </div>
+
+        {/* Loading badge */}
+        {isLoading && (
+          <div className="absolute right-4 top-4 z-10">
+            <Badge className="animate-pulse bg-white/90 text-gray-700 shadow dark:bg-gray-900/90 dark:text-gray-300">
+              Loading rooms…
+            </Badge>
+          </div>
+        )}
+
+        {/* Room count summary */}
+        <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2">
+          <Badge className="gap-1.5 bg-white/95 px-3 py-1.5 text-sm shadow dark:bg-gray-900/95">
+            <MapIcon className="size-3.5" />
+            {counts.available} rooms in view
+            {counts.avg != null && (
+              <span className="text-gray-500 dark:text-gray-400">
+                · avg ৳{counts.avg.toLocaleString()}
+              </span>
+            )}
           </Badge>
         </div>
+
+        {/* Legend */}
+        <div className="absolute bottom-4 right-4 z-10 hidden rounded-lg border border-gray-200 bg-white/95 px-3 py-2 text-xs shadow backdrop-blur sm:block dark:border-gray-800 dark:bg-gray-900/95">
+          <div className="mb-1 font-semibold text-foreground">Legend</div>
+          <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+            <span className="inline-block size-2.5 rounded-full bg-[#ea580c]" /> Free
+          </div>
+          <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+            <span className="inline-block size-2.5 rounded-full bg-[#3b82f6]" /> Featured
+          </div>
+          <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+            <span className="inline-block size-2.5 rounded-full bg-[#f59e0b]" /> Premium
+          </div>
+          <div className="mt-1.5 flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+            <span className="inline-block size-2.5 rounded-full bg-[#7c3aed]" /> University
+          </div>
+          <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+            <span className="inline-block size-2.5 rounded-full bg-[#0d9488]" /> Metro
+          </div>
+        </div>
+
+        {selectedRoom && <RoomModal room={selectedRoom} onClose={() => setSelectedRoom(null)} />}
+      </div>
+
+      {/* Sidebar list panel (desktop) — viewport-synced room list */}
+      <aside
+        className={cn(
+          "hidden w-96 shrink-0 flex-col border-l border-gray-200 bg-card lg:flex dark:border-gray-800",
+          !listOpen && "hidden lg:hidden"
+        )}
+      >
+        <MapSidebar
+          rooms={rooms}
+          loading={isLoading}
+          activeId={activeRoomId}
+          onSelect={(room) => {
+            setActiveRoomId(room.id);
+            setListOpen(true);
+            mapRef.current?.flyTo({
+              center: [room.lng, room.lat],
+              zoom: Math.max(mapRef.current.getZoom(), 14),
+            });
+            setSelectedRoom(room);
+          }}
+          onClose={() => setListOpen(false)}
+        />
+      </aside>
+
+      {/* Mobile bottom sheet */}
+      {listOpen && (
+        <div className="absolute inset-x-0 bottom-0 z-30 max-h-[45%] overflow-y-auto rounded-t-2xl border-t border-gray-200 bg-card shadow-2xl lg:hidden dark:border-gray-800">
+          <MapSidebar
+            rooms={rooms}
+            loading={isLoading}
+            activeId={activeRoomId}
+            onSelect={(room) => {
+              setActiveRoomId(room.id);
+              setSelectedRoom(room);
+            }}
+            onClose={() => setListOpen(false)}
+          />
+        </div>
       )}
+    </div>
+  );
+}
 
-      {/* Room count summary */}
-      <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2">
-        <Badge className="gap-1.5 bg-white/95 px-3 py-1.5 text-sm shadow dark:bg-gray-900/95">
-          <MapIcon className="size-3.5" />
-          {counts.available} rooms in view
-          {counts.avg != null && (
-            <span className="text-gray-500 dark:text-gray-400">
-              · avg ৳{counts.avg.toLocaleString()}
-            </span>
-          )}
-        </Badge>
+interface MapSidebarProps {
+  rooms: Room[];
+  loading: boolean;
+  activeId: number | null;
+  onSelect: (room: Room) => void;
+  onClose: () => void;
+}
+
+function MapSidebar({ rooms, loading, activeId, onSelect, onClose }: MapSidebarProps) {
+  const sorted = useMemo(() => sortRoomsForList(rooms), [rooms]);
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-800">
+        <h3 className="font-display text-sm font-bold text-foreground">{viewSummary(rooms)}</h3>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 rounded-lg"
+          onClick={onClose}
+          aria-label="Close list"
+        >
+          <X className="size-4" />
+        </Button>
       </div>
-
-      {/* Legend */}
-      <div className="absolute bottom-4 right-4 z-10 hidden rounded-lg border border-gray-200 bg-white/95 px-3 py-2 text-xs shadow backdrop-blur sm:block dark:border-gray-800 dark:bg-gray-900/95">
-        <div className="mb-1 font-semibold text-foreground">Legend</div>
-        <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-          <span className="inline-block size-2.5 rounded-full bg-[#ea580c]" /> Free
-        </div>
-        <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-          <span className="inline-block size-2.5 rounded-full bg-[#3b82f6]" /> Featured
-        </div>
-        <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-          <span className="inline-block size-2.5 rounded-full bg-[#f59e0b]" /> Premium
-        </div>
-        <div className="mt-1.5 flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-          <span className="inline-block size-2.5 rounded-full bg-[#7c3aed]" /> University
-        </div>
-        <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-          <span className="inline-block size-2.5 rounded-full bg-[#0d9488]" /> Metro
-        </div>
+      <div className="flex-1 overflow-y-auto p-2">
+        {loading && rooms.length === 0 ? (
+          <p className="px-3 py-6 text-center text-sm text-gray-500 dark:text-gray-400">Loading…</p>
+        ) : rooms.length === 0 ? (
+          <p className="px-3 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+            No rooms in this area — pan the map or widen your search.
+          </p>
+        ) : (
+          sorted.map((room) => (
+            <button
+              key={room.id}
+              onClick={() => onSelect(room)}
+              className={cn(
+                "mb-1.5 flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-colors",
+                activeId === room.id
+                  ? "border-orange-400 bg-orange-50 dark:border-orange-600 dark:bg-orange-950/40"
+                  : "border-transparent hover:border-gray-200 hover:bg-gray-50 dark:hover:border-gray-700 dark:hover:bg-gray-800/60"
+              )}
+            >
+              <div
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold text-white"
+                style={{ backgroundColor: tierColor(room.tier) }}
+              >
+                {markerPrice(room.price)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold text-foreground">{room.name}</div>
+                <div className="truncate text-xs text-gray-500 dark:text-gray-400">
+                  {room.area} · {room.type} · ★ {room.rating} ({room.reviews})
+                </div>
+              </div>
+              <div className="shrink-0 text-sm font-bold text-orange-600">
+                ৳{room.price.toLocaleString()}
+              </div>
+            </button>
+          ))
+        )}
       </div>
-
-      {selectedRoom && <RoomModal room={selectedRoom} onClose={() => setSelectedRoom(null)} />}
     </div>
   );
 }

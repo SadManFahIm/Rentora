@@ -116,13 +116,15 @@ export const roomService = {
       room_type: payload.type.toLowerCase(),
       price: payload.price,
       area: payload.area,
+      // Backend requires an address; the area label keeps it meaningful until
+      // a full street-address field is added to the listing form.
+      address: `${payload.area}, Dhaka`,
       lat: payload.lat,
       lng: payload.lng,
       amenities: payload.amenities,
       gender_preference: payload.gender.toLowerCase(),
       size_sqft: payload.size,
       is_available: payload.available,
-      is_featured: payload.featured,
     };
     const { data } = await api.post<ApiRoom>("/rooms/", body);
     return mapRoom(data);

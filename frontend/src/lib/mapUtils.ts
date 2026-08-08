@@ -108,3 +108,29 @@ export function avgPrice(rooms: Room[]): number | null {
   if (rooms.length === 0) return null;
   return Math.round(rooms.reduce((sum, r) => sum + r.price, 0) / rooms.length);
 }
+
+/**
+ * Decide whether clustering is worthwhile: with few listings individual pins
+ * are clearer; past this threshold clusters keep the map readable.
+ */
+export function shouldCluster(roomCount: number, threshold = 12): boolean {
+  return roomCount >= threshold;
+}
+
+/**
+ * Sort rooms for the map sidebar: promoted tiers first, then price ascending
+ * (cheapest first is the natural browse order), unavailable last.
+ */
+export function sortRoomsForList(rooms: Room[]): Room[] {
+  const rank = (r: Room): number =>
+    !r.available ? 3 : r.tier === "premium" ? 0 : r.tier === "featured" ? 1 : 2;
+  return [...rooms].sort((a, b) => rank(a) - rank(b) || a.price - b.price);
+}
+
+/** Short human-readable summary for the map list panel header. */
+export function viewSummary(rooms: Room[]): string {
+  const total = rooms.length;
+  const available = rooms.filter((r) => r.available).length;
+  if (total === 0) return "No rooms in view";
+  return `${available} of ${total} room${total === 1 ? "" : "s"} available`;
+}
