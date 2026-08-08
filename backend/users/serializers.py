@@ -6,6 +6,14 @@ from rest_framework import serializers
 User = get_user_model()
 
 
+class DuplicateEmailError(serializers.ValidationError):
+    """Raised when registration attempts to reuse an existing account's email.
+
+    Subclassing ValidationError keeps the envelope shape consistent — the
+    custom exception handler turns it into a 400 with a readable message.
+    """
+
+
 class UserSerializer(serializers.ModelSerializer):
     """General-purpose user representation, used by UserViewSet."""
 
@@ -64,6 +72,24 @@ class CustomRegisterSerializer(RegisterSerializer):
     role = serializers.ChoiceField(
         choices=User.Role.choices, required=False, default=User.Role.TENANT
     )
+
+    def validate_email(self, email):
+        # dj-rest-auth's default check only consults allauth's EmailAddress
+        # table, so accounts created outside the signup flow (admin,
+        # createsuperuser, seed scripts, shell) slipped through and a
+        # duplicate email could be registered. Enforce uniqueness against
+        # the user table itself as well.
+        email = super().validate_email(email)
+        if (
+            email
+            and User.objects.filter(email__iexact=email)
+            .exclude(pk=self.instance.pk if self.instance else None)
+            .exists()
+        ):
+            raise DuplicateEmailError(
+                {"email": "A user is already registered with this email address."}
+            )
+        return email
 
     def get_cleaned_data(self):
         data = super().get_cleaned_data()

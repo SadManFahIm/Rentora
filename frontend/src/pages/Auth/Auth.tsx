@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 import { ArrowLeft, Home, Loader2 } from "lucide-react";
+import { useApp } from "../../context/AppContext";
 import { useLogin, useRegister } from "../../hooks/useAuth";
 import { getApiErrorMessage } from "../../services/errors";
 import { Dialog, DialogContent, DialogTitle } from "../../components/ui/dialog";
@@ -57,6 +58,7 @@ function FloatShape({
 
 export default function Auth() {
   const navigate = useNavigate();
+  const { user, authLoading } = useApp();
   const [isLogin, setIsLogin] = useState(true);
   const login = useLogin();
   const register = useRegister();
@@ -170,6 +172,13 @@ export default function Auth() {
     animate: { opacity: 1, y: 0 },
     exit: { opacity: 0, y: -12 },
   };
+
+  // Already signed in? Send the user straight to their dashboard instead of
+  // showing the auth dialog. While the session is still restoring (tokens
+  // present, profile fetch in flight) render nothing to avoid a flash.
+  // (Placed after every hook so the hook order stays stable.)
+  if (authLoading) return null;
+  if (user) return <Navigate to="/dashboard" replace />;
 
   return (
     <Dialog open onOpenChange={(open) => !open && navigate("/")}>
