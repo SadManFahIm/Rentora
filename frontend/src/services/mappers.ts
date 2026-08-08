@@ -68,6 +68,11 @@ export interface ApiRoom {
   owner?: ApiOwner | null;
   images?: ApiRoomImage[];
   created_at: string;
+  distance_km?: number | null;
+  proximity?: {
+    nearest_university: { key: string; name: string; distance_km: number } | null;
+    nearest_metro: { key: string; name: string; distance_km: number } | null;
+  } | null;
 }
 
 export interface ApiBooking {
@@ -232,6 +237,25 @@ export function mapRoom(api: ApiRoom): Room {
     ownerId: api.owner?.id ?? null,
     ownerAvatar: initials(owner),
     verified: api.verified,
+    distanceKm: api.distance_km != null ? Number(api.distance_km) : null,
+    proximity: api.proximity
+      ? {
+          nearestUniversity: api.proximity.nearest_university
+            ? {
+                key: api.proximity.nearest_university.key,
+                name: api.proximity.nearest_university.name,
+                distanceKm: Number(api.proximity.nearest_university.distance_km),
+              }
+            : null,
+          nearestMetro: api.proximity.nearest_metro
+            ? {
+                key: api.proximity.nearest_metro.key,
+                name: api.proximity.nearest_metro.name,
+                distanceKm: Number(api.proximity.nearest_metro.distance_km),
+              }
+            : null,
+        }
+      : null,
   };
 }
 

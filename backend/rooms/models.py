@@ -62,6 +62,11 @@ class Room(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        # The map view filters by a viewport box (lat/lng ranges) and radius
+        # queries do an indexable bbox pre-filter, so a composite index over
+        # lat/lng keeps those queries fast as the listing count grows —
+        # without PostGIS, this is the main lever for geo query speed.
+        indexes = [models.Index(fields=["lat", "lng"], name="room_lat_lng_idx")]
 
     def __str__(self):
         return self.title
