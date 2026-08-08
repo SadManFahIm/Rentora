@@ -305,6 +305,16 @@ OTP_MAX_ATTEMPTS = int(os.getenv("OTP_MAX_ATTEMPTS", "5"))
 OTP_RESEND_COOLDOWN_SECONDS = int(os.getenv("OTP_RESEND_COOLDOWN_SECONDS", "30"))
 
 # ============================================================
+# WebAuthn / Passkeys (users app)
+# ============================================================
+# rp_id must match the browser's effective registrable domain — "localhost"
+# for local dev (a secure context per spec); prod must share a domain across
+# the SPA and API (e.g. app.example.com + api.example.com → rp_id "example.com").
+WEBAUTHN_RP_ID = os.getenv("WEBAUTHN_RP_ID", "localhost")
+WEBAUTHN_RP_NAME = os.getenv("WEBAUTHN_RP_NAME", "Rentora")
+WEBAUTHN_ORIGIN = os.getenv("WEBAUTHN_ORIGIN", "http://localhost:3000")
+
+# ============================================================
 # Payments — business rules & webhook hardening (Phase 5 Day 3)
 # ============================================================
 # Whether a landlord may approve a booking that has an unpaid security

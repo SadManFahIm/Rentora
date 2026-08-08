@@ -64,6 +64,15 @@ export interface User {
   nidVerified?: boolean;
   /** Email-OTP two-factor authentication is enabled for this account. */
   otpEnabled?: boolean;
+  /** Registered WebAuthn passkeys (from the user detail payload). */
+  passkeys?: PasskeyInfo[];
+}
+
+export interface PasskeyInfo {
+  id: string;
+  name: string;
+  created_at: string;
+  last_used_at: string | null;
 }
 
 export interface Notification {
