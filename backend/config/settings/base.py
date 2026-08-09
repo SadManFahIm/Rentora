@@ -5,6 +5,7 @@ For more information on this file, see
 https://docs.djangoproject.com/en/5.2/topics/settings/
 """
 
+import logging
 import os
 from datetime import timedelta
 from pathlib import Path
@@ -18,6 +19,30 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-change-me-in-production")
+
+# ============================================================
+# Sentry — error tracking. No-op when SENTRY_DSN is not set (local dev),
+# so the whole block is safe to leave on everywhere.
+# ============================================================
+SENTRY_DSN = os.getenv("SENTRY_DSN", "")
+if SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.celery import CeleryIntegration
+    from sentry_sdk.integrations.django import DjangoIntegration
+    from sentry_sdk.integrations.logging import LoggingIntegration
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        environment=os.getenv("SENTRY_ENV", "production"),
+        # 100% of events locally/CI is fine; scale down in prod if cost is a concern.
+        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+        send_default_pii=False,  # keep user emails/IDs out of events by default
+        integrations=[
+            DjangoIntegration(),
+            CeleryIntegration(),
+            LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
+        ],
+    )
 
 INSTALLED_APPS = [
     # Daphne must come before django.contrib.staticfiles so its ASGI-aware
@@ -43,6 +68,7 @@ INSTALLED_APPS = [
     "dj_rest_auth",
     "dj_rest_auth.registration",
     # Local apps
+    "audit",
     "users",
     "rooms",
     "bookings",
@@ -297,6 +323,7 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 # Email-OTP two-factor authentication (users app)
 # ============================================================
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "Rentora <noreply@rentora.com>")
+SITE_NAME = os.getenv("SITE_NAME", "Rentora")
 # How long a 6-digit sign-in code stays valid.
 OTP_TTL_SECONDS = int(os.getenv("OTP_TTL_SECONDS", "600"))
 # Failed attempts before a challenge locks and a new code is required.
@@ -345,6 +372,69 @@ LISTING_TIER_DURATION_DAYS = 30
 # Number of monthly installments to generate for an approved booking whose
 # `check_out` is open-ended (no fixed lease end date).
 DEFAULT_LEASE_SCHEDULE_MONTHS = int(os.getenv("DEFAULT_LEASE_SCHEDULE_MONTHS", "12"))
+
+# ============================================================
+# Celery — async task queue (Phase 9)
+# ============================================================
+# Empty broker (the default) => eager mode: tasks run synchronously in the
+# calling process, so local dev + tests need no Redis. Production sets
+# CELERY_BROKER_URL=redis://... which disables eager mode automatically.
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "")
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "")
+CELERY_TASK_ALWAYS_EAGER = not CELERY_BROKER_URL
+CELERY_TASK_EAGER_PROPAGATES = True  # surface task errors in tests instead of hiding them
+CELERY_TASK_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TIMEZONE = "Asia/Dhaka"
+
+# Scheduled maintenance (only effective with a real broker + `celery beat`):
+CELERY_BEAT_SCHEDULE = {
+    "expire-listing-tiers": {
+        "task": "rooms.tasks.expire_listing_tiers",
+        "schedule": 3600.0,  # hourly — promotions roll off promptly
+    },
+    "update-market-stats": {
+        "task": "pricing.tasks.update_market_stats",
+        "schedule": 86400.0,  # daily
+    },
+    "scan-rooms-fraud": {
+        "task": "fraud.tasks.scan_all_rooms",
+        "schedule": 86400.0,  # daily catalogue re-validation
+    },
+    "send-payment-reminders": {
+        "task": "payments.tasks.send_payment_reminders",
+        "schedule": 86400.0,  # daily
+    },
+}
+
+# ============================================================
+# Structured logging (Phase 9)
+# ============================================================
+# JSON logs on stdout in production (see config/logging.JSONFormatter); the
+# default console formatter is kept in dev so logs stay human-readable.
+if os.getenv("JSON_LOGS", "False") == "True":
+    LOGGING = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "json": {
+                "()": "config.logging.JSONFormatter",
+            },
+        },
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+                "formatter": "json",
+            },
+        },
+        "root": {"handlers": ["console"], "level": "INFO"},
+        "loggers": {
+            "django": {"handlers": ["console"], "level": "INFO", "propagate": False},
+            "django.request": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+            "celery": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        },
+    }
 
 # Known gateway webhook source IPs, comma-separated. Sandbox IPs vary and
 # aren't published, so this is empty (no enforcement) by default — see

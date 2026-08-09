@@ -1,0 +1,13 @@
+Hi {{ user.first_name|default:user.username }},
+
+{{ headline }}
+
+{{ body }}
+
+Listing: {{ room.title }}
+Area: {{ room.get_area_display|default:room.area }}
+Monthly rent: ৳{{ room.price }}
+
+View it here: {{ action_url }}
+
+— The {{ site_name }} Team

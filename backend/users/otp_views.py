@@ -189,6 +189,9 @@ class OTPToggleView(APIView):
             request.user.otp_enabled = False
             request.user.save(update_fields=["otp_enabled"])
             delete_recovery_codes(request.user)
+            from audit.services import log_action
+
+            log_action(actor=request.user, action="2fa.disabled", request=request)
             return Response(
                 {
                     "success": True,
@@ -287,6 +290,19 @@ class OTPConfirmEnableView(APIView):
         request.user.otp_enabled = True
         request.user.save(update_fields=["otp_enabled"])
         recovery_codes = generate_recovery_codes(request.user)
+        from audit.services import log_action
+
+        log_action(actor=request.user, action="2fa.enabled", request=request)
+        # A copy of the codes is emailed so a tab close / page refresh can't
+        # lose the only look at them; the API still returns them once.
+        from notifications.emails import send_html_email
+
+        send_html_email(
+            subject="Your Rentora backup codes",
+            to_email=request.user.email,
+            template_name="recovery_codes",
+            context={"user": request.user, "recovery_codes": recovery_codes},
+        )
         return Response(
             {
                 "success": True,
