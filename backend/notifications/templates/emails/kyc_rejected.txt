@@ -1,0 +1,17 @@
+Hi {{ user.first_name|default:user.username }},
+
+We couldn't approve the identity document you submitted for your
+{{ site_name }} account. Until it's approved, your listings don't carry
+the verified badge.
+
+{% if note %}Why it was rejected: {{ note }}
+{% else %}The document was too blurry or unclear to verify. Please upload a
+clear copy — your phone camera at arm's length usually works best.
+{% endif %}
+
+Re-upload your document here:
+{{ action_url }}
+
+Once re-submitted, a reviewer will normally decide within a day.
+
+— The {{ site_name }} Team

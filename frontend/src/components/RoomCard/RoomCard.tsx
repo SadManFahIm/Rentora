@@ -115,7 +115,15 @@ export default function RoomCard({ room, onClick }: RoomCardProps) {
               {room.ownerAvatar}
             </div>
             {room.owner}
-            {room.verified && <ShieldCheck className="size-3.5 text-emerald-500" />}
+            {room.verified && (
+              <span
+                className="inline-flex items-center gap-0.5 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[0.65rem] font-semibold text-emerald-600 dark:text-emerald-400"
+                title="Verified landlord — identity documents approved"
+              >
+                <ShieldCheck className="size-3" />
+                Verified
+              </span>
+            )}
           </div>
         </div>
       </CardContent>

@@ -39,6 +39,9 @@ class RoomFilter(django_filters.FilterSet):
     # Lets the landlord dashboard list only one owner's listings server-side
     # instead of pulling every page of all rooms and filtering client-side.
     owner = django_filters.NumberFilter(field_name="owner_id")
+    # "Verified only" toggle on the rooms page — filters to listings whose
+    # owner passed KYC (Room.verified, synced by users/signals.py).
+    verified = django_filters.BooleanFilter(field_name="verified")
 
     class Meta:
         model = Room
@@ -155,6 +158,14 @@ class RoomViewSet(viewsets.ModelViewSet):
         When(effective_tier="premium", then=Value(0)),
         When(effective_tier="featured", then=Value(1)),
         default=Value(2),
+        output_field=IntegerField(),
+    )
+
+    # KYC-verified landlords rank above unverified ones within the same paid
+    # tier — a trust signal for tenants, not a paid feature.
+    VERIFIED_RANK = Case(
+        When(verified=True, then=Value(0)),
+        default=Value(1),
         output_field=IntegerField(),
     )
 
@@ -311,10 +322,11 @@ class RoomViewSet(viewsets.ModelViewSet):
             if reference is not None:
                 queryset = self._order_by_distance(queryset, reference)
             else:
-                # Default browse view: promoted listings float to the top.
-                queryset = queryset.annotate(tier_rank=self.TIER_RANK).order_by(
-                    "tier_rank", "-created_at"
-                )
+                # Default browse view: promoted listings float to the top;
+                # within a tier, KYC-verified landlords come first.
+                queryset = queryset.annotate(
+                    tier_rank=self.TIER_RANK, verified_rank=self.VERIFIED_RANK
+                ).order_by("tier_rank", "verified_rank", "-created_at")
         return queryset
 
     def get_serializer_context(self):

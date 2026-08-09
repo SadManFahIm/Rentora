@@ -1,21 +1,14 @@
 """Re-run the fraud detector over every room in the database.
 
 Used to backfill risk scores for listings created before the fraud app
-existed, and to re-validate the whole catalogue periodically. New rooms are
-already scanned automatically via ``fraud.signals``.
-
-Scheduling
-----------
-No Celery setup exists yet (see ``pricing`` and ``payments`` for the same
-pattern), so run this from a cron/Task Scheduler entry, e.g.:
-
-    0 4 * * * cd /path/to/backend && venv/bin/python manage.py scan_rooms
+existed, and to re-validate the whole catalogue periodically. Also scheduled
+as the daily ``fraud.tasks.scan_all_rooms`` beat task — both paths call the
+shared :func:`fraud.services.catalogue.scan_all_rooms`.
 """
 
 from django.core.management.base import BaseCommand
 
-from fraud.services.detectors import run_scan
-from rooms.models import Room
+from fraud.services.catalogue import scan_all_rooms
 
 
 class Command(BaseCommand):
@@ -29,24 +22,10 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        rooms = Room.objects.all()
-        total = rooms.count()
-        flagged = 0
-        clean = 0
-
-        self.stdout.write(f"Scanning {total} room(s)...")
-        for room in rooms:
-            report = run_scan(room)
-            if report.is_flagged:
-                flagged += 1
-                self.stdout.write(
-                    f"  ⚠ {room.title} [{report.severity}] score={report.score} ({report.summary})"
-                )
-            else:
-                clean += 1
-                if options.get("verbose"):
-                    self.stdout.write(f"  ✓ {room.title} (clean)")
-
+        result = scan_all_rooms()
         self.stdout.write(
-            self.style.SUCCESS(f"Done. {total} scanned, {flagged} flagged, {clean} clean.")
+            self.style.SUCCESS(
+                f"Done. {result['scanned']} scanned, {result['flagged']} flagged, "
+                f"{result['scanned'] - result['flagged']} clean."
+            )
         )

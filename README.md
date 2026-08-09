@@ -7,8 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-268%20(136%20BE%20%2B%20132%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
-[![Tests](<https://img.shields.io/badge/tests-278%20(137%20BE%20%2B%20141%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-340%20(168%20BE%20%2B%20172%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -23,6 +22,20 @@
 | **Solution**        | One verified marketplace: AI-scanned listings, real-time landlord chat, secure gateway payments, roommate matching, and an ML-powered fraud engine that catches bad actors before tenants do. |
 | **Target users**    | Tenants (students & young professionals) and landlords in Bangladesh.                                                                                                                         |
 | **Differentiators** | Fraud-engineered trust layer, AI recommendations & fair-price insight, roommates (a growth hook competitors lack), and a monetized listing-tier system (Free → Featured → Premium).           |
+
+---
+
+## 🆕 Changelog
+
+**Phase 9 — Operate It (Reliability & Observability)**
+
+- **Sentry error tracking** — backend (Django/Celery integrations) and frontend (`@sentry/react`); initialised from `SENTRY_DSN` / `VITE_SENTRY_DSN` and a **no-op when unset**, so local dev and CI never send events. Frontend error boundary forwards component stacks.
+- **Structured JSON logging** — a stdlib-only `JSONFormatter` (`config/logging.py`) emits one JSON object per line when `JSON_LOGS=True`; stable keys (timestamp/level/logger/message) plus caller extras, ready for any log shipper.
+- **Celery + Celery Beat** — `config/celery.py` with a **zero-config local mode**: an empty `CELERY_BROKER_URL` runs tasks eagerly (synchronously, no Redis), production sets a Redis broker and tasks go async. Scheduled maintenance moved onto the beat schedule: hourly tier expiry, daily market-stat refresh, daily catalogue fraud re-scan, daily rent reminders (`rooms/pricing/fraud/payments/tasks.py`).
+- **Fraud hardening** — the auto-scan now runs through a Celery task wrapped in try/except so a detector or queue failure can **never break room creation**; individual detector failures are isolated (logged + skipped, the rest still run); the flag path now also emails the landlord.
+- **Branded HTML transactional emails** — `notifications/emails.py` + `notifications/templates/emails/` (base shell + OTP code, recovery codes, booking status, fraud flag, promotion expiry), each with a plain-text fallback. Wired into OTP delivery, 2FA-enable recovery codes, booking lifecycle signals, fraud flags, and `expire_listings`.
+- **Audit log** — new `audit` app: an append-only `AuditLogEntry` table records who did what to which object (with IP) for sensitive actions. Wired into fraud-report review and 2FA enable/disable; the Django admin view is read-only so the trail cannot be rewritten.
+- **Backup & restore runbook** — `scripts/backup_db.py` (cross-platform; SQLite consistent copy via the backup API, PostgreSQL via `pg_dump`, pruning with `--keep`) plus `docs/ops/backup-restore.md` covering restore, media, and a quarterly restore drill.
 
 ---
 
@@ -77,18 +90,29 @@
 - **Map + list split view** — a viewport-synced sidebar lists the rooms on screen (promoted first, then by price); on mobile it becomes a bottom sheet
 - Tapping a pin opens the room popup → full **RoomModal** (booking, chat, fraud badge, AI price insight)
 - **Shareable map URLs** — the current viewport (center + zoom + radius search) is live-synced to the URL (`/map?center=23.81,90.41&zoom=12&r=23.78,90.40,2.0`), so you can copy the address and share an exact map view; the **Share** button copies the link, and opening a shared link restores the exact view, radius and area chips
-- **Readable in both themes** — dark tiles are the CARTO CDN; if it's unreachable the map auto-falls back to dimmed OSM tiles (street labels stay legible), and the travel overlay + legend are styled for light *and* dark
+- **Readable in both themes** — dark tiles are the CARTO CDN; if it's unreachable the map auto-falls back to dimmed OSM tiles (street labels stay legible), and the travel overlay + legend are styled for light _and_ dark
 
 **Listing Location Picker (landlord)**
 
 - **List a Room** now opens a proper form with a **map picker** — click the map to pin the exact listing location (or "Use my location")
 - Coordinates are stored as `lat`/`lng`, powering the map view, geo search and price insight
 
+**KYC Verification + Verified Landlord Badge**
+
+- **Identity document upload** — landlords upload a NID or passport (image/PDF, 5 MB cap) from **Dashboard → KYC** (`KycCard`); uploads are stored server-side and **served through an auth-gated endpoint** (owner/admin only — the public media URL can never leak a document, and other users get a 404 so no existence leak)
+- **Admin review panel** — pending applications queue (``GET /users/kyc/pending/``) with approve/reject; a decision flips `nid_verified`, **syncs every listing badge** via signals, resolves the pending documents, writes an **audit-log entry** (`kyc.approved` / `kyc.rejected`) and notifies the landlord — all inside one `transaction.atomic()` block
+- **KYC audit trail** — Dashboard → KYC → History lists every decision (who, when, note) straight from the append-only audit log
+- **Verified badge everywhere** — RoomCard pill, RoomModal, Roommates match cards, and **Chat** (shield next to a verified participant's name); verified-first ranking inside each tier
+- **"Verified landlords only" filter** — one toggle on the Rooms page (`?verified=true`) narrows results to KYC-approved owners
+- **E2E coverage** — upload → 403 for non-admin → queue → approve (badge flip + audit + notification + fraud signal clears) → reject with note → **reject → re-upload → approve full loop** (the landlord sees the reviewer's note on their rejected doc, re-submits, and the badge finally lands — the audit trail tells the whole story) → revoke flips back → privacy (404 for strangers) → file-type guard: 12 KYC tests
+- **Rejection UX** — the dashboard KycCard shows a **"Why it was rejected"** banner with the reviewer's note (e.g. *"Blurry scan — please re-upload"*) plus the upload form, so the landlord knows exactly what to fix before re-submitting
+- **Rejection email** — a rejection also sends a **branded transactional email** (`kyc_rejected` template) with the reviewer's note and a **direct re-upload CTA** that deep-links to the dashboard KYC tab, so the landlord can fix and resubmit without hunting through the app
+- **KYC review SLA stats** — the admin panel now opens with a **queue-health strip**: pending applications (with the oldest-waiting age), average review time (all-time + this week), and a 7-day decision trend (`▲ +N / ▼ -N` vs last week), all from `GET /users/kyc/sla/` (admin-only)
+
 **Engineering**
 
 - **Coverage history per branch** — every PR and main push appends its own `history-<branch>.csv` + SVG chart to the `coverage-history` branch (viewable `index.html` linking all branches)
-- 268 automated tests (136 backend + 132 frontend) · coverage gates (BE ≥50%, FE ≥55%)
-- 278 automated tests (137 backend + 141 frontend) · coverage gates (BE ≥50%, FE ≥55%)
+- 340 automated tests (168 backend + 172 frontend) · coverage gates (BE ≥50%, FE ≥55%)
 - Ruff + ESLint + Prettier with husky/lint-staged pre-commit hooks
 - GitHub Actions CI (backend, frontend, lint, coverage-summary PR comment, per-branch coverage history)
 - Route-level code splitting (React.lazy) — smaller bundles
@@ -99,22 +123,24 @@
 
 > Tracked like a product backlog — every shipped phase is checked off.
 
-| Phase     | Scope                                                                                             | Status               |
-| --------- | ------------------------------------------------------------------------------------------------- | -------------------- |
-| **1–2**   | React prototype with mock data                                                                    | ✅ Shipped           |
-| **2.5**   | Frontend refactor — Vite, TS strict, Tailwind, Zustand, React Query, shadcn/ui                    | ✅ Shipped           |
-| **3**     | Django backend — 10+ apps, JWT auth, full REST API, frontend integration                          | ✅ Shipped           |
-| **4**     | Real-time chat (Django Channels, typing, read receipts, file upload) + real-time notifications    | ✅ Shipped           |
-| **5**     | Payments — SSLCommerz + bKash, refunds, PDF receipts, invoices, security deposits, webhook audit  | ✅ Shipped           |
-| **6**     | AI — recommendation engine (content/collaborative/hybrid) + price insight + fair-price prediction | ✅ Shipped           |
-| **Bonus** | Roommate matching (profile + scoring + request flow)                                              | ✅ Shipped           |
-| **Bonus** | Fraud engine (6 detectors, auto-scan, review queue)                                               | ✅ Shipped           |
-| **Bonus** | Paid listing tiers (Free/Featured/Premium monetization)                                           | ✅ Shipped           |     | **Bonus** | Two-factor authentication (email OTP, password-gated enable) | ✅ Shipped |
-| **Bonus** | 2FA recovery codes (10 one-time backups) + email-verified enable                                  | ✅ Shipped           |
-| **Bonus** | Passkeys / WebAuthn (passwordless login, conditional UI)                                          | ✅ Shipped           |
-| **Bonus** | Geo backend (bbox / radius / landmark queries)                                                    | ✅ Shipped           |
-| **7**     | Map (MapLibre GL, clustering, split view, radius + travel overlay, street search, metro routes, room-count API, directions + metro ETA + area chips) | ✅ Shipped |
-| **8**     | Docker Compose + production deployment + HTTPS                                                    | ⏳ Next — CI/CD done |
+| Phase     | Scope                                                                                                                                                | Status               |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| **1–2**   | React prototype with mock data                                                                                                                       | ✅ Shipped           |
+| **2.5**   | Frontend refactor — Vite, TS strict, Tailwind, Zustand, React Query, shadcn/ui                                                                       | ✅ Shipped           |
+| **3**     | Django backend — 10+ apps, JWT auth, full REST API, frontend integration                                                                             | ✅ Shipped           |
+| **4**     | Real-time chat (Django Channels, typing, read receipts, file upload) + real-time notifications                                                       | ✅ Shipped           |
+| **5**     | Payments — SSLCommerz + bKash, refunds, PDF receipts, invoices, security deposits, webhook audit                                                     | ✅ Shipped           |
+| **6**     | AI — recommendation engine (content/collaborative/hybrid) + price insight + fair-price prediction                                                    | ✅ Shipped           |
+| **Bonus** | Roommate matching (profile + scoring + request flow)                                                                                                 | ✅ Shipped           |
+| **Bonus** | Fraud engine (6 detectors, auto-scan, review queue)                                                                                                  | ✅ Shipped           |
+| **Bonus** | Paid listing tiers (Free/Featured/Premium monetization)                                                                                              | ✅ Shipped           |     | **Bonus** | Two-factor authentication (email OTP, password-gated enable) | ✅ Shipped |
+| **Bonus** | KYC verification + verified-landlord badge + document upload + audit trail | ✅ Shipped |
+| **Bonus** | 2FA recovery codes (10 one-time backups) + email-verified enable                                                                                     | ✅ Shipped           |
+| **Bonus** | Passkeys / WebAuthn (passwordless login, conditional UI)                                                                                             | ✅ Shipped           |
+| **Bonus** | Geo backend (bbox / radius / landmark queries)                                                                                                       | ✅ Shipped           |
+| **7**     | Map (MapLibre GL, clustering, split view, radius + travel overlay, street search, metro routes, room-count API, directions + metro ETA + area chips) | ✅ Shipped           |
+| **8**     | Docker Compose + production deployment + HTTPS                                                                                                       | ⏳ Next — CI/CD done |
+| **9**     | Reliability & observability — Sentry, JSON logs, Celery + beat, branded emails, audit log, backups                                                   | ✅ Shipped           |
 
 ---
 
@@ -140,6 +166,7 @@
 - Get notified on new bookings and reviews
 - **Fraud protection** — every listing is auto-scanned on creation; flagged listings show an "under review" badge
 - **Paid listing tiers** — promote a listing to **Featured** (৳199/30 days) or **Premium** (৳499/30 days) via SSLCommerz/bKash to rank higher in search and show a badge; expired promotions auto-revert to Free
+- **KYC verification** — verified landlords carry a trust badge (RoomCard, RoomModal, Roommates, Chat) and rank first; tenants can filter to verified owners only
 - Dashboard with revenue stats, ratings, listing analytics, and fraud risk cards with one-click re-scan
 
 **Platform Features**
@@ -181,22 +208,24 @@
 
 ### Backend
 
-| Technology                    | Purpose                             |
-| ----------------------------- | ----------------------------------- |
-| Django 5.2                    | Web framework                       |
-| Django REST Framework         | REST API                            |
-| Django Channels               | WebSocket support                   |
-| Daphne                        | ASGI server                         |
-| SimpleJWT                     | JWT authentication                  |
-| dj-rest-auth + django-allauth | Auth endpoints                      |
-| django-filter                 | API filtering                       |
-| drf-spectacular               | OpenAPI docs                        |
-| bleach                        | Input sanitization                  |
-| difflib                       | Similarity detection (fraud engine) |
-| PostgreSQL 16                 | Production database                 |
-| SQLite                        | Development database                |
-| Redis                         | Channel layer + caching             |
-| pytest / unittest             | Backend tests                       |
+| Technology                    | Purpose                                 |
+| ----------------------------- | --------------------------------------- |
+| Django 5.2                    | Web framework                           |
+| Django REST Framework         | REST API                                |
+| Django Channels               | WebSocket support                       |
+| Daphne                        | ASGI server                             |
+| SimpleJWT                     | JWT authentication                      |
+| dj-rest-auth + django-allauth | Auth endpoints                          |
+| django-filter                 | API filtering                           |
+| drf-spectacular               | OpenAPI docs                            |
+| bleach                        | Input sanitization                      |
+| difflib                       | Similarity detection (fraud engine)     |
+| PostgreSQL 16                 | Production database                     |
+| SQLite                        | Development database                    |
+| Redis                         | Channel layer + caching + Celery broker |
+| Celery                        | Async task queue + beat scheduler       |
+| Sentry (sentry-sdk)           | Error tracking (backend + frontend)     |
+| pytest / unittest             | Backend tests                           |
 
 ---
 
@@ -279,12 +308,12 @@ Rentora/
 
 Quality is enforced **in CI and at commit time** — style or coverage drift fails the pipeline automatically.
 
-### Automated tests (278 total)
+### Automated tests (340 total)
 
 | Suite             | Count | Gate                                               |
 | ----------------- | ----- | -------------------------------------------------- |
-| Backend (Django)  | 137   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
-| Frontend (Vitest) | 141   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
+| Backend (Django)  | 168   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
+| Frontend (Vitest) | 172   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
 
 ```bash
 # Backend
@@ -373,9 +402,27 @@ python manage.py createsuperuser
 
 # Start server
 python manage.py runserver
+
+# Backup the database (SQLite copy or pg_dump; prunes old backups)
+python ../scripts/backup_db.py --keep 14
 ```
 
 Backend runs at `http://localhost:8000`
+
+**Celery (optional, async mode)** — with no broker configured, tasks run eagerly
+(synchronously) so nothing extra is needed locally. To run a real worker + beat
+schedule, start Redis and set `CELERY_BROKER_URL=redis://localhost:6379/0` in
+`backend/.env`, then:
+
+```bash
+celery -A config worker -l info
+celery -A config beat -l info
+```
+
+**Error tracking** — set `SENTRY_DSN` (backend `.env`) and `VITE_SENTRY_DSN`
+(frontend `.env`) to enable Sentry; leaving them unset keeps everything working
+with no events sent. See `docs/ops/backup-restore.md` for the backup/restore
+runbook.
 
 ### Frontend Setup
 
@@ -538,6 +585,19 @@ Frontend runs at `http://localhost:3000`
 
 Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badge, Home "Featured Rooms") → **Premium** (৳499/30d: top of search, gold badge, priority in AI recommendations). Expired promotions revert to Free automatically (`expire_listings` management command + query-time `effective_tier`).
 
+### KYC Verification
+
+| Method | Endpoint                                                      | Auth        | Description                                                          |
+| ------ | ------------------------------------------------------------- | ----------- | -------------------------------------------------------------------- |
+| GET    | `/api/v1/users/kyc/documents/`                                | Auth        | My KYC documents (admin: all)                                        |
+| POST   | `/api/v1/users/kyc/documents/`                                | Auth        | Upload a NID/passport document (multipart, 5 MB cap)                 |
+| GET    | `/api/v1/users/kyc/documents/:id/file/`                       | Owner/Admin | **Auth-gated document file** — strangers get 404 (no existence leak) |
+| GET    | `/api/v1/users/kyc/pending/`                                  | Admin       | Pending applications queue                                           |
+| POST   | `/api/v1/users/kyc/:user_id/review/`                          | Admin       | Approve/reject (badge sync + audit log + notification, atomic)       |
+| GET    | `/api/v1/users/kyc/audit/`                                    | Admin       | Full KYC decision trail (who/when/note from the audit log)           |
+| GET    | `/api/v1/users/kyc/sla/`                                      | Admin       | Review-queue health: pending count, avg review hours, 7-day trend    |
+| GET    | `/api/v1/rooms/?verified=true`                                | Public      | Only rooms owned by KYC-approved landlords                           |
+
 ### Documentation
 
 | Endpoint          | Description           |
@@ -557,11 +617,15 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 - CORS configured (dev: all origins, prod: pinned domains)
 - Custom error handler with consistent JSON envelope
 - Production security headers (HSTS, XSS filter, content-type nosniff)
+- **Append-only audit log** for sensitive actions (fraud-report reviews, 2FA changes) — immutable in the admin, so an audit trail cannot be rewritten
+- **Error tracking** via Sentry (backend + frontend) and **structured JSON logs** (`JSON_LOGS=True`) so incidents are visible and searchable
+- **Defensive fraud scanning** — a detector or queue failure can never break room creation; detector errors are isolated and logged
 - **Fraud engine** auto-scans every new listing — flagged listings go into an admin review queue
 - **Password hygiene on register** — zxcvbn-ts entropy scoring rejects trivially guessable passwords with actionable warnings; HaveIBeenPwned k-anonymity check warns when the chosen password appears in known data breaches (nothing but a 5-char hash prefix ever leaves the device)
 - **Two-factor authentication (email OTP)** — challenge codes are stored hashed, TTL-bounded (10 min), attempt-limited (5 → lock) and cooldown-guarded; the login endpoint never returns tokens for a 2FA account until the code is verified
 - **2FA enable is email-verified** — password + emailed code are both required before `otp_enabled` flips, and **recovery codes** (10, hashed, single-use) are minted at that moment; disabling deletes them
 - **Passkeys** — public-key only storage, sign-counter replay protection, conditional UI on login
+- **KYC document privacy** — identity documents are served through an **auth-gated endpoint** (owner/admin only); the public media URL can never expose a document, and non-owners get a 404 so even file existence is hidden
 
 ## 🔑 Passkeys / WebAuthn — Shipped
 
@@ -591,12 +655,15 @@ Passwordless sign-in is live — the phishing-resistant successor to passwords +
 | 🏠 Landlord | `farhana.akter` | Modern Studio Mirpur listing                                                                            |
 | 🏠 Landlord | `tanvir.islam`  | Fraud dashboard (Executive Single Banani + re-scan)                                                     |
 | 🏠 Landlord | `demo.promoter` | **Fresh FREE listing** — try the Promote flow end-to-end                                                |
+| 🏠 Landlord | `kyc.demo`      | **Unverified landlord** — Dashboard → KYC: upload a document, then watch an admin approve it and the **verified badge** appear on your listing + chat                                      |
+| 🏠 Landlord | `kyc.rejected`  | **Rejected KYC demo** — Dashboard → KYC shows the **"Why it was rejected"** banner with the reviewer's note and a ready re-upload form                                  |
 
 **Tips**
 
 - Sign in with the **username** (e.g. `rahim.hossain`) **or** the email address (e.g. `rahim.hossain@rentora.com`) — both work.
 - `rahim.hossain` has a roommate profile — log in and open **Roommates** to see live match scores.
 - `tanvir.islam` has listings — open **Dashboard → Fraud** to see the risk cards and try **Re-scan**.
+- `kyc.rejected` starts with a rejected document — open **Dashboard → KYC** to see the rejection note, then upload a clear copy to restart the review loop.
 - **Try 2FA:** Dashboard → **Two-Factor Authentication** → **Enable 2FA** (current password → emailed code → save your **recovery codes**). Next sign-in asks for the emailed code (or a recovery code). In development the code prints to the backend console; in production it goes to the account's email.
 - **Try passkeys:** Dashboard → Security → **Passkeys** → **Register a passkey** (your device's biometric/PIN), then sign out and use the login page's passkey autofill or the **"Sign in with a passkey"** button.
 
@@ -629,6 +696,24 @@ Passwordless sign-in is live — the phishing-resistant successor to passwords +
 **Two-step verification (email OTP)** — password-first login pauses at a verification-code step; tokens are issued only after the code checks out:
 
 <img width="1440" alt="OTP Verification" src="docs/screenshots/otp-verification.png" />
+
+**KYC Verification** — upload identity documents from the landlord dashboard, review pending applications as admin, and see the decision trail (audit log):
+
+<img width="1440" alt="KYC Upload" src="docs/screenshots/kyc-upload.png" />
+
+<img width="1440" alt="KYC Admin Panel" src="docs/screenshots/kyc-admin-panel.png" />
+
+**KYC Review SLA Stats** — the admin panel's queue-health strip (pending volume, average review time, 7-day decision trend):
+
+<img width="1440" alt="KYC SLA Stats" src="docs/screenshots/kyc-sla.png" />
+
+**Verified badge — dark theme** (the ✓ Verified pill stays legible in dark mode):
+
+<img width="1440" alt="Verified Badge Dark" src="docs/screenshots/verified-badge-dark.png" />
+
+**KYC on mobile** — the identity card + verified state on a phone-sized screen:
+
+<img width="390" alt="KYC Mobile" src="docs/screenshots/kyc-mobile.png" />
 
 **Home & Listing Pages:**
 

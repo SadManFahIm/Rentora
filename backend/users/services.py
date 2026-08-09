@@ -16,7 +16,6 @@ import hashlib
 import secrets
 
 from django.conf import settings
-from django.core.mail import send_mail
 from django.utils import timezone
 
 from .models import OTPChallenge
@@ -64,19 +63,19 @@ def _mask_email(email: str) -> str:
 
 
 def _deliver_code(user, code: str) -> None:
-    """Send the one-time code to the user's email address."""
-    send_mail(
+    """Send the one-time code to the user's email address (brand-styled HTML)."""
+    from notifications.emails import send_html_email
+
+    send_html_email(
         subject="Your Rentora verification code",
-        message=(
-            f"Hi {user.first_name or user.username},\n\n"
-            f"Your Rentora sign-in verification code is: {code}\n\n"
-            "This code expires in 10 minutes. If you did not try to sign in, "
-            "you can safely ignore this email — your account is protected.\n\n"
-            "— The Rentora Team"
-        ),
+        to_email=user.email,
+        template_name="otp_code",
+        context={
+            "user": user,
+            "code": code,
+            "expires_in_minutes": int(getattr(settings, "OTP_TTL_SECONDS", OTP_TTL_SECONDS)) // 60,
+        },
         from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        fail_silently=True,
     )
 
 

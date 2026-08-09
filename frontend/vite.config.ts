@@ -14,7 +14,11 @@ export default defineConfig({
     outDir: "build",
   },
   test: {
-    environment: "node",
+    // jsdom globally: component tests (.tsx) need a DOM, and Vitest 4 removed
+    // per-glob environments (environmentMatchGlobs) — the pure-logic suites
+    // pass fine under jsdom too (Vitest keeps node globals available).
+    environment: "jsdom",
+    setupFiles: ["src/test/setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
     coverage: {
       provider: "v8",

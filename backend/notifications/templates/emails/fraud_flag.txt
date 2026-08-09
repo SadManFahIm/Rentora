@@ -1,0 +1,10 @@
+Hi {{ user.first_name|default:user.username }},
+
+Our automated fraud detection flagged your listing "{{ room.title }}"
+({{ severity }} risk, score {{ score }}/100). Please review it.
+
+{% for signal in signals %}- {{ signal.get_detector_display }}: {{ signal.message }}
+{% endfor %}
+Review it here: {{ action_url }}
+
+— The {{ site_name }} Team
