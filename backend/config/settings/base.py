@@ -406,6 +406,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "payments.tasks.send_payment_reminders",
         "schedule": 86400.0,  # daily
     },
+    "alert-kyc-sla-breaches": {
+        "task": "users.tasks.alert_kyc_sla_breaches",
+        "schedule": 86400.0,  # daily — flag review queues stuck >48h / slipping
+    },
 }
 
 # ============================================================

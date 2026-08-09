@@ -1,0 +1,11 @@
+Hi {{ user.first_name|default:user.username }},
+
+{{ message }}
+
+Open the KYC review queue here:
+{{ action_url }}
+
+Keeping the queue under 48 hours protects the verified-badge promise we
+make to landlords.
+
+— The {{ site_name }} Team
