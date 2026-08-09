@@ -1,0 +1,30 @@
+{% load static %}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f4f4f5" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">
+  <tr>
+    <td align="center" style="padding: 32px 16px;">
+      <table role="presentation" width="100%" max-width="560" cellpadding="0" cellspacing="0" style="max-width: 560px; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.08);">
+        <!-- Brand bar -->
+        <tr>
+          <td style="background: #0f172a; padding: 24px 32px;">
+            <span style="color: #f97316; font-size: 20px; font-weight: 800; letter-spacing: 0.5px;">🏠 {{ site_name }}</span>
+          </td>
+        </tr>
+        <!-- Body -->
+        <tr>
+          <td style="padding: 32px; color: #1e293b; font-size: 15px; line-height: 1.6;">
+            {% block content %}{% endblock %}
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="padding: 20px 32px; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 12px; line-height: 1.5;">
+            <p style="margin: 0;">
+              You're receiving this email because of activity on your {{ site_name }} account.<br />
+              If you didn't expect this, you can safely ignore it — your account is protected.
+            </p>
+            <p style="margin: 8px 0 0;">— The {{ site_name }} Team</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

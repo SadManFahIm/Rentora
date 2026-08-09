@@ -6,6 +6,8 @@ interface AppEnv {
   API_BASE_URL: string;
   /** Origin (scheme + host + port) the WebSocket endpoints live under, e.g. "ws://localhost:8000". */
   WS_BASE_URL: string;
+  /** Sentry DSN — empty when error tracking is not configured. */
+  SENTRY_DSN: string;
 }
 
 /** Derive the ws(s):// origin from the REST API base URL, e.g.
@@ -28,6 +30,7 @@ const apiBaseUrl: string = import.meta.env.VITE_API_BASE_URL ?? "http://localhos
 export const env: AppEnv = {
   API_BASE_URL: apiBaseUrl,
   WS_BASE_URL: import.meta.env.VITE_WS_BASE_URL ?? deriveWsBaseUrl(apiBaseUrl),
+  SENTRY_DSN: import.meta.env.VITE_SENTRY_DSN ?? "",
 };
 
 export default env;

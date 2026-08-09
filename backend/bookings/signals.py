@@ -34,6 +34,34 @@ def _capture_previous_booking_status(sender, instance: Booking, **kwargs) -> Non
         instance._previous_status = None
 
 
+def _send_booking_email(
+    user, *, headline: str, body: str, room, to_email: str | None = None
+) -> None:
+    """Best-effort branded email for a booking lifecycle event.
+
+    Email is a complement to the in-app notification — never a gate, so
+    failures are swallowed by ``send_html_email`` (fail_silently).
+    """
+    if not to_email:
+        to_email = user.email
+    if not to_email:
+        return
+    from notifications.emails import send_html_email
+
+    send_html_email(
+        subject=headline,
+        to_email=to_email,
+        template_name="booking_status",
+        context={
+            "user": user,
+            "headline": headline,
+            "body": body,
+            "room": room,
+            "action_url": _BOOKING_ACTION_URL,
+        },
+    )
+
+
 @receiver(post_save, sender=Booking)
 def notify_on_booking_change(sender, instance: Booking, created: bool, **kwargs) -> None:
     """Notify the relevant party when a booking is created or transitions.
@@ -54,6 +82,12 @@ def notify_on_booking_change(sender, instance: Booking, created: bool, **kwargs)
             message=f"New booking request for {room_title}.",
             action_url=_BOOKING_ACTION_URL,
         )
+        _send_booking_email(
+            room.owner,
+            headline="New booking request",
+            body=f"A tenant has requested to book your listing '{room_title}'. Review it in your dashboard.",
+            room=room,
+        )
         return
 
     previous_status = getattr(instance, "_previous_status", None)
@@ -68,6 +102,12 @@ def notify_on_booking_change(sender, instance: Booking, created: bool, **kwargs)
             title="Booking approved",
             message=f"Your booking for {room_title} has been approved!",
             action_url=_BOOKING_ACTION_URL,
+        )
+        _send_booking_email(
+            instance.tenant,
+            headline="Your booking was approved",
+            body=f"Great news — your booking for '{room_title}' has been approved! Check your dashboard for next steps and payment details.",
+            room=room,
         )
         # Local import: payments imports bookings.models at module load, so
         # importing payments back at bookings' own module-load time would
@@ -84,6 +124,12 @@ def notify_on_booking_change(sender, instance: Booking, created: bool, **kwargs)
             message=f"Your booking for {room_title} was rejected.",
             action_url=_BOOKING_ACTION_URL,
         )
+        _send_booking_email(
+            instance.tenant,
+            headline="Booking request declined",
+            body=f"Unfortunately the landlord declined your booking for '{room_title}'. Keep searching — more rooms are added every day.",
+            room=room,
+        )
     elif instance.status == Booking.Status.CANCELLED:
         create_notification(
             user=room.owner,
@@ -91,6 +137,12 @@ def notify_on_booking_change(sender, instance: Booking, created: bool, **kwargs)
             title="Booking cancelled",
             message=f"Booking for {room_title} was cancelled.",
             action_url=_BOOKING_ACTION_URL,
+        )
+        _send_booking_email(
+            room.owner,
+            headline="A booking was cancelled",
+            body=f"The booking for '{room_title}' was cancelled. The room is available again for new requests.",
+            room=room,
         )
 
 
