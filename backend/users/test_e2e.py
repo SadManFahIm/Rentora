@@ -447,6 +447,7 @@ class KycAdminPanelE2ETest(APITestCase):
     def test_admin_sees_kyc_sla_stats(self):
         """The SLA endpoint reports queue health: pending volume, decision
         speed and the 7-day trend — admin only."""
+        from django.utils import timezone as tz
 
         # One pending doc (unresolved) + one resolved doc reviewed recently.
         self._upload(self.landlord)
@@ -463,11 +464,94 @@ class KycAdminPanelE2ETest(APITestCase):
         self.assertEqual(res.data["prev_7d_decisions"], 0)
         self.assertEqual(res.data["decision_delta_7d"], 1)
         self.assertIsNotNone(res.data["pending_oldest_hours"])
+        # No breaches here (nothing old, trend positive) and a full 30-day
+        # trend series — oldest first, today included.
+        self.assertEqual(res.data["breaches"], [])
+        self.assertEqual(len(res.data["trend_30d"]), 30)
+        self.assertEqual(res.data["trend_30d"][-1]["date"], tz.localdate().isoformat())
+        self.assertEqual(res.data["trend_30d"][-1]["decisions"], 1)
 
         # A non-admin cannot read SLA stats.
         self._auth(self.landlord)
         res = self.client.get("/api/v1/users/kyc/sla/")
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_sla_flags_oldest_pending_and_negative_trend(self):
+        """The SLA endpoint flags a stuck queue (>48h oldest) and a slipping
+        week (fewer decisions than last week)."""
+        from datetime import timedelta
+
+        from django.utils import timezone as tz
+
+        # An old pending doc: created 3 days ago, never reviewed.
+        old = KycDocument.objects.create(
+            user=self.landlord,
+            doc_type="nid",
+            file=SimpleUploadedFile("old.jpg", b"x" * 10, content_type="image/jpeg"),
+            status=KycDocument.Status.PENDING,
+        )
+        KycDocument.objects.filter(pk=old.pk).update(created_at=tz.now() - timedelta(days=3))
+
+        # A resolved doc reviewed a week+ ago, so this week (0) trails last
+        # week (1) -> trend_negative.
+        old_resolved = KycDocument.objects.create(
+            user=self.landlord,
+            doc_type="passport",
+            file=SimpleUploadedFile("old_resolved.jpg", b"y" * 10, content_type="image/jpeg"),
+            status=KycDocument.Status.APPROVED,
+            reviewed_at=tz.now() - timedelta(days=10),
+        )
+        KycDocument.objects.filter(pk=old_resolved.pk).update(
+            created_at=tz.now() - timedelta(days=11)
+        )
+
+        self._auth(self.admin)
+        res = self.client.get("/api/v1/users/kyc/sla/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.assertIn("oldest_pending", res.data["breaches"])
+        self.assertIn("trend_negative", res.data["breaches"])
+        self.assertGreater(res.data["pending_oldest_hours"], 48)
+
+    def test_sla_breach_task_alerts_admins_once_per_day(self):
+        """The daily beat task notifies every admin (in-app + email) for each
+        breached condition, deduplicated per day per condition."""
+        from datetime import timedelta
+
+        from django.core import mail
+        from django.utils import timezone as tz
+
+        from notifications.models import Notification
+        from users.tasks import alert_kyc_sla_breaches
+
+        # One ancient pending doc -> oldest_pending breach.
+        old = KycDocument.objects.create(
+            user=self.landlord,
+            doc_type="nid",
+            file=SimpleUploadedFile("old.jpg", b"x" * 10, content_type="image/jpeg"),
+            status=KycDocument.Status.PENDING,
+        )
+        KycDocument.objects.filter(pk=old.pk).update(created_at=tz.now() - timedelta(days=3))
+
+        with self.captureOnCommitCallbacks(execute=True):
+            result = alert_kyc_sla_breaches()
+
+        self.assertEqual(result["breaches"], ["oldest_pending"])
+        self.assertGreater(result["alerted"], 0)
+        # In-app notification created for the admin.
+        self.assertTrue(
+            Notification.objects.filter(notification_type=Notification.Type.KYC_SLA_BREACH).exists()
+        )
+        # Branded email with the queue deep-link.
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("KYC queue breach", mail.outbox[0].subject)
+        self.assertIn("/dashboard?tab=kyc", mail.outbox[0].body)
+
+        # Running again the same day is a no-op (dedupe).
+        mail.outbox.clear()
+        with self.captureOnCommitCallbacks(execute=True):
+            second = alert_kyc_sla_breaches()
+        self.assertEqual(second["alerted"], 0)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_rejection_sends_email_with_note_and_reupload_link(self):
         """Rejecting a document emails the landlord with the reviewer's note

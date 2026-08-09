@@ -122,6 +122,8 @@ export const kycService = {
       prev_7d_decisions: number;
       decision_delta_7d: number;
       pending_oldest_hours: number | null;
+      breaches: string[];
+      trend_30d: { date: string; decisions: number; avg_review_hours: number | null }[];
     }>("/users/kyc/sla/");
     return {
       pendingCount: data.pending_count,
@@ -132,6 +134,12 @@ export const kycService = {
       prev7dDecisions: data.prev_7d_decisions,
       decisionDelta7d: data.decision_delta_7d,
       pendingOldestHours: data.pending_oldest_hours,
+      breaches: data.breaches,
+      trend30d: data.trend_30d.map((d) => ({
+        date: d.date,
+        decisions: d.decisions,
+        avgReviewHours: d.avg_review_hours,
+      })),
     };
   },
 
