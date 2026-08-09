@@ -40,9 +40,11 @@ jobs:
         run: python manage.py makemigrations --check --dry-run
 
       - name: Run tests with coverage
-        # fail_under=55 lives in backend/.coveragerc
+        # fail_under=55 lives in backend/.coveragerc. E2E suites run in the
+        # dedicated `e2e` job (tagged @tag("e2e")) — excluded here so they're
+        # not double-run and don't skew the unit-test coverage gate.
         run: |
-          coverage run manage.py test
+          coverage run manage.py test --exclude-tag=e2e
           coverage report
           coverage xml -o coverage.xml
 
@@ -92,6 +94,33 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  e2e:
+    # Cross-app E2E suites (fraud auto-scan x booking, payments/tier
+    # promotions). Kept as their own job so an integration regression is
+    # visible at a glance and re-runnable independently, rather than buried
+    # inside the (coverage-gated) backend unit-test job.
+    name: E2E (fraud + payments)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run E2E tests
+        run: python manage.py test --tag=e2e
 
   coverage-summary:
     name: Coverage summary
