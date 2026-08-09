@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-278%20(137%20BE%20%2B%20141%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-287%20(146%20BE%20%2B%20141%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -22,6 +22,20 @@
 | **Solution**        | One verified marketplace: AI-scanned listings, real-time landlord chat, secure gateway payments, roommate matching, and an ML-powered fraud engine that catches bad actors before tenants do. |
 | **Target users**    | Tenants (students & young professionals) and landlords in Bangladesh.                                                                                                                         |
 | **Differentiators** | Fraud-engineered trust layer, AI recommendations & fair-price insight, roommates (a growth hook competitors lack), and a monetized listing-tier system (Free → Featured → Premium).           |
+
+---
+
+## 🆕 Changelog
+
+**Phase 9 — Operate It (Reliability & Observability)**
+
+- **Sentry error tracking** — backend (Django/Celery integrations) and frontend (`@sentry/react`); initialised from `SENTRY_DSN` / `VITE_SENTRY_DSN` and a **no-op when unset**, so local dev and CI never send events. Frontend error boundary forwards component stacks.
+- **Structured JSON logging** — a stdlib-only `JSONFormatter` (`config/logging.py`) emits one JSON object per line when `JSON_LOGS=True`; stable keys (timestamp/level/logger/message) plus caller extras, ready for any log shipper.
+- **Celery + Celery Beat** — `config/celery.py` with a **zero-config local mode**: an empty `CELERY_BROKER_URL` runs tasks eagerly (synchronously, no Redis), production sets a Redis broker and tasks go async. Scheduled maintenance moved onto the beat schedule: hourly tier expiry, daily market-stat refresh, daily catalogue fraud re-scan, daily rent reminders (`rooms/pricing/fraud/payments/tasks.py`).
+- **Fraud hardening** — the auto-scan now runs through a Celery task wrapped in try/except so a detector or queue failure can **never break room creation**; individual detector failures are isolated (logged + skipped, the rest still run); the flag path now also emails the landlord.
+- **Branded HTML transactional emails** — `notifications/emails.py` + `notifications/templates/emails/` (base shell + OTP code, recovery codes, booking status, fraud flag, promotion expiry), each with a plain-text fallback. Wired into OTP delivery, 2FA-enable recovery codes, booking lifecycle signals, fraud flags, and `expire_listings`.
+- **Audit log** — new `audit` app: an append-only `AuditLogEntry` table records who did what to which object (with IP) for sensitive actions. Wired into fraud-report review and 2FA enable/disable; the Django admin view is read-only so the trail cannot be rewritten.
+- **Backup & restore runbook** — `scripts/backup_db.py` (cross-platform; SQLite consistent copy via the backup API, PostgreSQL via `pg_dump`, pruning with `--keep`) plus `docs/ops/backup-restore.md` covering restore, media, and a quarterly restore drill.
 
 ---
 
@@ -76,7 +90,7 @@
 - **Map + list split view** — a viewport-synced sidebar lists the rooms on screen (promoted first, then by price); on mobile it becomes a bottom sheet
 - Tapping a pin opens the room popup → full **RoomModal** (booking, chat, fraud badge, AI price insight)
 - **Shareable map URLs** — the current viewport (center + zoom + radius search) is live-synced to the URL (`/map?center=23.81,90.41&zoom=12&r=23.78,90.40,2.0`), so you can copy the address and share an exact map view; the **Share** button copies the link, and opening a shared link restores the exact view, radius and area chips
-- **Readable in both themes** — dark tiles are the CARTO CDN; if it's unreachable the map auto-falls back to dimmed OSM tiles (street labels stay legible), and the travel overlay + legend are styled for light *and* dark
+- **Readable in both themes** — dark tiles are the CARTO CDN; if it's unreachable the map auto-falls back to dimmed OSM tiles (street labels stay legible), and the travel overlay + legend are styled for light _and_ dark
 
 **Listing Location Picker (landlord)**
 
@@ -86,7 +100,7 @@
 **Engineering**
 
 - **Coverage history per branch** — every PR and main push appends its own `history-<branch>.csv` + SVG chart to the `coverage-history` branch (viewable `index.html` linking all branches)
-- 278 automated tests (137 backend + 141 frontend) · coverage gates (BE ≥50%, FE ≥55%)
+- 287 automated tests (146 backend + 141 frontend) · coverage gates (BE ≥50%, FE ≥55%)
 - Ruff + ESLint + Prettier with husky/lint-staged pre-commit hooks
 - GitHub Actions CI (backend, frontend, lint, coverage-summary PR comment, per-branch coverage history)
 - Route-level code splitting (React.lazy) — smaller bundles
@@ -97,22 +111,23 @@
 
 > Tracked like a product backlog — every shipped phase is checked off.
 
-| Phase     | Scope                                                                                             | Status               |
-| --------- | ------------------------------------------------------------------------------------------------- | -------------------- |
-| **1–2**   | React prototype with mock data                                                                    | ✅ Shipped           |
-| **2.5**   | Frontend refactor — Vite, TS strict, Tailwind, Zustand, React Query, shadcn/ui                    | ✅ Shipped           |
-| **3**     | Django backend — 10+ apps, JWT auth, full REST API, frontend integration                          | ✅ Shipped           |
-| **4**     | Real-time chat (Django Channels, typing, read receipts, file upload) + real-time notifications    | ✅ Shipped           |
-| **5**     | Payments — SSLCommerz + bKash, refunds, PDF receipts, invoices, security deposits, webhook audit  | ✅ Shipped           |
-| **6**     | AI — recommendation engine (content/collaborative/hybrid) + price insight + fair-price prediction | ✅ Shipped           |
-| **Bonus** | Roommate matching (profile + scoring + request flow)                                              | ✅ Shipped           |
-| **Bonus** | Fraud engine (6 detectors, auto-scan, review queue)                                               | ✅ Shipped           |
-| **Bonus** | Paid listing tiers (Free/Featured/Premium monetization)                                           | ✅ Shipped           |     | **Bonus** | Two-factor authentication (email OTP, password-gated enable) | ✅ Shipped |
-| **Bonus** | 2FA recovery codes (10 one-time backups) + email-verified enable                                  | ✅ Shipped           |
-| **Bonus** | Passkeys / WebAuthn (passwordless login, conditional UI)                                          | ✅ Shipped           |
-| **Bonus** | Geo backend (bbox / radius / landmark queries)                                                    | ✅ Shipped           |
-| **7**     | Map (MapLibre GL, clustering, split view, radius + travel overlay, street search, metro routes, room-count API, directions + metro ETA + area chips) | ✅ Shipped |
-| **8**     | Docker Compose + production deployment + HTTPS                                                    | ⏳ Next — CI/CD done |
+| Phase     | Scope                                                                                                                                                | Status               |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| **1–2**   | React prototype with mock data                                                                                                                       | ✅ Shipped           |
+| **2.5**   | Frontend refactor — Vite, TS strict, Tailwind, Zustand, React Query, shadcn/ui                                                                       | ✅ Shipped           |
+| **3**     | Django backend — 10+ apps, JWT auth, full REST API, frontend integration                                                                             | ✅ Shipped           |
+| **4**     | Real-time chat (Django Channels, typing, read receipts, file upload) + real-time notifications                                                       | ✅ Shipped           |
+| **5**     | Payments — SSLCommerz + bKash, refunds, PDF receipts, invoices, security deposits, webhook audit                                                     | ✅ Shipped           |
+| **6**     | AI — recommendation engine (content/collaborative/hybrid) + price insight + fair-price prediction                                                    | ✅ Shipped           |
+| **Bonus** | Roommate matching (profile + scoring + request flow)                                                                                                 | ✅ Shipped           |
+| **Bonus** | Fraud engine (6 detectors, auto-scan, review queue)                                                                                                  | ✅ Shipped           |
+| **Bonus** | Paid listing tiers (Free/Featured/Premium monetization)                                                                                              | ✅ Shipped           |     | **Bonus** | Two-factor authentication (email OTP, password-gated enable) | ✅ Shipped |
+| **Bonus** | 2FA recovery codes (10 one-time backups) + email-verified enable                                                                                     | ✅ Shipped           |
+| **Bonus** | Passkeys / WebAuthn (passwordless login, conditional UI)                                                                                             | ✅ Shipped           |
+| **Bonus** | Geo backend (bbox / radius / landmark queries)                                                                                                       | ✅ Shipped           |
+| **7**     | Map (MapLibre GL, clustering, split view, radius + travel overlay, street search, metro routes, room-count API, directions + metro ETA + area chips) | ✅ Shipped           |
+| **8**     | Docker Compose + production deployment + HTTPS                                                                                                       | ⏳ Next — CI/CD done |
+| **9**     | Reliability & observability — Sentry, JSON logs, Celery + beat, branded emails, audit log, backups                                                   | ✅ Shipped           |
 
 ---
 
@@ -179,22 +194,24 @@
 
 ### Backend
 
-| Technology                    | Purpose                             |
-| ----------------------------- | ----------------------------------- |
-| Django 5.2                    | Web framework                       |
-| Django REST Framework         | REST API                            |
-| Django Channels               | WebSocket support                   |
-| Daphne                        | ASGI server                         |
-| SimpleJWT                     | JWT authentication                  |
-| dj-rest-auth + django-allauth | Auth endpoints                      |
-| django-filter                 | API filtering                       |
-| drf-spectacular               | OpenAPI docs                        |
-| bleach                        | Input sanitization                  |
-| difflib                       | Similarity detection (fraud engine) |
-| PostgreSQL 16                 | Production database                 |
-| SQLite                        | Development database                |
-| Redis                         | Channel layer + caching             |
-| pytest / unittest             | Backend tests                       |
+| Technology                    | Purpose                                 |
+| ----------------------------- | --------------------------------------- |
+| Django 5.2                    | Web framework                           |
+| Django REST Framework         | REST API                                |
+| Django Channels               | WebSocket support                       |
+| Daphne                        | ASGI server                             |
+| SimpleJWT                     | JWT authentication                      |
+| dj-rest-auth + django-allauth | Auth endpoints                          |
+| django-filter                 | API filtering                           |
+| drf-spectacular               | OpenAPI docs                            |
+| bleach                        | Input sanitization                      |
+| difflib                       | Similarity detection (fraud engine)     |
+| PostgreSQL 16                 | Production database                     |
+| SQLite                        | Development database                    |
+| Redis                         | Channel layer + caching + Celery broker |
+| Celery                        | Async task queue + beat scheduler       |
+| Sentry (sentry-sdk)           | Error tracking (backend + frontend)     |
+| pytest / unittest             | Backend tests                           |
 
 ---
 
@@ -277,11 +294,11 @@ Rentora/
 
 Quality is enforced **in CI and at commit time** — style or coverage drift fails the pipeline automatically.
 
-### Automated tests (278 total)
+### Automated tests (287 total)
 
 | Suite             | Count | Gate                                               |
 | ----------------- | ----- | -------------------------------------------------- |
-| Backend (Django)  | 137   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
+| Backend (Django)  | 146   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
 | Frontend (Vitest) | 141   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
 
 ```bash
@@ -371,9 +388,27 @@ python manage.py createsuperuser
 
 # Start server
 python manage.py runserver
+
+# Backup the database (SQLite copy or pg_dump; prunes old backups)
+python ../scripts/backup_db.py --keep 14
 ```
 
 Backend runs at `http://localhost:8000`
+
+**Celery (optional, async mode)** — with no broker configured, tasks run eagerly
+(synchronously) so nothing extra is needed locally. To run a real worker + beat
+schedule, start Redis and set `CELERY_BROKER_URL=redis://localhost:6379/0` in
+`backend/.env`, then:
+
+```bash
+celery -A config worker -l info
+celery -A config beat -l info
+```
+
+**Error tracking** — set `SENTRY_DSN` (backend `.env`) and `VITE_SENTRY_DSN`
+(frontend `.env`) to enable Sentry; leaving them unset keeps everything working
+with no events sent. See `docs/ops/backup-restore.md` for the backup/restore
+runbook.
 
 ### Frontend Setup
 
@@ -555,6 +590,9 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 - CORS configured (dev: all origins, prod: pinned domains)
 - Custom error handler with consistent JSON envelope
 - Production security headers (HSTS, XSS filter, content-type nosniff)
+- **Append-only audit log** for sensitive actions (fraud-report reviews, 2FA changes) — immutable in the admin, so an audit trail cannot be rewritten
+- **Error tracking** via Sentry (backend + frontend) and **structured JSON logs** (`JSON_LOGS=True`) so incidents are visible and searchable
+- **Defensive fraud scanning** — a detector or queue failure can never break room creation; detector errors are isolated and logged
 - **Fraud engine** auto-scans every new listing — flagged listings go into an admin review queue
 - **Password hygiene on register** — zxcvbn-ts entropy scoring rejects trivially guessable passwords with actionable warnings; HaveIBeenPwned k-anonymity check warns when the chosen password appears in known data breaches (nothing but a 5-char hash prefix ever leaves the device)
 - **Two-factor authentication (email OTP)** — challenge codes are stored hashed, TTL-bounded (10 min), attempt-limited (5 → lock) and cooldown-guarded; the login endpoint never returns tokens for a 2FA account until the code is verified
