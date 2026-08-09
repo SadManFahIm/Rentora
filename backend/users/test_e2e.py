@@ -403,6 +403,26 @@ class KycAdminPanelE2ETest(APITestCase):
         self.assertIn("file", res.data)
         self.assertFalse(KycDocument.objects.filter(user=self.landlord).exists())
 
+    def test_admin_sees_kyc_audit_trail(self):
+        """The approve/reject timeline comes from the append-only audit log."""
+        self._upload(self.landlord)
+        self._review(self.admin, True, note="Docs look genuine")
+        self._review(self.admin, False, note="Revoked on appeal")
+
+        self._auth(self.admin)
+        res = self.client.get("/api/v1/users/kyc/audit/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual([e["action"] for e in res.data], ["kyc.rejected", "kyc.approved"])
+        self.assertEqual(res.data[0]["note"], "Revoked on appeal")
+        self.assertEqual(res.data[1]["note"], "Docs look genuine")
+        self.assertEqual(res.data[1]["actor_username"], self.admin.username)
+        self.assertEqual(res.data[1]["user_id"], self.landlord.pk)
+
+        # A non-admin cannot read the trail.
+        self._auth(self.landlord)
+        res = self.client.get("/api/v1/users/kyc/audit/")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_approve_then_revoke_flips_badge_twice(self):
         self._upload(self.landlord)
         room = self._publish_room()

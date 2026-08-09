@@ -2,7 +2,9 @@ import { useState } from "react";
 import {
   BadgeCheck,
   Check,
+  Clock,
   ExternalLink,
+  History,
   Loader2,
   ShieldCheck,
   ShieldOff,
@@ -10,7 +12,11 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { usePendingKycApplications, useReviewKycApplication } from "../../hooks/useKyc";
+import {
+  useKycAuditTrail,
+  usePendingKycApplications,
+  useReviewKycApplication,
+} from "../../hooks/useKyc";
 import { kycService } from "../../services/kycService";
 import { getApiErrorMessage } from "../../services/errors";
 import { Button } from "../ui/button";
@@ -23,10 +29,93 @@ const docStatusClasses: Record<string, string> = {
   rejected: "bg-red-500/10 text-red-500",
 };
 
+/** Relative-ish, readable timestamp (e.g. "5 Jan, 14:32"). */
+function formatWhen(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function HistoryView() {
+  const { data: entries = [], isLoading } = useKycAuditTrail();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 py-15 text-gray-600 dark:text-gray-400">
+        <Loader2 className="size-4 animate-spin" /> Loading history…
+      </div>
+    );
+  }
+
+  if (entries.length === 0) {
+    return (
+      <div className="flex flex-col items-center px-5 py-15 text-center text-gray-600 dark:text-gray-400">
+        <History className="mb-4 size-12" />
+        <h3 className="mb-2 font-display text-lg font-bold text-foreground">No decisions yet</h3>
+        <p>Every approve/reject will show up here — who decided, when, and why.</p>
+      </div>
+    );
+  }
+
+  return (
+    <ol className="relative space-y-0">
+      {entries.map((entry, i) => {
+        const approved = entry.action === "kyc.approved";
+        const isLast = i === entries.length - 1;
+        return (
+          <li key={entry.id} className="relative flex gap-4 pb-6 last:pb-0">
+            {/* Timeline rail */}
+            {!isLast && (
+              <span className="absolute left-4 top-9 h-full w-px bg-gray-200 dark:bg-gray-800" />
+            )}
+            {/* Node */}
+            <span
+              className={cn(
+                "z-10 flex size-8 shrink-0 items-center justify-center rounded-full border-2 border-card shadow-sm",
+                approved ? "bg-emerald-500/15 text-emerald-500" : "bg-red-500/15 text-red-500"
+              )}
+            >
+              {approved ? <BadgeCheck className="size-4" /> : <X className="size-4" />}
+            </span>
+            <div className="min-w-0 flex-1 rounded-xl border border-gray-100 bg-gray-50 p-3.5 dark:border-gray-800 dark:bg-gray-800/40">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-foreground">
+                  {approved ? "Approved" : "Rejected"}{" "}
+                  <span className="font-normal text-gray-600 dark:text-gray-400">
+                    {entry.userName}
+                  </span>
+                </p>
+                <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                  <Clock className="size-3" /> {formatWhen(entry.createdAt)}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                by <span className="font-medium text-foreground">{entry.actorName}</span>
+                {entry.note && (
+                  <>
+                    {" "}
+                    · note: <em className="text-gray-500">“{entry.note}”</em>
+                  </>
+                )}
+              </p>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 export default function AdminKycPanel() {
   const { data: applications = [], isLoading } = usePendingKycApplications();
   const review = useReviewKycApplication();
   const [notes, setNotes] = useState<Record<number, string>>({});
+  const [view, setView] = useState<"applications" | "history">("applications");
 
   const decide = async (userId: number, approved: boolean) => {
     try {
@@ -56,13 +145,45 @@ export default function AdminKycPanel() {
         <div>
           <h2 className="font-display text-lg font-bold text-foreground">KYC Review Panel</h2>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Approve identity documents to grant the verified badge. Approving also flips every
-            existing listing's badge; rejecting revokes it.
+            Approve identity documents to grant the verified badge — every decision is audited.
           </p>
         </div>
       </div>
 
-      {isLoading ? (
+      {/* Segmented view toggle */}
+      <div className="mb-5 flex w-fit gap-1 rounded-xl bg-gray-50 p-1 dark:bg-gray-800">
+        <button
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-medium transition-colors",
+            view === "applications"
+              ? "bg-card text-foreground shadow-sm"
+              : "text-gray-600 hover:text-foreground dark:text-gray-400"
+          )}
+          onClick={() => setView("applications")}
+        >
+          <Users className="size-3.5" /> Applications
+          {applications.length > 0 && (
+            <span className="rounded-full bg-orange-600 px-1.5 text-[10px] font-bold text-white">
+              {applications.length}
+            </span>
+          )}
+        </button>
+        <button
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-medium transition-colors",
+            view === "history"
+              ? "bg-card text-foreground shadow-sm"
+              : "text-gray-600 hover:text-foreground dark:text-gray-400"
+          )}
+          onClick={() => setView("history")}
+        >
+          <History className="size-3.5" /> History
+        </button>
+      </div>
+
+      {view === "history" ? (
+        <HistoryView />
+      ) : isLoading ? (
         <div className="flex items-center gap-2 py-15 text-gray-600 dark:text-gray-400">
           <Loader2 className="size-4 animate-spin" /> Loading applications…
         </div>

@@ -11,6 +11,7 @@ from notifications.utils import create_notification
 
 from .models import KycDocument, User
 from .serializers import (
+    KycAuditEntrySerializer,
     KycDocumentSerializer,
     KycPendingUserSerializer,
     KycReviewRequestSerializer,
@@ -171,6 +172,60 @@ class KycPendingApplicationsView(APIView):
                 context={"request": request},
             ).data
         )
+
+
+class KycAuditTrailView(APIView):
+    """Admin-only KYC decision history — the approve/reject timeline.
+
+    Reads the append-only audit log (``AuditLogEntry``, action prefix
+    ``kyc.``), so the trail shows exactly what was decided, by whom, when,
+    and with which note — and cannot be rewritten.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["KYC"],
+        summary="KYC decision history",
+        description="Admin only. Newest first, at most 50 entries: who decided, on "
+        "whom, when, and with what note.",
+        responses=KycAuditEntrySerializer(many=True),
+    )
+    def get(self, request):
+        if not _is_admin(request.user):
+            return Response(
+                {"detail": "Admin access required."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        from audit.models import AuditLogEntry
+
+        entries = list(
+            AuditLogEntry.objects.filter(action__startswith="kyc.")
+            .select_related("actor")
+            .order_by("-created_at")[:50]
+        )
+        user_ids = [int(e.target_id) for e in entries if e.target_id.isdigit()]
+        users = {u.id: u for u in User.objects.filter(id__in=user_ids)}
+
+        data = []
+        for entry in entries:
+            actor = entry.actor
+            target = users.get(int(entry.target_id)) if entry.target_id.isdigit() else None
+            data.append(
+                {
+                    "id": entry.id,
+                    "action": entry.action,
+                    "actor_username": actor.username if actor else "System",
+                    "actor_name": (actor.get_full_name() or actor.username) if actor else "System",
+                    "user_id": target.id if target else None,
+                    "user_name": (target.get_full_name() or target.username)
+                    if target
+                    else entry.target_id,
+                    "note": (entry.detail or {}).get("note", ""),
+                    "created_at": entry.created_at,
+                }
+            )
+        return Response(data)
 
 
 class KycReviewView(APIView):

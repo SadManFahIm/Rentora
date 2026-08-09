@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-287%20(146%20BE%20%2B%20141%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-329%20(165%20BE%20%2B%20164%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -97,10 +97,19 @@
 - **List a Room** now opens a proper form with a **map picker** — click the map to pin the exact listing location (or "Use my location")
 - Coordinates are stored as `lat`/`lng`, powering the map view, geo search and price insight
 
+**KYC Verification + Verified Landlord Badge**
+
+- **Identity document upload** — landlords upload a NID or passport (image/PDF, 5 MB cap) from **Dashboard → KYC** (`KycCard`); uploads are stored server-side and **served through an auth-gated endpoint** (owner/admin only — the public media URL can never leak a document, and other users get a 404 so no existence leak)
+- **Admin review panel** — pending applications queue (``GET /users/kyc/pending/``) with approve/reject; a decision flips `nid_verified`, **syncs every listing badge** via signals, resolves the pending documents, writes an **audit-log entry** (`kyc.approved` / `kyc.rejected`) and notifies the landlord — all inside one `transaction.atomic()` block
+- **KYC audit trail** — Dashboard → KYC → History lists every decision (who, when, note) straight from the append-only audit log
+- **Verified badge everywhere** — RoomCard pill, RoomModal, Roommates match cards, and **Chat** (shield next to a verified participant's name); verified-first ranking inside each tier
+- **"Verified landlords only" filter** — one toggle on the Rooms page (`?verified=true`) narrows results to KYC-approved owners
+- **E2E coverage** — upload → 403 for non-admin → queue → approve (badge flip + audit + notification + fraud signal clears) → reject with note → revoke flips back → privacy (404 for strangers) → file-type guard: 11 KYC tests
+
 **Engineering**
 
 - **Coverage history per branch** — every PR and main push appends its own `history-<branch>.csv` + SVG chart to the `coverage-history` branch (viewable `index.html` linking all branches)
-- 287 automated tests (146 backend + 141 frontend) · coverage gates (BE ≥50%, FE ≥55%)
+- 329 automated tests (165 backend + 164 frontend) · coverage gates (BE ≥50%, FE ≥55%)
 - Ruff + ESLint + Prettier with husky/lint-staged pre-commit hooks
 - GitHub Actions CI (backend, frontend, lint, coverage-summary PR comment, per-branch coverage history)
 - Route-level code splitting (React.lazy) — smaller bundles
@@ -122,6 +131,7 @@
 | **Bonus** | Roommate matching (profile + scoring + request flow)                                                                                                 | ✅ Shipped           |
 | **Bonus** | Fraud engine (6 detectors, auto-scan, review queue)                                                                                                  | ✅ Shipped           |
 | **Bonus** | Paid listing tiers (Free/Featured/Premium monetization)                                                                                              | ✅ Shipped           |     | **Bonus** | Two-factor authentication (email OTP, password-gated enable) | ✅ Shipped |
+| **Bonus** | KYC verification + verified-landlord badge + document upload + audit trail | ✅ Shipped |
 | **Bonus** | 2FA recovery codes (10 one-time backups) + email-verified enable                                                                                     | ✅ Shipped           |
 | **Bonus** | Passkeys / WebAuthn (passwordless login, conditional UI)                                                                                             | ✅ Shipped           |
 | **Bonus** | Geo backend (bbox / radius / landmark queries)                                                                                                       | ✅ Shipped           |
@@ -153,6 +163,7 @@
 - Get notified on new bookings and reviews
 - **Fraud protection** — every listing is auto-scanned on creation; flagged listings show an "under review" badge
 - **Paid listing tiers** — promote a listing to **Featured** (৳199/30 days) or **Premium** (৳499/30 days) via SSLCommerz/bKash to rank higher in search and show a badge; expired promotions auto-revert to Free
+- **KYC verification** — verified landlords carry a trust badge (RoomCard, RoomModal, Roommates, Chat) and rank first; tenants can filter to verified owners only
 - Dashboard with revenue stats, ratings, listing analytics, and fraud risk cards with one-click re-scan
 
 **Platform Features**
@@ -294,12 +305,12 @@ Rentora/
 
 Quality is enforced **in CI and at commit time** — style or coverage drift fails the pipeline automatically.
 
-### Automated tests (287 total)
+### Automated tests (329 total)
 
 | Suite             | Count | Gate                                               |
 | ----------------- | ----- | -------------------------------------------------- |
-| Backend (Django)  | 146   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
-| Frontend (Vitest) | 141   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
+| Backend (Django)  | 165   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
+| Frontend (Vitest) | 164   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
 
 ```bash
 # Backend
@@ -571,6 +582,18 @@ Frontend runs at `http://localhost:3000`
 
 Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badge, Home "Featured Rooms") → **Premium** (৳499/30d: top of search, gold badge, priority in AI recommendations). Expired promotions revert to Free automatically (`expire_listings` management command + query-time `effective_tier`).
 
+### KYC Verification
+
+| Method | Endpoint                                                      | Auth        | Description                                                          |
+| ------ | ------------------------------------------------------------- | ----------- | -------------------------------------------------------------------- |
+| GET    | `/api/v1/users/kyc/documents/`                                | Auth        | My KYC documents (admin: all)                                        |
+| POST   | `/api/v1/users/kyc/documents/`                                | Auth        | Upload a NID/passport document (multipart, 5 MB cap)                 |
+| GET    | `/api/v1/users/kyc/documents/:id/file/`                       | Owner/Admin | **Auth-gated document file** — strangers get 404 (no existence leak) |
+| GET    | `/api/v1/users/kyc/pending/`                                  | Admin       | Pending applications queue                                           |
+| POST   | `/api/v1/users/kyc/:user_id/review/`                          | Admin       | Approve/reject (badge sync + audit log + notification, atomic)       |
+| GET    | `/api/v1/users/kyc/audit/`                                    | Admin       | Full KYC decision trail (who/when/note from the audit log)           |
+| GET    | `/api/v1/rooms/?verified=true`                                | Public      | Only rooms owned by KYC-approved landlords                           |
+
 ### Documentation
 
 | Endpoint          | Description           |
@@ -598,6 +621,7 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 - **Two-factor authentication (email OTP)** — challenge codes are stored hashed, TTL-bounded (10 min), attempt-limited (5 → lock) and cooldown-guarded; the login endpoint never returns tokens for a 2FA account until the code is verified
 - **2FA enable is email-verified** — password + emailed code are both required before `otp_enabled` flips, and **recovery codes** (10, hashed, single-use) are minted at that moment; disabling deletes them
 - **Passkeys** — public-key only storage, sign-counter replay protection, conditional UI on login
+- **KYC document privacy** — identity documents are served through an **auth-gated endpoint** (owner/admin only); the public media URL can never expose a document, and non-owners get a 404 so even file existence is hidden
 
 ## 🔑 Passkeys / WebAuthn — Shipped
 
@@ -627,6 +651,7 @@ Passwordless sign-in is live — the phishing-resistant successor to passwords +
 | 🏠 Landlord | `farhana.akter` | Modern Studio Mirpur listing                                                                            |
 | 🏠 Landlord | `tanvir.islam`  | Fraud dashboard (Executive Single Banani + re-scan)                                                     |
 | 🏠 Landlord | `demo.promoter` | **Fresh FREE listing** — try the Promote flow end-to-end                                                |
+| 🏠 Landlord | `kyc.demo`      | **Unverified landlord** — Dashboard → KYC: upload a document, then watch an admin approve it and the **verified badge** appear on your listing + chat                                      |
 
 **Tips**
 
@@ -665,6 +690,12 @@ Passwordless sign-in is live — the phishing-resistant successor to passwords +
 **Two-step verification (email OTP)** — password-first login pauses at a verification-code step; tokens are issued only after the code checks out:
 
 <img width="1440" alt="OTP Verification" src="docs/screenshots/otp-verification.png" />
+
+**KYC Verification** — upload identity documents from the landlord dashboard, review pending applications as admin, and see the decision trail (audit log):
+
+<img width="1440" alt="KYC Upload" src="docs/screenshots/kyc-upload.png" />
+
+<img width="1440" alt="KYC Admin Panel" src="docs/screenshots/kyc-admin-panel.png" />
 
 **Home & Listing Pages:**
 

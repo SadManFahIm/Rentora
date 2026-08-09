@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { kycService } from "../services/kycService";
-import type { KycApplication, KycDocType, KycDocument } from "../types";
+import type { KycApplication, KycAuditEntry, KycDocType, KycDocument } from "../types";
 
 // ============================================================
 // KYC HOOKS — my documents + admin review panel
@@ -10,6 +10,7 @@ export const kycKeys = {
   all: ["kyc"] as const,
   mine: () => [...kycKeys.all, "mine"] as const,
   pending: () => [...kycKeys.all, "pending"] as const,
+  audit: () => [...kycKeys.all, "audit"] as const,
 };
 
 /** The caller's own KYC documents. */
@@ -39,7 +40,7 @@ export function usePendingKycApplications() {
   });
 }
 
-/** Admin approve/reject; refreshes the queue. */
+/** Admin approve/reject; refreshes the queue + audit trail. */
 export function useReviewKycApplication() {
   const queryClient = useQueryClient();
   return useMutation<KycApplication, Error, { userId: number; approved: boolean; note?: string }>({
@@ -48,5 +49,13 @@ export function useReviewKycApplication() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: kycKeys.all });
     },
+  });
+}
+
+/** Admin-only KYC decision history (append-only audit trail). */
+export function useKycAuditTrail() {
+  return useQuery<KycAuditEntry[]>({
+    queryKey: kycKeys.audit(),
+    queryFn: () => kycService.auditTrail(),
   });
 }

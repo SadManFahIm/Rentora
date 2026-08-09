@@ -1,5 +1,5 @@
 import { api } from "./api";
-import type { KycApplication, KycDocType, KycDocument } from "../types";
+import type { KycApplication, KycAuditEntry, KycDocType, KycDocument } from "../types";
 
 // ============================================================
 // KYC SERVICE — document upload + admin review panel
@@ -15,6 +15,17 @@ interface ApiKycDocument {
   review_note: string;
   created_at: string;
   reviewed_at: string | null;
+}
+
+interface ApiKycAuditEntry {
+  id: number;
+  action: KycAuditEntry["action"];
+  actor_username: string;
+  actor_name: string;
+  user_id: number | null;
+  user_name: string;
+  note: string;
+  created_at: string;
 }
 
 interface ApiKycApplication {
@@ -60,15 +71,18 @@ export const kycService = {
 
   /**
    * POST /users/kyc/documents/ — upload a KYC proof (multipart).
-   * No manual Content-Type header: axios v1 strips it for FormData in the
-   * browser so the browser adds the boundary itself — a hand-set header
-   * would arrive without a boundary and the server would reject it.
+   * The shared instance defaults to `Content-Type: application/json`, which
+   * must be explicitly cleared for FormData: axios merges per-request headers
+   * over the instance defaults, so `undefined` removes it and the browser
+   * sets `multipart/form-data` with the boundary itself.
    */
   async uploadDocument(docType: KycDocType, file: File): Promise<KycDocument> {
     const form = new FormData();
     form.append("doc_type", docType);
     form.append("file", file);
-    const { data } = await api.post<ApiKycDocument>("/users/kyc/documents/", form);
+    const { data } = await api.post<ApiKycDocument>("/users/kyc/documents/", form, {
+      headers: { "Content-Type": undefined },
+    });
     return mapDocument(data);
   },
 
@@ -95,6 +109,21 @@ export const kycService = {
       note,
     });
     return mapApplication(data);
+  },
+
+  /** GET /users/kyc/audit/ — admin-only approve/reject history (newest first). */
+  async auditTrail(): Promise<KycAuditEntry[]> {
+    const { data } = await api.get<ApiKycAuditEntry[]>("/users/kyc/audit/");
+    return data.map((e) => ({
+      id: e.id,
+      action: e.action,
+      actorUsername: e.actor_username,
+      actorName: e.actor_name,
+      userId: e.user_id,
+      userName: e.user_name,
+      note: e.note,
+      createdAt: e.created_at,
+    }));
   },
 };
 
