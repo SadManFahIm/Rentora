@@ -1,0 +1,16 @@
+{% extends "emails/base_email.html" %}
+{% block content %}
+  <h2 style="margin: 0 0 12px; font-size: 18px; color: #0f172a;">⚠️ KYC review alert</h2>
+  <p style="margin: 0 0 8px;">Hi {{ user.first_name|default:user.username }},</p>
+  <p style="margin: 0 0 20px;">{{ message }}</p>
+
+  <p style="margin: 20px 0 0;">
+    <a href="{{ action_url }}" style="background: #f97316; color: #ffffff; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; display: inline-block;">
+      Open the KYC review queue
+    </a>
+  </p>
+  <p style="margin: 12px 0 0; font-size: 13px; color: #64748b;">
+    Keeping the queue under 48 hours protects the verified-badge promise we
+    make to landlords.
+  </p>
+{% endblock %}
