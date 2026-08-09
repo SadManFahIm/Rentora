@@ -1,0 +1,10 @@
+Hi {{ user.first_name|default:user.username }},
+
+Two-factor authentication is now enabled on your account. Store these one-time backup codes
+somewhere safe — each can be used ONCE to sign in if you lose access to your email:
+
+{% for code in recovery_codes %}{{ code }}
+{% endfor %}
+Regenerate or remove these codes anytime from your dashboard's security settings.
+
+— The {{ site_name }} Team

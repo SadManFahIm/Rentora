@@ -7,6 +7,8 @@ gating in the views. Uses Django's built-in ``TestCase`` like the rest of the
 project.
 """
 
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework import status
@@ -370,3 +372,27 @@ class DetectorRegistrationTests(TestCase):
                 "_rapid_listing",
             },
         )
+
+
+class DetectorFailureIsolationTests(TestCase):
+    """A failing detector must never abort the scan or room creation."""
+
+    @patch("fraud.services.detectors._duplicate_listing", side_effect=RuntimeError("boom"))
+    def test_broken_detector_skipped_others_still_run(self, _mock):
+        from fraud.services.detectors import run_scan
+
+        room = make_room(make_user("o", nid_verified=True))
+        room.images.create(image="http://example.com/room.jpg")
+        # One detector explodes; the rest still produce a report row.
+        report = run_scan(room)
+        self.assertIsNotNone(report.pk)
+        self.assertEqual(report.severity, FraudReport.Severity.CLEAN)
+
+    @patch("fraud.tasks.scan_room.delay", side_effect=RuntimeError("broker down"))
+    def test_room_creation_survives_scan_dispatch_failure(self, _mock):
+        # The signal must swallow a task-dispatch failure so a listing is
+        # ALWAYS saved even if the queue is down.
+        owner = make_user("o")
+        room = make_room(owner, title="Survives Queue Down")
+        self.assertIsNotNone(room.pk)
+        self.assertEqual(Room.objects.filter(pk=room.pk).count(), 1)

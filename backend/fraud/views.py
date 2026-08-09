@@ -146,4 +146,14 @@ class FraudReportReviewView(APIView):
 
         report.status = serializer.validated_data["action"]
         report.save(update_fields=["status", "updated_at"])
+        # Audit trail: who resolved/dismissed a report and from where.
+        from audit.services import log_action
+
+        log_action(
+            actor=request.user,
+            action=f"fraud.report.{serializer.validated_data['action']}",
+            target=report,
+            request=request,
+            detail={"room_id": report.room_id},
+        )
         return Response(FraudReportSerializer(report, context={"request": request}).data)

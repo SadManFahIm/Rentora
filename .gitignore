@@ -14,6 +14,7 @@ backend/media/
 backend/staticfiles/
 backend/.coverage
 backend/htmlcov/
+backend/backups/
 
 # General
 .DS_Store
