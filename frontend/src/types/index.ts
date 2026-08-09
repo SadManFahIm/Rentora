@@ -487,6 +487,21 @@ export interface KycApplication {
   documents: KycDocument[];
 }
 
+/** Admin review-queue health from GET /users/kyc/sla/. */
+export interface KycSla {
+  pendingCount: number;
+  resolvedCount: number;
+  /** Average hours between submission and a decision (all-time). */
+  avgReviewHours: number | null;
+  last7dDecisions: number;
+  last7dAvgReviewHours: number | null;
+  prev7dDecisions: number;
+  /** This week's decisions minus last week's — negative means the queue grows. */
+  decisionDelta7d: number;
+  /** Age of the oldest pending document, in hours. */
+  pendingOldestHours: number | null;
+}
+
 /** One KYC decision in the admin history view (append-only audit trail). */
 export interface KycAuditEntry {
   id: number;

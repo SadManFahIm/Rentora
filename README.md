@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-332%20(166%20BE%20%2B%20166%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-340%20(168%20BE%20%2B%20172%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -106,11 +106,13 @@
 - **"Verified landlords only" filter** — one toggle on the Rooms page (`?verified=true`) narrows results to KYC-approved owners
 - **E2E coverage** — upload → 403 for non-admin → queue → approve (badge flip + audit + notification + fraud signal clears) → reject with note → **reject → re-upload → approve full loop** (the landlord sees the reviewer's note on their rejected doc, re-submits, and the badge finally lands — the audit trail tells the whole story) → revoke flips back → privacy (404 for strangers) → file-type guard: 12 KYC tests
 - **Rejection UX** — the dashboard KycCard shows a **"Why it was rejected"** banner with the reviewer's note (e.g. *"Blurry scan — please re-upload"*) plus the upload form, so the landlord knows exactly what to fix before re-submitting
+- **Rejection email** — a rejection also sends a **branded transactional email** (`kyc_rejected` template) with the reviewer's note and a **direct re-upload CTA** that deep-links to the dashboard KYC tab, so the landlord can fix and resubmit without hunting through the app
+- **KYC review SLA stats** — the admin panel now opens with a **queue-health strip**: pending applications (with the oldest-waiting age), average review time (all-time + this week), and a 7-day decision trend (`▲ +N / ▼ -N` vs last week), all from `GET /users/kyc/sla/` (admin-only)
 
 **Engineering**
 
 - **Coverage history per branch** — every PR and main push appends its own `history-<branch>.csv` + SVG chart to the `coverage-history` branch (viewable `index.html` linking all branches)
-- 332 automated tests (166 backend + 166 frontend) · coverage gates (BE ≥50%, FE ≥55%)
+- 340 automated tests (168 backend + 172 frontend) · coverage gates (BE ≥50%, FE ≥55%)
 - Ruff + ESLint + Prettier with husky/lint-staged pre-commit hooks
 - GitHub Actions CI (backend, frontend, lint, coverage-summary PR comment, per-branch coverage history)
 - Route-level code splitting (React.lazy) — smaller bundles
@@ -306,12 +308,12 @@ Rentora/
 
 Quality is enforced **in CI and at commit time** — style or coverage drift fails the pipeline automatically.
 
-### Automated tests (332 total)
+### Automated tests (340 total)
 
 | Suite             | Count | Gate                                               |
 | ----------------- | ----- | -------------------------------------------------- |
-| Backend (Django)  | 166   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
-| Frontend (Vitest) | 166   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
+| Backend (Django)  | 168   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
+| Frontend (Vitest) | 172   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
 
 ```bash
 # Backend
@@ -593,6 +595,7 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 | GET    | `/api/v1/users/kyc/pending/`                                  | Admin       | Pending applications queue                                           |
 | POST   | `/api/v1/users/kyc/:user_id/review/`                          | Admin       | Approve/reject (badge sync + audit log + notification, atomic)       |
 | GET    | `/api/v1/users/kyc/audit/`                                    | Admin       | Full KYC decision trail (who/when/note from the audit log)           |
+| GET    | `/api/v1/users/kyc/sla/`                                      | Admin       | Review-queue health: pending count, avg review hours, 7-day trend    |
 | GET    | `/api/v1/rooms/?verified=true`                                | Public      | Only rooms owned by KYC-approved landlords                           |
 
 ### Documentation
@@ -699,6 +702,10 @@ Passwordless sign-in is live — the phishing-resistant successor to passwords +
 <img width="1440" alt="KYC Upload" src="docs/screenshots/kyc-upload.png" />
 
 <img width="1440" alt="KYC Admin Panel" src="docs/screenshots/kyc-admin-panel.png" />
+
+**KYC Review SLA Stats** — the admin panel's queue-health strip (pending volume, average review time, 7-day decision trend):
+
+<img width="1440" alt="KYC SLA Stats" src="docs/screenshots/kyc-sla.png" />
 
 **Verified badge — dark theme** (the ✓ Verified pill stays legible in dark mode):
 

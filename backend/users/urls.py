@@ -7,6 +7,7 @@ from .views import (
     KycDocumentListCreateView,
     KycPendingApplicationsView,
     KycReviewView,
+    KycSlaStatsView,
     UserViewSet,
 )
 
@@ -24,6 +25,7 @@ urlpatterns = [
     ),
     path("kyc/pending/", KycPendingApplicationsView.as_view(), name="kyc-pending"),
     path("kyc/audit/", KycAuditTrailView.as_view(), name="kyc-audit"),
+    path("kyc/sla/", KycSlaStatsView.as_view(), name="kyc-sla"),
     path("kyc/<int:user_id>/review/", KycReviewView.as_view(), name="kyc-review"),
     *router.urls,
 ]

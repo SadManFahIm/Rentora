@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -7,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from notifications.emails import send_html_email
 from notifications.utils import create_notification
 
 from .models import KycDocument, User
@@ -15,6 +17,7 @@ from .serializers import (
     KycDocumentSerializer,
     KycPendingUserSerializer,
     KycReviewRequestSerializer,
+    KycSlaSerializer,
     KycUploadRequestSerializer,
     UserSerializer,
 )
@@ -174,6 +177,78 @@ class KycPendingApplicationsView(APIView):
         )
 
 
+class KycSlaStatsView(APIView):
+    """Admin-only review-queue health: pending volume, decision speed, trend.
+
+    Powers the SLA card on the admin KYC panel. All times are computed from
+    the documents themselves (``created_at`` → ``reviewed_at``), so the
+    numbers reflect the real review workload, not the audit log.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["KYC"],
+        summary="KYC review SLA stats",
+        description="Admin only. Pending count, average review time (hours), "
+        "7-day decision trend and oldest pending document age.",
+        responses=KycSlaSerializer,
+    )
+    def get(self, request):
+        if not _is_admin(request.user):
+            return Response(
+                {"detail": "Admin access required."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        from datetime import timedelta
+
+        from django.db.models import Avg, DurationField, ExpressionWrapper, F
+
+        now = timezone.now()
+        week_ago = now - timedelta(days=7)
+        two_weeks_ago = now - timedelta(days=14)
+
+        resolved = KycDocument.objects.exclude(reviewed_at=None)
+        review_time = ExpressionWrapper(
+            F("reviewed_at") - F("created_at"), output_field=DurationField()
+        )
+
+        def avg_hours(qs):
+            agg = qs.aggregate(avg=Avg(review_time))
+            if agg["avg"] is None:
+                return None
+            return round(agg["avg"].total_seconds() / 3600, 1)
+
+        resolved_count = resolved.count()
+        last_7d_decisions = resolved.filter(reviewed_at__gte=week_ago).count()
+        prev_7d_decisions = resolved.filter(
+            reviewed_at__gte=two_weeks_ago, reviewed_at__lt=week_ago
+        ).count()
+
+        oldest_pending = (
+            KycDocument.objects.filter(status=KycDocument.Status.PENDING)
+            .order_by("created_at")
+            .first()
+        )
+        pending_oldest_hours = None
+        if oldest_pending:
+            pending_oldest_hours = round(
+                (now - oldest_pending.created_at).total_seconds() / 3600, 1
+            )
+
+        data = {
+            "pending_count": KycDocument.objects.filter(status=KycDocument.Status.PENDING).count(),
+            "resolved_count": resolved_count,
+            "avg_review_hours": avg_hours(resolved),
+            "last_7d_decisions": last_7d_decisions,
+            "last_7d_avg_review_hours": avg_hours(resolved.filter(reviewed_at__gte=week_ago)),
+            "prev_7d_decisions": prev_7d_decisions,
+            "decision_delta_7d": last_7d_decisions - prev_7d_decisions,
+            "pending_oldest_hours": pending_oldest_hours,
+        }
+        return Response(KycSlaSerializer(data).data)
+
+
 class KycAuditTrailView(APIView):
     """Admin-only KYC decision history — the approve/reject timeline.
 
@@ -301,4 +376,24 @@ class KycReviewView(APIView):
                 ),
                 action_url="/dashboard",
             )
+
+            # Rejection gets a branded email with the reviewer's note and a
+            # direct re-upload link, so the landlord can fix and resubmit
+            # without hunting through the app. Sent only *after* the decision
+            # commits (on_commit): an SMTP hiccup must never hold the DB
+            # transaction open, and a rolled-back decision must never mail a
+            # landlord about an approval that didn't happen.
+            if not approved:
+                transaction.on_commit(
+                    lambda: send_html_email(
+                        subject="Your Rentora identity verification needs attention",
+                        to_email=target.email,
+                        template_name="kyc_rejected",
+                        context={
+                            "user": target,
+                            "note": note,
+                            "action_url": f"{settings.FRONTEND_URL}/dashboard?tab=kyc",
+                        },
+                    )
+                )
         return Response(KycPendingUserSerializer(target, context={"request": request}).data)
