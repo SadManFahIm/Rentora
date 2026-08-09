@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import {
   useKycAuditTrail,
+  useKycSla,
   usePendingKycApplications,
   useReviewKycApplication,
 } from "../../hooks/useKyc";
@@ -39,6 +40,70 @@ function formatWhen(iso: string): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+/** Queue-health strip: pending volume, decision speed, and the 7-day trend. */
+function SlaStats() {
+  const { data: sla, isLoading } = useKycSla();
+
+  const cards = [
+    {
+      icon: Users,
+      label: "Pending applications",
+      value: sla?.pendingCount ?? "—",
+      sub:
+        sla?.pendingOldestHours != null
+          ? `oldest waiting ${formatHours(sla.pendingOldestHours)}`
+          : "queue is empty",
+    },
+    {
+      icon: Clock,
+      label: "Avg review time",
+      value: sla?.avgReviewHours != null ? `${formatHours(sla.avgReviewHours)}` : "—",
+      sub:
+        sla?.last7dAvgReviewHours != null
+          ? `${formatHours(sla.last7dAvgReviewHours)} this week`
+          : "no decisions yet",
+    },
+    {
+      icon: History,
+      label: "Decisions · 7 days",
+      value: sla?.last7dDecisions ?? "—",
+      sub:
+        sla?.decisionDelta7d === 0
+          ? "same as last week"
+          : sla && sla.decisionDelta7d > 0
+            ? `▲ +${sla.decisionDelta7d} vs last week`
+            : sla && sla.decisionDelta7d < 0
+              ? `▼ ${sla.decisionDelta7d} vs last week`
+              : "no trend yet",
+    },
+  ];
+
+  return (
+    <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {cards.map((c) => (
+        <div
+          key={c.label}
+          className="rounded-xl border border-gray-200 bg-card p-4 dark:border-gray-800"
+        >
+          <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+            <c.icon className="size-3.5" /> {c.label}
+          </div>
+          <p className="mt-1.5 font-display text-2xl font-bold text-foreground">
+            {isLoading ? <Loader2 className="size-5 animate-spin text-gray-400" /> : c.value}
+          </p>
+          <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{c.sub}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function formatHours(h: number): string {
+  if (h < 1) return `${Math.round(h * 60)}m`;
+  if (h < 24) return `${Math.round(h)}h`;
+  return `${(h / 24).toFixed(1)}d`;
 }
 
 function HistoryView() {
@@ -180,6 +245,8 @@ export default function AdminKycPanel() {
           <History className="size-3.5" /> History
         </button>
       </div>
+
+      {view === "applications" && <SlaStats />}
 
       {view === "history" ? (
         <HistoryView />

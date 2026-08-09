@@ -217,6 +217,24 @@ class KycReviewRequestSerializer(serializers.Serializer):
     note = serializers.CharField(required=False, allow_blank=True, default="")
 
 
+class KycSlaSerializer(serializers.Serializer):
+    """Admin review-queue health: how many applications are waiting, how fast
+    decisions happen, and whether that pace is improving or slipping.
+
+    All durations are in hours. ``decision_delta_7d`` is this week's decision
+    count minus last week's, so a negative value means the queue is growing.
+    """
+
+    pending_count = serializers.IntegerField()
+    resolved_count = serializers.IntegerField()
+    avg_review_hours = serializers.FloatField(allow_null=True)
+    last_7d_decisions = serializers.IntegerField()
+    last_7d_avg_review_hours = serializers.FloatField(allow_null=True)
+    prev_7d_decisions = serializers.IntegerField()
+    decision_delta_7d = serializers.IntegerField()
+    pending_oldest_hours = serializers.FloatField(allow_null=True)
+
+
 class KycAuditEntrySerializer(serializers.Serializer):
     """One KYC decision from the append-only audit log, shaped for the admin
     panel's history view (who decided, on whom, when, with what note)."""

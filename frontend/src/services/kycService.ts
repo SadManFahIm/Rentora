@@ -1,5 +1,5 @@
 import { api } from "./api";
-import type { KycApplication, KycAuditEntry, KycDocType, KycDocument } from "../types";
+import type { KycApplication, KycAuditEntry, KycDocType, KycDocument, KycSla } from "../types";
 
 // ============================================================
 // KYC SERVICE — document upload + admin review panel
@@ -109,6 +109,30 @@ export const kycService = {
       note,
     });
     return mapApplication(data);
+  },
+
+  /** GET /users/kyc/sla/ — admin-only review-queue health stats (403 otherwise). */
+  async slaStats(): Promise<KycSla> {
+    const { data } = await api.get<{
+      pending_count: number;
+      resolved_count: number;
+      avg_review_hours: number | null;
+      last_7d_decisions: number;
+      last_7d_avg_review_hours: number | null;
+      prev_7d_decisions: number;
+      decision_delta_7d: number;
+      pending_oldest_hours: number | null;
+    }>("/users/kyc/sla/");
+    return {
+      pendingCount: data.pending_count,
+      resolvedCount: data.resolved_count,
+      avgReviewHours: data.avg_review_hours,
+      last7dDecisions: data.last_7d_decisions,
+      last7dAvgReviewHours: data.last_7d_avg_review_hours,
+      prev7dDecisions: data.prev_7d_decisions,
+      decisionDelta7d: data.decision_delta_7d,
+      pendingOldestHours: data.pending_oldest_hours,
+    };
   },
 
   /** GET /users/kyc/audit/ — admin-only approve/reject history (newest first). */

@@ -114,6 +114,13 @@ const CAPTURES = [
     waitMs: 4500,
     afterClickMs: 2500,
   },
+  // KYC review SLA stats — the queue-health strip on the Applications view.
+  {
+    user: "admin",
+    route: "/dashboard?tab=kyc",
+    out: "kyc-sla.png",
+    waitMs: 4500,
+  },
   // KYC verified badge in dark mode — the KycCard + trust badge styled for
   // the dark theme (RoomCard verified pill visible in the listing grid).
   {

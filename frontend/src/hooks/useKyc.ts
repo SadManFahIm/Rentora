@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { kycService } from "../services/kycService";
-import type { KycApplication, KycAuditEntry, KycDocType, KycDocument } from "../types";
+import type { KycApplication, KycAuditEntry, KycDocType, KycDocument, KycSla } from "../types";
 
 // ============================================================
 // KYC HOOKS — my documents + admin review panel
@@ -11,6 +11,7 @@ export const kycKeys = {
   mine: () => [...kycKeys.all, "mine"] as const,
   pending: () => [...kycKeys.all, "pending"] as const,
   audit: () => [...kycKeys.all, "audit"] as const,
+  sla: () => [...kycKeys.all, "sla"] as const,
 };
 
 /** The caller's own KYC documents. */
@@ -49,6 +50,14 @@ export function useReviewKycApplication() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: kycKeys.all });
     },
+  });
+}
+
+/** Admin-only KYC review SLA stats (queue health + decision trend). */
+export function useKycSla() {
+  return useQuery<KycSla>({
+    queryKey: kycKeys.sla(),
+    queryFn: () => kycService.slaStats(),
   });
 }
 

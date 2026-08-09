@@ -444,6 +444,61 @@ class KycAdminPanelE2ETest(APITestCase):
         self.assertFalse(res.data["verified"])
         self.assertFalse(res.data["owner"]["nid_verified"])
 
+    def test_admin_sees_kyc_sla_stats(self):
+        """The SLA endpoint reports queue health: pending volume, decision
+        speed and the 7-day trend — admin only."""
+
+        # One pending doc (unresolved) + one resolved doc reviewed recently.
+        self._upload(self.landlord)
+        self._upload(self.admin)
+        self._review(self.admin, True, note="Docs look genuine")
+
+        self._auth(self.admin)
+        res = self.client.get("/api/v1/users/kyc/sla/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.assertEqual(res.data["pending_count"], 1)
+        self.assertEqual(res.data["resolved_count"], 1)
+        self.assertIsNotNone(res.data["avg_review_hours"])
+        self.assertEqual(res.data["last_7d_decisions"], 1)
+        self.assertEqual(res.data["prev_7d_decisions"], 0)
+        self.assertEqual(res.data["decision_delta_7d"], 1)
+        self.assertIsNotNone(res.data["pending_oldest_hours"])
+
+        # A non-admin cannot read SLA stats.
+        self._auth(self.landlord)
+        res = self.client.get("/api/v1/users/kyc/sla/")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_rejection_sends_email_with_note_and_reupload_link(self):
+        """Rejecting a document emails the landlord with the reviewer's note
+        and a direct re-upload link; approving sends no rejection email.
+
+        The email is sent via ``transaction.on_commit`` (never inside the
+        atomic decision block), so the test must flush the on-commit
+        callbacks — exactly what ``captureOnCommitCallbacks`` does.
+        """
+        from django.core import mail
+
+        self._upload(self.landlord)
+        with self.captureOnCommitCallbacks(execute=True):
+            self._review(self.admin, False, note="Blurry scan — please re-upload")
+
+        self.assertEqual(len(mail.outbox), 1)
+        msg = mail.outbox[0]
+        self.assertIn(self.landlord.email, msg.to)
+        self.assertIn("needs attention", msg.subject)
+        self.assertIn("Blurry scan — please re-upload", msg.body)
+        self.assertIn("/dashboard?tab=kyc", msg.body)
+        # The HTML alternative carries the branded CTA too.
+        self.assertTrue(any("Re-upload your document" in c[0] for c in msg.alternatives))
+
+        # Approving does not send the rejection email.
+        self._upload(self.landlord)
+        mail.outbox.clear()
+        with self.captureOnCommitCallbacks(execute=True):
+            self._review(self.admin, True, note="Looks good")
+        self.assertEqual(len(mail.outbox), 0)
+
     def test_reject_then_upload_then_approve_full_loop(self):
         """The complete landlord lifecycle: upload -> reject (with note) -> the
         landlord sees the note -> re-uploads -> approve -> verified badge."""
