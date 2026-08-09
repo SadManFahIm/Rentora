@@ -24,6 +24,7 @@ class Notification(models.Model):
         ROOMMATE_REQUEST = "roommate_request", "Roommate Request"
         ROOMMATE_APPROVED = "roommate_approved", "Roommate Approved"
         FRAUD_FLAG = "fraud_flag", "Fraud Flag"
+        KYC_SLA_BREACH = "kyc_sla_breach", "KYC SLA Breach"
         SYSTEM = "system", "System"
 
     user = models.ForeignKey(

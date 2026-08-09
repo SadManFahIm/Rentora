@@ -500,6 +500,10 @@ export interface KycSla {
   decisionDelta7d: number;
   /** Age of the oldest pending document, in hours. */
   pendingOldestHours: number | null;
+  /** Which review SLA is currently being missed ("oldest_pending" | "trend_negative"). */
+  breaches: string[];
+  /** Last 30 days, oldest first: decisions + average review hours per day. */
+  trend30d: { date: string; decisions: number; avgReviewHours: number | null }[];
 }
 
 /** One KYC decision in the admin history view (append-only audit trail). */

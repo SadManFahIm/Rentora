@@ -51,6 +51,12 @@ const sla = {
   prev7dDecisions: 5,
   decisionDelta7d: 3,
   pendingOldestHours: 30,
+  breaches: [] as string[],
+  trend30d: Array.from({ length: 30 }, (_, i) => ({
+    date: `2026-01-${String(i + 1).padStart(2, "0")}`,
+    decisions: i % 3,
+    avgReviewHours: i % 2 ? 5 : null,
+  })),
 };
 
 function renderPanel() {
@@ -93,7 +99,7 @@ describe("AdminKycPanel", () => {
     expect(mutateAsync).toHaveBeenCalledWith({ userId: 1, approved: true, note: "" });
   });
 
-  it("switches to the audit-trail history view", async () => {
+  it("switches to the audit-trail history view with the 30-day trend chart", async () => {
     mockUseAudit.mockReturnValue({
       data: [
         {
@@ -113,8 +119,20 @@ describe("AdminKycPanel", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /history/i }));
 
+    expect(screen.getByText("Review activity · last 30 days")).toBeInTheDocument();
     expect(screen.getByText("Approved")).toBeInTheDocument();
     expect(screen.getByText(/Docs look genuine/)).toBeInTheDocument();
     expect(screen.queryByText("Pending applications")).not.toBeInTheDocument();
+  });
+
+  it("shows breach badges when the review SLA is missed", () => {
+    mockUseSla.mockReturnValue({
+      data: { ...sla, breaches: ["oldest_pending", "trend_negative"] },
+      isLoading: false,
+    });
+    renderPanel();
+
+    expect(screen.getByText("Application waiting >48h")).toBeInTheDocument();
+    expect(screen.getByText("Decisions down vs last week")).toBeInTheDocument();
   });
 });

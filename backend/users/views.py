@@ -51,6 +51,11 @@ def _is_admin(user: User) -> bool:
 MAX_KYC_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 ALLOWED_KYC_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
 
+# Review-SLA breach thresholds — shared by the SLA endpoint (flags) and the
+# beat task (alerts), so the dashboard and the alerts never disagree.
+# An application older than this (hours) is considered a breach.
+SLA_OLDEST_PENDING_BREACH_H = 48.0
+
 
 class KycDocumentFileView(APIView):
     """Serve one KYC document's bytes — owner or admin only.
@@ -236,6 +241,46 @@ class KycSlaStatsView(APIView):
                 (now - oldest_pending.created_at).total_seconds() / 3600, 1
             )
 
+        # ---- Breach flags (share the thresholds with the beat task) ----
+        breaches = []
+        if pending_oldest_hours is not None and pending_oldest_hours > SLA_OLDEST_PENDING_BREACH_H:
+            breaches.append("oldest_pending")
+        if last_7d_decisions - prev_7d_decisions < 0:
+            breaches.append("trend_negative")
+
+        # ---- Last-30-days trend: daily decisions + avg review hours ----
+        # TruncDate (not ExpressionWrapper) so the bucket key is a real date
+        # on SQLite *and* Postgres.
+        from django.db.models import Count
+        from django.db.models.functions import TruncDate
+
+        trend_start = now - timedelta(days=29)
+        daily = (
+            resolved.filter(reviewed_at__gte=trend_start)
+            .annotate(day=TruncDate("reviewed_at"))
+            .values("day")
+            .annotate(
+                decisions=Count("id"),
+                avg=Avg(review_time),
+            )
+            .order_by("day")
+        )
+        by_day = {}
+        for row in daily:
+            avg_h = None
+            if row["avg"] is not None:
+                avg_h = round(row["avg"].total_seconds() / 3600, 1)
+            by_day[row["day"]] = {"decisions": row["decisions"], "avg_review_hours": avg_h}
+        trend_30d = []
+        for i in range(30):  # oldest first, today last
+            day = (trend_start + timedelta(days=i)).date()
+            trend_30d.append(
+                {
+                    "date": day.isoformat(),
+                    **by_day.get(day, {"decisions": 0, "avg_review_hours": None}),
+                }
+            )
+
         data = {
             "pending_count": KycDocument.objects.filter(status=KycDocument.Status.PENDING).count(),
             "resolved_count": resolved_count,
@@ -245,6 +290,8 @@ class KycSlaStatsView(APIView):
             "prev_7d_decisions": prev_7d_decisions,
             "decision_delta_7d": last_7d_decisions - prev_7d_decisions,
             "pending_oldest_hours": pending_oldest_hours,
+            "breaches": breaches,
+            "trend_30d": trend_30d,
         }
         return Response(KycSlaSerializer(data).data)
 

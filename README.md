@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-340%20(168%20BE%20%2B%20172%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-343%20(170%20BE%20%2B%20173%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -36,6 +36,7 @@
 - **Branded HTML transactional emails** — `notifications/emails.py` + `notifications/templates/emails/` (base shell + OTP code, recovery codes, booking status, fraud flag, promotion expiry), each with a plain-text fallback. Wired into OTP delivery, 2FA-enable recovery codes, booking lifecycle signals, fraud flags, and `expire_listings`.
 - **Audit log** — new `audit` app: an append-only `AuditLogEntry` table records who did what to which object (with IP) for sensitive actions. Wired into fraud-report review and 2FA enable/disable; the Django admin view is read-only so the trail cannot be rewritten.
 - **Backup & restore runbook** — `scripts/backup_db.py` (cross-platform; SQLite consistent copy via the backup API, PostgreSQL via `pg_dump`, pruning with `--keep`) plus `docs/ops/backup-restore.md` covering restore, media, and a quarterly restore drill.
+- **KYC SLA breach alerts** — a daily Celery beat task (`alert_kyc_sla_breaches`) watches the KYC review queue and alerts every admin (in-app notification + branded email) when a **breach** fires: an application stuck past 48h, or decisions this week trailing last week. Deduplicated atomically per day per condition (`get_or_create` on a date-stamped title), so a retried cron never stacks identical alerts.
 
 ---
 
@@ -108,11 +109,13 @@
 - **Rejection UX** — the dashboard KycCard shows a **"Why it was rejected"** banner with the reviewer's note (e.g. *"Blurry scan — please re-upload"*) plus the upload form, so the landlord knows exactly what to fix before re-submitting
 - **Rejection email** — a rejection also sends a **branded transactional email** (`kyc_rejected` template) with the reviewer's note and a **direct re-upload CTA** that deep-links to the dashboard KYC tab, so the landlord can fix and resubmit without hunting through the app
 - **KYC review SLA stats** — the admin panel now opens with a **queue-health strip**: pending applications (with the oldest-waiting age), average review time (all-time + this week), and a 7-day decision trend (`▲ +N / ▼ -N` vs last week), all from `GET /users/kyc/sla/` (admin-only)
+- **SLA breach badges** — when a breach fires the strip grows **red alert chips** ("Application waiting >48h" / "Decisions down vs last week"), matching the flags the daily beat alert emails about — dashboard and alerts never disagree (same thresholds)
+- **30-day decision trend chart** — the admin History tab now opens with a lightweight **dependency-free SVG chart**: daily decision counts (bars) + average review hours (line) over the last 30 days, bucketed server-side with `TruncDate`
 
 **Engineering**
 
 - **Coverage history per branch** — every PR and main push appends its own `history-<branch>.csv` + SVG chart to the `coverage-history` branch (viewable `index.html` linking all branches)
-- 340 automated tests (168 backend + 172 frontend) · coverage gates (BE ≥50%, FE ≥55%)
+- 343 automated tests (170 backend + 173 frontend) · coverage gates (BE ≥50%, FE ≥55%)
 - Ruff + ESLint + Prettier with husky/lint-staged pre-commit hooks
 - GitHub Actions CI (backend, frontend, lint, coverage-summary PR comment, per-branch coverage history)
 - Route-level code splitting (React.lazy) — smaller bundles
@@ -140,7 +143,7 @@
 | **Bonus** | Geo backend (bbox / radius / landmark queries)                                                                                                       | ✅ Shipped           |
 | **7**     | Map (MapLibre GL, clustering, split view, radius + travel overlay, street search, metro routes, room-count API, directions + metro ETA + area chips) | ✅ Shipped           |
 | **8**     | Docker Compose + production deployment + HTTPS                                                                                                       | ⏳ Next — CI/CD done |
-| **9**     | Reliability & observability — Sentry, JSON logs, Celery + beat, branded emails, audit log, backups                                                   | ✅ Shipped           |
+| **9**     | Reliability & observability — Sentry, JSON logs, Celery + beat, branded emails, audit log, backups, KYC SLA alerts + trend chart                    | ✅ Shipped           |
 
 ---
 
@@ -312,8 +315,8 @@ Quality is enforced **in CI and at commit time** — style or coverage drift fai
 
 | Suite             | Count | Gate                                               |
 | ----------------- | ----- | -------------------------------------------------- |
-| Backend (Django)  | 168   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
-| Frontend (Vitest) | 172   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
+| Backend (Django)  | 170   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
+| Frontend (Vitest) | 173   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
 
 ```bash
 # Backend
@@ -595,7 +598,7 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 | GET    | `/api/v1/users/kyc/pending/`                                  | Admin       | Pending applications queue                                           |
 | POST   | `/api/v1/users/kyc/:user_id/review/`                          | Admin       | Approve/reject (badge sync + audit log + notification, atomic)       |
 | GET    | `/api/v1/users/kyc/audit/`                                    | Admin       | Full KYC decision trail (who/when/note from the audit log)           |
-| GET    | `/api/v1/users/kyc/sla/`                                      | Admin       | Review-queue health: pending count, avg review hours, 7-day trend    |
+| GET    | `/api/v1/users/kyc/sla/`                                      | Admin       | Review-queue health: pending count, avg review hours, 7-day trend, **breach flags** (`oldest_pending` / `trend_negative`) and 30-day daily trend (`trend_30d`) |
 | GET    | `/api/v1/rooms/?verified=true`                                | Public      | Only rooms owned by KYC-approved landlords                           |
 
 ### Documentation
@@ -703,9 +706,13 @@ Passwordless sign-in is live — the phishing-resistant successor to passwords +
 
 <img width="1440" alt="KYC Admin Panel" src="docs/screenshots/kyc-admin-panel.png" />
 
-**KYC Review SLA Stats** — the admin panel's queue-health strip (pending volume, average review time, 7-day decision trend):
+**KYC Review SLA Stats** — the admin panel's queue-health strip (pending volume, average review time, 7-day decision trend) with red **breach badges** when the queue slips past 48h or trails last week:
 
 <img width="1440" alt="KYC SLA Stats" src="docs/screenshots/kyc-sla.png" />
+
+**KYC 30-day decision trend** — the History view's SVG chart: bars are decisions per day, the line is average review time, so the review team can see capacity at a glance:
+
+<img width="1440" alt="KYC Trend Chart" src="docs/screenshots/kyc-trend-chart.png" />
 
 **Verified badge — dark theme** (the ✓ Verified pill stays legible in dark mode):
 
