@@ -26,6 +26,7 @@ function buildParams(filters: RoomFilters): Record<string, string> {
   if (filters.minPrice) params.price__gte = filters.minPrice;
   if (filters.maxPrice) params.price__lte = filters.maxPrice;
   if (filters.available === "yes") params.is_available = "true";
+  if (filters.verified) params.verified = "true";
   if (filters.owner != null) params.owner = String(filters.owner);
 
   // Geo / map queries (Phase 7) — the backend supports bbox and a reference

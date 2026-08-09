@@ -14,6 +14,8 @@ import {
 import { wishlistService } from "../../services/wishlistService";
 import { useApp } from "../../context/AppContext";
 import FraudTab from "../../components/FraudTab/FraudTab";
+import KycCard from "../../components/KycCard/KycCard";
+import AdminKycPanel from "../../components/AdminKycPanel/AdminKycPanel";
 import RoomCard from "../../components/RoomCard/RoomCard";
 import RoomModal from "../../components/RoomModal/RoomModal";
 import RoomForm from "../../components/RoomForm/RoomForm";
@@ -40,8 +42,17 @@ import {
 import type { Booking, PaymentStatus, Room } from "../../types";
 import { cn } from "../../lib/utils";
 
-type DashboardTab = "overview" | "listings" | "bookings" | "payments" | "wishlist" | "fraud";
-const TABS: DashboardTab[] = ["overview", "listings", "bookings", "payments", "wishlist", "fraud"];
+type DashboardTab =
+  "overview" | "listings" | "bookings" | "payments" | "wishlist" | "fraud" | "kyc";
+const TABS: DashboardTab[] = [
+  "overview",
+  "listings",
+  "bookings",
+  "payments",
+  "wishlist",
+  "fraud",
+  "kyc",
+];
 
 interface StatCard {
   icon: string;
@@ -172,6 +183,7 @@ function BookingListItem({
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
+  const { user } = useApp();
   const [searchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const [activeTab, setActiveTab] = useState<DashboardTab>(
@@ -185,6 +197,10 @@ export default function Dashboard() {
   const [statusFilter, setStatusFilter] = useState<PaymentStatus | "all">("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+
+  // The KYC review tab is admin-only; the KYC upload card is for everyone else.
+  const isAdmin = user?.role === "admin";
+  const visibleTabs = isAdmin ? TABS : TABS.filter((t) => t !== "kyc");
 
   const { data: stats, isLoading: statsLoading } = useDashboard();
   const { data: bookings = [], isLoading: bookingsLoading } = useBookings();
@@ -297,7 +313,7 @@ export default function Dashboard() {
       </div>
 
       <div className="mb-6 flex w-fit gap-1 rounded-xl bg-gray-50 p-1 dark:bg-gray-800">
-        {TABS.map((t) => (
+        {visibleTabs.map((t) => (
           <button
             key={t}
             className={cn(
@@ -351,6 +367,12 @@ export default function Dashboard() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {!isAdmin && (
+            <div className="mb-6">
+              <KycCard />
             </div>
           )}
 
@@ -560,6 +582,8 @@ export default function Dashboard() {
         ))}
 
       {activeTab === "fraud" && <FraudTab />}
+
+      {activeTab === "kyc" && isAdmin && <AdminKycPanel />}
 
       {selectedRoom && <RoomModal room={selectedRoom} onClose={() => setSelectedRoom(null)} />}
 

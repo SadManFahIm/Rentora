@@ -21,6 +21,7 @@ const DEFAULT_FILTERS: Filters = {
   available: "any",
   minPrice: "",
   maxPrice: "",
+  verified: false,
 };
 
 export default function Rooms() {

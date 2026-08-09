@@ -1,7 +1,10 @@
 from dj_rest_auth.registration.serializers import RegisterSerializer
 from dj_rest_auth.serializers import UserDetailsSerializer
 from django.contrib.auth import get_user_model
+from django.urls import reverse
 from rest_framework import serializers
+
+from .models import KycDocument
 
 User = get_user_model()
 
@@ -140,6 +143,77 @@ class OTPSerializer(serializers.Serializer):
         required=False, allow_blank=True, write_only=True, style={"input_type": "password"}
     )
     enable = serializers.BooleanField(required=False, default=True)
+
+
+# ============================================================
+# KYC verification (documents + admin review panel)
+# ============================================================
+
+
+class KycUploadRequestSerializer(serializers.Serializer):
+    """Multipart request body for a document upload (schema documentation;
+    the view validates against the actual file object)."""
+
+    doc_type = serializers.ChoiceField(choices=KycDocument.DocType.choices)
+    file = serializers.FileField()
+
+
+class KycDocumentSerializer(serializers.ModelSerializer):
+    """One submitted KYC document.
+
+    Only the owner and staff/admins ever receive this serializer (the views
+    enforce it), and the ``file`` field points at the *authenticated* file
+    endpoint rather than the public MEDIA_URL — so the bytes stay private
+    even though Django's dev server serves /media/ to anyone.
+    """
+
+    doc_type_display = serializers.CharField(source="get_doc_type_display", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    file = serializers.SerializerMethodField()
+
+    class Meta:
+        model = KycDocument
+        fields = [
+            "id",
+            "doc_type",
+            "doc_type_display",
+            "file",
+            "status",
+            "status_display",
+            "review_note",
+            "created_at",
+            "reviewed_at",
+        ]
+        read_only_fields = fields
+
+    def get_file(self, obj: KycDocument) -> str:
+        """The permission-gated file URL (owner/admin only)."""
+        path = reverse("kyc-document-file", args=[obj.pk])
+        request = self.context.get("request")
+        return request.build_absolute_uri(path) if request else path
+
+
+class KycPendingUserSerializer(serializers.ModelSerializer):
+    """One applicant in the admin review panel: profile summary + documents."""
+
+    name = serializers.SerializerMethodField()
+    # ``source`` is the model related_name (``kyc_documents``); the API field
+    # stays ``documents`` for readability.
+    documents = KycDocumentSerializer(many=True, read_only=True, source="kyc_documents")
+
+    class Meta:
+        model = User
+        fields = ["id", "username", "email", "name", "phone", "role", "nid_verified", "documents"]
+
+    def get_name(self, obj):
+        return obj.get_full_name() or obj.username
+
+
+class KycReviewRequestSerializer(serializers.Serializer):
+    """Admin decision on a user's KYC application."""
+
+    approved = serializers.BooleanField()
+    note = serializers.CharField(required=False, allow_blank=True, default="")
 
 
 class PasskeySerializer(serializers.Serializer):
