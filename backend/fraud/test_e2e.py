@@ -22,6 +22,7 @@ from datetime import date, timedelta
 
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.test import tag
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -56,6 +57,7 @@ def _room_payload(title, description, **overrides):
     return payload
 
 
+@tag("e2e")
 class FraudBookingE2ETest(APITestCase):
     """End-to-end cycle: create → flag → landlord email → booking → re-scan."""
 
@@ -251,6 +253,7 @@ class FraudBookingE2ETest(APITestCase):
         self.assertIn("declined", reject_email.subject.lower())
 
 
+@tag("e2e")
 class FraudAdminReviewE2ETest(APITestCase):
     """Admin resolution flow: flag → review / dismiss, all through the API.
 
