@@ -1,0 +1,16 @@
+{% extends "emails/base_email.html" %}
+{% block content %}
+  <h2 style="margin: 0 0 12px; font-size: 18px; color: #0f172a;">Your promotion has ended</h2>
+  <p style="margin: 0 0 8px;">Hi {{ user.first_name|default:user.username }},</p>
+  <p style="margin: 0 0 20px;">
+    The <strong>{{ tier_display }}</strong> promotion on <strong>"{{ room.title }}"</strong> has
+    expired, so the listing has returned to the standard (Free) tier. It's still fully visible —
+    it just no longer gets the boosted search position or badge.
+  </p>
+  <p style="margin: 0 0 20px;">Re-promote it anytime from your dashboard to keep the boost going.</p>
+  <p style="margin: 0;">
+    <a href="{{ action_url }}" style="background: #f97316; color: #ffffff; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; display: inline-block;">
+      Go to my listings
+    </a>
+  </p>
+{% endblock %}

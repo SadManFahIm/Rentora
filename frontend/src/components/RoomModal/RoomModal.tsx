@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ShieldAlert, Star, ShieldCheck, MessageCircle, CalendarCheck } from "lucide-react";
 import { useRoomFraudStatus } from "../../hooks/useFraud";
+import { fraudBadgeLabel } from "../../lib/fraud";
 import type { Room } from "../../types";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -113,12 +114,7 @@ export default function RoomModal({ room, onClose }: RoomModalProps) {
                     {fraud?.flagged && (
                       <span className="flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-600 dark:bg-red-950/40 dark:text-red-400">
                         <ShieldAlert className="size-3.5" />
-                        Under review
-                        {fraud.severity === "high"
-                          ? " (high risk)"
-                          : fraud.severity === "medium"
-                            ? " (medium risk)"
-                            : ""}
+                        {fraudBadgeLabel(fraud.severity)}
                       </span>
                     )}
                   </div>

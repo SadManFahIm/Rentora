@@ -57,10 +57,26 @@ class RoommateProfileView(APIView):
         responses=RoommateProfileSerializer,
     )
     def put(self, request):
-        profile, _created = RoommateProfile.objects.get_or_create(user=request.user)
+        # Validate first, then create: RoommateProfile's required fields
+        # (budget range, area, room type) have no defaults, so a naive
+        # ``get_or_create(user=...)`` on a first-time caller would attempt a
+        # partial row and blow up with a NOT NULL IntegrityError (500).
+        profile = RoommateProfile.objects.filter(user=request.user).first()
         serializer = RoommateProfileSerializer(profile, data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        if profile is None:
+            # Race hardening: two concurrent first-time PUTs can both pass the
+            # ``filter().first()`` above; the loser of the unique(user) race
+            # re-reads the row and updates it instead of 500ing.
+            try:
+                serializer.save(user=request.user)
+            except IntegrityError:
+                profile = RoommateProfile.objects.get(user=request.user)
+                serializer = RoommateProfileSerializer(profile, data=request.data)
+                serializer.is_valid(raise_exception=True)
+                serializer.save()
+        else:
+            serializer.save()
         return Response(serializer.data)
 
 

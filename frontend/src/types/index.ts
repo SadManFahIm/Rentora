@@ -5,21 +5,6 @@
 export type RoomType = "Single" | "Shared" | "Studio";
 export type GenderPref = "Any" | "Male" | "Female";
 
-export type LandmarkKind = "university" | "metro";
-
-/** A single nearby landmark with its distance from a room (Phase 7 geo). */
-export interface LandmarkProximity {
-  key: string;
-  name: string;
-  kind: LandmarkKind;
-  distanceKm: number;
-}
-
-/** Nearest university/metro to a room, as returned by the backend. */
-export interface RoomProximity {
-  nearestUniversity: LandmarkProximity | null;
-  nearestMetro: LandmarkProximity | null;
-}
 /** Paid listing tier (monetization): free is the default; featured/premium
  * are unlocked via a promotion payment and expire. */
 export type ListingTier = "free" | "featured" | "premium";
@@ -47,17 +32,23 @@ export interface Room {
   ownerId: number | null;
   ownerAvatar: string;
   verified: boolean;
-  /** Nearest university/metro (present when the API includes it). */
-  proximity?: RoomProximity;
-  /** Distance (km) from a geo query's reference point; null unless the request supplied one. */
+  /** Distance (km) from the query's reference point — set on radius/map queries. */
   distanceKm?: number | null;
+  /** Nearest university + metro to this listing, each with distance in km. */
+  proximity?: {
+    nearestUniversity: { key: string; name: string; distanceKm: number } | null;
+    nearestMetro: { key: string; name: string; distanceKm: number } | null;
+  } | null;
 }
+
+/** Public tier catalog from GET /rooms/tier-catalog/. */
 export interface TierInfo {
   tier: ListingTier;
   label: string;
   price: number;
   benefits: string[];
 }
+
 export interface TierCatalog {
   tiers: TierInfo[];
   durationDays: number;
@@ -74,6 +65,8 @@ export interface User {
   firstName?: string;
   lastName?: string;
   role?: UserRole;
+  /** Django staff — treated as admin in the UI (mirrors the backend check). */
+  isStaff?: boolean;
   avatar?: string | null;
   phone?: string;
   bio?: string;
@@ -105,6 +98,8 @@ export interface ChatUser {
   firstName: string;
   lastName: string;
   avatar: string | null;
+  /** KYC-verified — shown as a trust badge next to the participant's name. */
+  nidVerified?: boolean;
 }
 
 export type ChatMessageType = "text" | "image" | "file" | "system";
@@ -172,6 +167,8 @@ export interface Filters {
   available: AvailabilityFilter;
   minPrice: string;
   maxPrice: string;
+  /** KYC-verified landlords only (Room.verified). */
+  verified: boolean;
 }
 
 // Filters as sent to the service layer — every field optional.
@@ -458,4 +455,61 @@ export interface FraudReport {
   signals: FraudSignal[];
   createdAt: string;
   updatedAt: string;
+}
+
+// ---- KYC verification (documents + admin review panel) ----
+
+export type KycDocType = "nid" | "passport";
+export type KycDocStatus = "pending" | "approved" | "rejected";
+
+export interface KycDocument {
+  id: number;
+  docType: KycDocType;
+  docTypeDisplay: string;
+  /** Private file URL — only the owner and admins can fetch it. */
+  fileUrl: string;
+  status: KycDocStatus;
+  statusDisplay: string;
+  reviewNote: string;
+  createdAt: string;
+  reviewedAt: string | null;
+}
+
+/** One applicant in the admin KYC review panel. */
+export interface KycApplication {
+  id: number;
+  username: string;
+  email: string;
+  name: string;
+  phone: string;
+  role: string;
+  nidVerified: boolean;
+  documents: KycDocument[];
+}
+
+/** Admin review-queue health from GET /users/kyc/sla/. */
+export interface KycSla {
+  pendingCount: number;
+  resolvedCount: number;
+  /** Average hours between submission and a decision (all-time). */
+  avgReviewHours: number | null;
+  last7dDecisions: number;
+  last7dAvgReviewHours: number | null;
+  prev7dDecisions: number;
+  /** This week's decisions minus last week's — negative means the queue grows. */
+  decisionDelta7d: number;
+  /** Age of the oldest pending document, in hours. */
+  pendingOldestHours: number | null;
+}
+
+/** One KYC decision in the admin history view (append-only audit trail). */
+export interface KycAuditEntry {
+  id: number;
+  action: "kyc.approved" | "kyc.rejected";
+  actorUsername: string;
+  actorName: string;
+  userId: number | null;
+  userName: string;
+  note: string;
+  createdAt: string;
 }

@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
+import { Sentry, sentryEnabled } from "../lib/sentry";
 import { Button } from "./ui/button";
 
 interface ErrorBoundaryProps {
@@ -19,6 +20,12 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("Uncaught application error:", error, info);
+    // Forward to Sentry when configured (safe no-op otherwise).
+    if (sentryEnabled) {
+      Sentry.captureException(error, {
+        contexts: { react: { componentStack: info.componentStack } },
+      });
+    }
   }
 
   render() {

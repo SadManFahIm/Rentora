@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, SlidersHorizontal, X } from "lucide-react";
+import { Search, ShieldCheck, SlidersHorizontal, X } from "lucide-react";
 import { AREAS, ROOM_TYPES, AMENITIES_LIST } from "../../data/mockData";
 import type { Filters, SortOption, GenderPref } from "../../types";
 import { Input } from "../ui/input";
@@ -50,6 +50,7 @@ export default function SearchFilter({ filters, setFilters }: SearchFilterProps)
       available: "any",
       minPrice: "",
       maxPrice: "",
+      verified: false,
     });
     setShowPanel(false);
   };
@@ -235,6 +236,27 @@ export default function SearchFilter({ filters, setFilters }: SearchFilterProps)
               Available Only
             </button>
           </div>
+        </div>
+
+        <div className="mb-6">
+          <label className="mb-2.5 block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+            Landlord Verification
+          </label>
+          <button
+            className={cn(
+              "flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors",
+              filters.verified
+                ? "border-emerald-600 bg-emerald-600 text-white"
+                : "border-gray-300 bg-background text-gray-600 hover:border-emerald-600 hover:text-emerald-600 dark:border-gray-700 dark:text-gray-400"
+            )}
+            onClick={() => update("verified", !filters.verified)}
+          >
+            <ShieldCheck className="size-4" />
+            {filters.verified ? "Verified only ✓" : "Verified landlords only"}
+          </button>
+          <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+            KYC-verified owners — their identity documents were approved.
+          </p>
         </div>
 
         <Button

@@ -19,6 +19,7 @@ duplicate) can never be hidden by "only one issue".
 from __future__ import annotations
 
 import difflib
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -28,6 +29,8 @@ from django.utils import timezone
 from rooms.models import Room
 
 from ..models import FraudReport, FraudSignal
+
+logger = logging.getLogger(__name__)
 
 # Price-anomaly thresholds vs the (area, room_type) market segment:
 # below 60% of the 25th percentile is "too good to be true", above 150% of
@@ -236,9 +239,24 @@ def run_scan(room: Room) -> FraudReport:
     Idempotent: the room's existing ``FraudReport`` (and its signals) is
     replaced wholesale, so a re-scan after the landlord fixes an issue
     reflects the new state.
+
+    Detector failures are isolated: one detector raising (e.g. a transient
+    DB error) never aborts the whole scan — it is logged and the remaining
+    detectors still run, so a scan always produces a report.
     """
-    signals = [detector(room) for detector in DETECTORS]
-    signals = [s for s in signals if s is not None]
+    signals: list[Signal] = []
+    for detector in DETECTORS:
+        try:
+            signal = detector(room)
+        except Exception:
+            logger.exception(
+                "Fraud detector %s failed for room %s; skipping it.",
+                detector.__name__,
+                room.pk,
+            )
+            continue
+        if signal is not None:
+            signals.append(signal)
 
     score = _score_signals(signals)
     severity = _severity_of(signals)

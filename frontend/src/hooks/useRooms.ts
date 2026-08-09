@@ -46,7 +46,7 @@ export function useLandmarks() {
   return useQuery<Landmark[]>({
     queryKey: [...roomKeys.all, "landmarks"] as const,
     queryFn: () => roomService.getLandmarks(),
-    staleTime: 24 * 60 * 60 * 1000, // static data ΓÇö cache for a day
+    staleTime: 24 * 60 * 60 * 1000, // static data — cache for a day
   });
 }
 
