@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  AlertTriangle,
   BadgeCheck,
   Check,
   Clock,
@@ -8,6 +9,7 @@ import {
   Loader2,
   ShieldCheck,
   ShieldOff,
+  TrendingDown,
   Users,
   X,
 } from "lucide-react";
@@ -20,6 +22,7 @@ import {
 } from "../../hooks/useKyc";
 import { kycService } from "../../services/kycService";
 import { getApiErrorMessage } from "../../services/errors";
+import type { KycSla } from "../../types";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { cn } from "../../lib/utils";
@@ -45,6 +48,17 @@ function formatWhen(iso: string): string {
 /** Queue-health strip: pending volume, decision speed, and the 7-day trend. */
 function SlaStats() {
   const { data: sla, isLoading } = useKycSla();
+
+  const breachLabels: Record<string, { label: string; icon: typeof AlertTriangle }> = {
+    oldest_pending: {
+      label: "Application waiting >48h",
+      icon: AlertTriangle,
+    },
+    trend_negative: {
+      label: "Decisions down vs last week",
+      icon: TrendingDown,
+    },
+  };
 
   const cards = [
     {
@@ -81,21 +95,155 @@ function SlaStats() {
   ];
 
   return (
-    <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-      {cards.map((c) => (
-        <div
-          key={c.label}
-          className="rounded-xl border border-gray-200 bg-card p-4 dark:border-gray-800"
-        >
-          <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-            <c.icon className="size-3.5" /> {c.label}
-          </div>
-          <p className="mt-1.5 font-display text-2xl font-bold text-foreground">
-            {isLoading ? <Loader2 className="size-5 animate-spin text-gray-400" /> : c.value}
-          </p>
-          <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{c.sub}</p>
+    <>
+      {sla && sla.breaches.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          {sla.breaches.map((key) => {
+            const breach = breachLabels[key];
+            if (!breach) return null;
+            const Icon = breach.icon;
+            return (
+              <span
+                key={key}
+                className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400"
+              >
+                <Icon className="size-3.5" />
+                {breach.label}
+              </span>
+            );
+          })}
         </div>
-      ))}
+      )}
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {cards.map((c) => (
+          <div
+            key={c.label}
+            className="rounded-xl border border-gray-200 bg-card p-4 dark:border-gray-800"
+          >
+            <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+              <c.icon className="size-3.5" /> {c.label}
+            </div>
+            <p className="mt-1.5 font-display text-2xl font-bold text-foreground">
+              {isLoading ? <Loader2 className="size-5 animate-spin text-gray-400" /> : c.value}
+            </p>
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{c.sub}</p>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/**
+ * Lightweight dependency-free 30-day trend chart (SVG): bars for decisions
+ * per day, a line for average review hours. Deliberately hand-rolled so the
+ * admin panel adds no chart-library weight to the bundle.
+ */
+function TrendChart({ trend }: { trend: KycSla["trend30d"] }) {
+  const W = 720;
+  const H = 220;
+  const PAD = { top: 20, right: 16, bottom: 30, left: 40 };
+  const iw = W - PAD.left - PAD.right;
+  const ih = H - PAD.top - PAD.bottom;
+
+  const maxDecisions = Math.max(1, ...trend.map((d) => d.decisions));
+  const maxHours = Math.max(1, ...trend.map((d) => d.avgReviewHours ?? 0));
+  const n = trend.length;
+  const bw = iw / n;
+
+  const hoursToY = (h: number) => PAD.top + ih - (h / maxHours) * ih;
+  const decToY = (dec: number) => PAD.top + ih - (dec / maxDecisions) * ih;
+
+  // Line through the average-review-hours points (skip nulls).
+  const linePoints = trend
+    .map((d, i) =>
+      d.avgReviewHours == null
+        ? null
+        : `${PAD.left + i * bw + bw / 2},${hoursToY(d.avgReviewHours)}`
+    )
+    .filter((p): p is string => p !== null)
+    .join(" ");
+
+  // X-axis ticks: show every ~5th day so labels don't crowd.
+  const ticks = trend.filter((_, i) => i % 5 === 0 || i === n - 1);
+
+  return (
+    <div>
+      <div className="mb-1 flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block size-2.5 rounded-sm bg-orange-500" /> Decisions / day
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block size-2.5 rounded-full border-2 border-sky-500" /> Avg review
+          hours
+        </span>
+      </div>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full"
+        role="img"
+        aria-label="KYC decisions and review time over the last 30 days"
+      >
+        {/* Gridlines */}
+        {[0.25, 0.5, 0.75, 1].map((f) => {
+          const y = PAD.top + ih - f * ih;
+          return (
+            <line
+              key={f}
+              x1={PAD.left}
+              y1={y}
+              x2={W - PAD.right}
+              y2={y}
+              stroke="currentColor"
+              strokeOpacity="0.08"
+              strokeDasharray="3 4"
+            />
+          );
+        })}
+
+        {/* Decision bars */}
+        {trend.map((d, i) => (
+          <rect
+            key={d.date}
+            x={PAD.left + i * bw + bw * 0.2}
+            y={decToY(d.decisions)}
+            width={bw * 0.6}
+            height={ih - (decToY(d.decisions) - PAD.top)}
+            rx={2}
+            fill="#f97316"
+            fillOpacity={d.decisions > 0 ? 0.85 : 0.12}
+          />
+        ))}
+
+        {/* Avg review hours line */}
+        {linePoints && (
+          <polyline
+            points={linePoints}
+            fill="none"
+            stroke="#0ea5e9"
+            strokeWidth="2"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        )}
+
+        {/* X-axis labels */}
+        {ticks.map((d) => {
+          const i = trend.indexOf(d);
+          const date = new Date(d.date + "T00:00:00");
+          return (
+            <text
+              key={d.date}
+              x={PAD.left + i * bw + bw / 2}
+              y={H - 10}
+              textAnchor="middle"
+              className="fill-current text-[10px] text-gray-400"
+            >
+              {date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+            </text>
+          );
+        })}
+      </svg>
     </div>
   );
 }
@@ -108,6 +256,7 @@ function formatHours(h: number): string {
 
 function HistoryView() {
   const { data: entries = [], isLoading } = useKycAuditTrail();
+  const { data: sla } = useKycSla();
 
   if (isLoading) {
     return (
@@ -116,6 +265,8 @@ function HistoryView() {
       </div>
     );
   }
+
+  const trend = sla?.trend30d ?? [];
 
   if (entries.length === 0) {
     return (
@@ -128,51 +279,63 @@ function HistoryView() {
   }
 
   return (
-    <ol className="relative space-y-0">
-      {entries.map((entry, i) => {
-        const approved = entry.action === "kyc.approved";
-        const isLast = i === entries.length - 1;
-        return (
-          <li key={entry.id} className="relative flex gap-4 pb-6 last:pb-0">
-            {/* Timeline rail */}
-            {!isLast && (
-              <span className="absolute left-4 top-9 h-full w-px bg-gray-200 dark:bg-gray-800" />
-            )}
-            {/* Node */}
-            <span
-              className={cn(
-                "z-10 flex size-8 shrink-0 items-center justify-center rounded-full border-2 border-card shadow-sm",
-                approved ? "bg-emerald-500/15 text-emerald-500" : "bg-red-500/15 text-red-500"
+    <>
+      {/* 30-day review trend — decisions/day (bars) + avg review hours (line). */}
+      {trend.length > 0 && (
+        <div className="mb-6 rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800">
+          <h3 className="mb-3 font-display text-sm font-bold text-foreground">
+            Review activity · last 30 days
+          </h3>
+          <TrendChart trend={trend} />
+        </div>
+      )}
+
+      <ol className="relative space-y-0">
+        {entries.map((entry, i) => {
+          const approved = entry.action === "kyc.approved";
+          const isLast = i === entries.length - 1;
+          return (
+            <li key={entry.id} className="relative flex gap-4 pb-6 last:pb-0">
+              {/* Timeline rail */}
+              {!isLast && (
+                <span className="absolute left-4 top-9 h-full w-px bg-gray-200 dark:bg-gray-800" />
               )}
-            >
-              {approved ? <BadgeCheck className="size-4" /> : <X className="size-4" />}
-            </span>
-            <div className="min-w-0 flex-1 rounded-xl border border-gray-100 bg-gray-50 p-3.5 dark:border-gray-800 dark:bg-gray-800/40">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-foreground">
-                  {approved ? "Approved" : "Rejected"}{" "}
-                  <span className="font-normal text-gray-600 dark:text-gray-400">
-                    {entry.userName}
-                  </span>
-                </p>
-                <span className="inline-flex items-center gap-1 text-xs text-gray-500">
-                  <Clock className="size-3" /> {formatWhen(entry.createdAt)}
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                by <span className="font-medium text-foreground">{entry.actorName}</span>
-                {entry.note && (
-                  <>
-                    {" "}
-                    · note: <em className="text-gray-500">“{entry.note}”</em>
-                  </>
+              {/* Node */}
+              <span
+                className={cn(
+                  "z-10 flex size-8 shrink-0 items-center justify-center rounded-full border-2 border-card shadow-sm",
+                  approved ? "bg-emerald-500/15 text-emerald-500" : "bg-red-500/15 text-red-500"
                 )}
-              </p>
-            </div>
-          </li>
-        );
-      })}
-    </ol>
+              >
+                {approved ? <BadgeCheck className="size-4" /> : <X className="size-4" />}
+              </span>
+              <div className="min-w-0 flex-1 rounded-xl border border-gray-100 bg-gray-50 p-3.5 dark:border-gray-800 dark:bg-gray-800/40">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-foreground">
+                    {approved ? "Approved" : "Rejected"}{" "}
+                    <span className="font-normal text-gray-600 dark:text-gray-400">
+                      {entry.userName}
+                    </span>
+                  </p>
+                  <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                    <Clock className="size-3" /> {formatWhen(entry.createdAt)}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                  by <span className="font-medium text-foreground">{entry.actorName}</span>
+                  {entry.note && (
+                    <>
+                      {" "}
+                      · note: <em className="text-gray-500">“{entry.note}”</em>
+                    </>
+                  )}
+                </p>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </>
   );
 }
 

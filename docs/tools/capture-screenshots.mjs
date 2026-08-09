@@ -121,6 +121,16 @@ const CAPTURES = [
     out: "kyc-sla.png",
     waitMs: 4500,
   },
+  // KYC 30-day decision trend — the History view's SVG chart: bars are
+  // decisions per day, the line is average review hours.
+  {
+    user: "admin",
+    route: "/dashboard?tab=kyc",
+    click: "history",
+    out: "kyc-trend-chart.png",
+    waitMs: 4500,
+    afterClickMs: 2500,
+  },
   // KYC verified badge in dark mode — the KycCard + trust badge styled for
   // the dark theme (RoomCard verified pill visible in the listing grid).
   {
