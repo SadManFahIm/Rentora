@@ -114,6 +114,33 @@ const CAPTURES = [
     waitMs: 4500,
     afterClickMs: 2500,
   },
+  // KYC verified badge in dark mode — the KycCard + trust badge styled for
+  // the dark theme (RoomCard verified pill visible in the listing grid).
+  {
+    user: "kyc.demo",
+    route: "/rooms",
+    out: "verified-badge-dark.png",
+    waitMs: 4500,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: true }, version: 0 }));
+      return 'dark';
+    })()`,
+  },
+  // Mobile viewport — verified badge + KYC card on a phone-sized screen.
+  {
+    user: "kyc.demo",
+    route: "/dashboard",
+    out: "kyc-mobile.png",
+    waitMs: 4500,
+    viewport: { width: 390, height: 844, deviceScaleFactor: 2, mobile: true },
+    resetViewport: true,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+  },
   // Email-OTP 2FA step: enable 2FA, sign in through the REAL login form
   // (token injection would bypass the challenge), screenshot the code step,
   // then disable 2FA again so the demo accounts stay in their default state.
@@ -265,6 +292,14 @@ async function main() {
     await send("Page.navigate", { url });
     await sleep(waitMs);
   };
+  const setViewport = async (vp) => {
+    await send("Emulation.setDeviceMetricsOverride", {
+      width: vp.width,
+      height: vp.height,
+      deviceScaleFactor: vp.deviceScaleFactor ?? 1,
+      mobile: vp.mobile ?? false,
+    });
+  };
   const shot = async (file) => {
     const r = await send("Page.captureScreenshot", {
       format: "png",
@@ -340,6 +375,9 @@ async function main() {
         return 'cleared';
       })()`);
     }
+    if (cap.viewport) {
+      await setViewport(cap.viewport);
+    }
     if (cap.beforeCapture) {
       await evaluate(cap.beforeCapture);
     }
@@ -367,6 +405,11 @@ async function main() {
     }
 
     await shot(cap.out);
+
+    if (cap.resetViewport) {
+      // Back to the desktop viewport so later captures aren't shot mobile-sized.
+      await setViewport({ width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+    }
   }
 
   ws.close();

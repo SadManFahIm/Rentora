@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BadgeCheck, FileUp, Loader2, ShieldCheck, UploadCloud } from "lucide-react";
+import { AlertCircle, BadgeCheck, FileUp, Loader2, ShieldCheck, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 import { useMyKycDocuments, useUploadKycDocument } from "../../hooks/useKyc";
 import { useApp } from "../../context/AppContext";
@@ -31,6 +31,15 @@ export default function KycCard() {
 
   const verified = user?.nidVerified === true;
   const pending = documents.some((d) => d.status === "pending");
+  // The most recent reviewer note on a rejected submission, if any — shown so
+  // the landlord knows exactly what to fix before re-uploading. Sort by
+  // reviewedAt desc so the latest decision wins when several were rejected.
+  const rejected = [...documents]
+    .filter((d) => d.status === "rejected")
+    .sort(
+      (a, b) => new Date(b.reviewedAt ?? 0).getTime() - new Date(a.reviewedAt ?? 0).getTime()
+    )[0];
+  const rejectionNote = rejected?.reviewNote?.trim();
 
   const submit = async () => {
     if (!file) return;
@@ -65,7 +74,11 @@ export default function KycCard() {
               ? "Verified — your listings carry the trust badge and rank above unverified landlords."
               : pending
                 ? "Your document is under review. This usually takes under a day."
-                : "Upload your NID or passport to get the verified badge on your listings."}
+                : rejected
+                  ? rejectionNote
+                    ? "Your document was not approved. Review the note below, then upload a clear copy to try again."
+                    : "Your document was not approved. Upload a clear copy to try again."
+                  : "Upload your NID or passport to get the verified badge on your listings."}
           </p>
         </div>
         {verified && (
@@ -111,6 +124,17 @@ export default function KycCard() {
                 )}
                 Upload
               </Button>
+            </div>
+          )}
+
+          {/* Rejection banner — the reviewer's note drives the fix. */}
+          {rejected && rejectionNote && !pending && (
+            <div className="mt-4 flex gap-2.5 rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm dark:border-red-500/30 dark:bg-red-500/10">
+              <AlertCircle className="mt-0.5 size-4 shrink-0 text-red-500" />
+              <div>
+                <p className="font-semibold text-red-600 dark:text-red-400">Why it was rejected</p>
+                <p className="mt-0.5 text-red-600/90 dark:text-red-400/80">“{rejectionNote}”</p>
+              </div>
             </div>
           )}
 

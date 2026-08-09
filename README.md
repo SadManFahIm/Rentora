@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-329%20(165%20BE%20%2B%20164%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-332%20(166%20BE%20%2B%20166%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -104,12 +104,13 @@
 - **KYC audit trail** — Dashboard → KYC → History lists every decision (who, when, note) straight from the append-only audit log
 - **Verified badge everywhere** — RoomCard pill, RoomModal, Roommates match cards, and **Chat** (shield next to a verified participant's name); verified-first ranking inside each tier
 - **"Verified landlords only" filter** — one toggle on the Rooms page (`?verified=true`) narrows results to KYC-approved owners
-- **E2E coverage** — upload → 403 for non-admin → queue → approve (badge flip + audit + notification + fraud signal clears) → reject with note → revoke flips back → privacy (404 for strangers) → file-type guard: 11 KYC tests
+- **E2E coverage** — upload → 403 for non-admin → queue → approve (badge flip + audit + notification + fraud signal clears) → reject with note → **reject → re-upload → approve full loop** (the landlord sees the reviewer's note on their rejected doc, re-submits, and the badge finally lands — the audit trail tells the whole story) → revoke flips back → privacy (404 for strangers) → file-type guard: 12 KYC tests
+- **Rejection UX** — the dashboard KycCard shows a **"Why it was rejected"** banner with the reviewer's note (e.g. *"Blurry scan — please re-upload"*) plus the upload form, so the landlord knows exactly what to fix before re-submitting
 
 **Engineering**
 
 - **Coverage history per branch** — every PR and main push appends its own `history-<branch>.csv` + SVG chart to the `coverage-history` branch (viewable `index.html` linking all branches)
-- 329 automated tests (165 backend + 164 frontend) · coverage gates (BE ≥50%, FE ≥55%)
+- 332 automated tests (166 backend + 166 frontend) · coverage gates (BE ≥50%, FE ≥55%)
 - Ruff + ESLint + Prettier with husky/lint-staged pre-commit hooks
 - GitHub Actions CI (backend, frontend, lint, coverage-summary PR comment, per-branch coverage history)
 - Route-level code splitting (React.lazy) — smaller bundles
@@ -305,12 +306,12 @@ Rentora/
 
 Quality is enforced **in CI and at commit time** — style or coverage drift fails the pipeline automatically.
 
-### Automated tests (329 total)
+### Automated tests (332 total)
 
 | Suite             | Count | Gate                                               |
 | ----------------- | ----- | -------------------------------------------------- |
-| Backend (Django)  | 165   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
-| Frontend (Vitest) | 164   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
+| Backend (Django)  | 166   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
+| Frontend (Vitest) | 166   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
 
 ```bash
 # Backend
@@ -652,12 +653,14 @@ Passwordless sign-in is live — the phishing-resistant successor to passwords +
 | 🏠 Landlord | `tanvir.islam`  | Fraud dashboard (Executive Single Banani + re-scan)                                                     |
 | 🏠 Landlord | `demo.promoter` | **Fresh FREE listing** — try the Promote flow end-to-end                                                |
 | 🏠 Landlord | `kyc.demo`      | **Unverified landlord** — Dashboard → KYC: upload a document, then watch an admin approve it and the **verified badge** appear on your listing + chat                                      |
+| 🏠 Landlord | `kyc.rejected`  | **Rejected KYC demo** — Dashboard → KYC shows the **"Why it was rejected"** banner with the reviewer's note and a ready re-upload form                                  |
 
 **Tips**
 
 - Sign in with the **username** (e.g. `rahim.hossain`) **or** the email address (e.g. `rahim.hossain@rentora.com`) — both work.
 - `rahim.hossain` has a roommate profile — log in and open **Roommates** to see live match scores.
 - `tanvir.islam` has listings — open **Dashboard → Fraud** to see the risk cards and try **Re-scan**.
+- `kyc.rejected` starts with a rejected document — open **Dashboard → KYC** to see the rejection note, then upload a clear copy to restart the review loop.
 - **Try 2FA:** Dashboard → **Two-Factor Authentication** → **Enable 2FA** (current password → emailed code → save your **recovery codes**). Next sign-in asks for the emailed code (or a recovery code). In development the code prints to the backend console; in production it goes to the account's email.
 - **Try passkeys:** Dashboard → Security → **Passkeys** → **Register a passkey** (your device's biometric/PIN), then sign out and use the login page's passkey autofill or the **"Sign in with a passkey"** button.
 
@@ -696,6 +699,14 @@ Passwordless sign-in is live — the phishing-resistant successor to passwords +
 <img width="1440" alt="KYC Upload" src="docs/screenshots/kyc-upload.png" />
 
 <img width="1440" alt="KYC Admin Panel" src="docs/screenshots/kyc-admin-panel.png" />
+
+**Verified badge — dark theme** (the ✓ Verified pill stays legible in dark mode):
+
+<img width="1440" alt="Verified Badge Dark" src="docs/screenshots/verified-badge-dark.png" />
+
+**KYC on mobile** — the identity card + verified state on a phone-sized screen:
+
+<img width="390" alt="KYC Mobile" src="docs/screenshots/kyc-mobile.png" />
 
 **Home & Listing Pages:**
 
