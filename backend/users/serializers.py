@@ -233,6 +233,10 @@ class KycSlaSerializer(serializers.Serializer):
     prev_7d_decisions = serializers.IntegerField()
     decision_delta_7d = serializers.IntegerField()
     pending_oldest_hours = serializers.FloatField(allow_null=True)
+    # Breach flags — which review SLA is currently being missed.
+    breaches = serializers.ListField(child=serializers.CharField())
+    # Last 30 days, oldest first: decisions per day + average review hours.
+    trend_30d = serializers.ListField(child=serializers.DictField())
 
 
 class KycAuditEntrySerializer(serializers.Serializer):
