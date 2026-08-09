@@ -34,6 +34,46 @@ class User(AbstractUser):
         return self.username
 
 
+class KycDocument(models.Model):
+    """A KYC proof (NID or passport scan) submitted by a user for verification.
+
+    Privacy contract: document *files* are only ever exposed to the owner
+    (via the authenticated "my documents" endpoint) and to staff/admins (via
+    the review-panel endpoints). They never appear in public room/user
+    serializers, and no public endpoint references this model.
+
+    Lifecycle: pending -> approved | rejected (admin decision, recorded on
+    ``review_note``). Approving a document is what gates ``User.nid_verified``
+    in the admin panel flow; the two stay consistent because the review view
+    flips ``nid_verified`` in the same transaction.
+    """
+
+    class DocType(models.TextChoices):
+        NID = "nid", "National ID (NID)"
+        PASSPORT = "passport", "Passport"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    user = models.ForeignKey("users.User", on_delete=models.CASCADE, related_name="kyc_documents")
+    doc_type = models.CharField(max_length=10, choices=DocType.choices)
+    # FileField (not ImageField) so PDF scans are accepted too — admins
+    # preview the file in-browser (images render inline, PDFs via viewer).
+    file = models.FileField(upload_to="kyc_documents/%Y/%m/")
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    review_note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.get_doc_type_display()} for {self.user_id} ({self.status})"
+
+
 class OTPChallenge(models.Model):
     """A single in-flight email-OTP challenge.
 

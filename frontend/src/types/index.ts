@@ -163,6 +163,8 @@ export interface Filters {
   available: AvailabilityFilter;
   minPrice: string;
   maxPrice: string;
+  /** KYC-verified landlords only (Room.verified). */
+  verified: boolean;
 }
 
 // Filters as sent to the service layer — every field optional.
@@ -449,4 +451,34 @@ export interface FraudReport {
   signals: FraudSignal[];
   createdAt: string;
   updatedAt: string;
+}
+
+// ---- KYC verification (documents + admin review panel) ----
+
+export type KycDocType = "nid" | "passport";
+export type KycDocStatus = "pending" | "approved" | "rejected";
+
+export interface KycDocument {
+  id: number;
+  docType: KycDocType;
+  docTypeDisplay: string;
+  /** Private file URL — only the owner and admins can fetch it. */
+  fileUrl: string;
+  status: KycDocStatus;
+  statusDisplay: string;
+  reviewNote: string;
+  createdAt: string;
+  reviewedAt: string | null;
+}
+
+/** One applicant in the admin KYC review panel. */
+export interface KycApplication {
+  id: number;
+  username: string;
+  email: string;
+  name: string;
+  phone: string;
+  role: string;
+  nidVerified: boolean;
+  documents: KycDocument[];
 }

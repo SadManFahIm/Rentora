@@ -3,25 +3,29 @@
 1. An unverified landlord publishes a room -> the listing reports
    ``verified=False`` and ``owner.nid_verified=False``, and the fraud
    auto-scan flags the "unverified owner" signal.
-2. An admin approves the landlord's KYC (``nid_verified=True`` — an admin
-   action; there is deliberately no self-service endpoint) -> the users
+2. An admin approves the landlord's KYC (``nid_verified=True``) -> the users
    signal flips ``Room.verified`` on every one of the landlord's listings.
 3. The listing API now carries the badge data and a re-scan drops the
    unverified-owner signal.
 4. Revoking verification removes the badges again.
 5. Roommate matching exposes the KYC state so verified users stand out.
 
-The admin step uses ``user.save()`` on purpose: ``QuerySet.update()`` skips
-signals, and this test is exactly about the signal firing.
+The later half of this module drives the *admin review panel*: document
+uploads (multipart), the pending queue, and approve/reject — all through
+HTTP, the way the browser does.
 """
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import tag
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from audit.models import AuditLogEntry
 from fraud.models import FraudReport, FraudSignal
+from notifications.models import Notification
 from rooms.models import Room
+from users.models import KycDocument
 
 User = get_user_model()
 
@@ -186,3 +190,236 @@ class KYCVerifiedBadgeE2ETest(APITestCase):
         by_username = {m["profile"]["user"]["username"]: m["profile"]["user"] for m in res.data}
         self.assertTrue(by_username["verified_owner"]["nid_verified"])
         self.assertFalse(by_username["unverified_owner"]["nid_verified"])
+
+
+@tag("e2e")
+class KycAdminPanelE2ETest(APITestCase):
+    """Document upload + admin review panel, all through the real API."""
+
+    def setUp(self):
+        self.landlord = User.objects.create_user(
+            username="panel_landlord",
+            email="panel_landlord@example.com",
+            password="test12345",
+            role=User.Role.LANDLORD,
+            nid_verified=False,
+        )
+        self.admin = User.objects.create_user(
+            username="panel_admin",
+            email="panel_admin@example.com",
+            password="test12345",
+            role=User.Role.ADMIN,
+            nid_verified=True,
+        )
+
+    def _auth(self, user):
+        self.client.force_authenticate(user=user)
+
+    def _upload(self, user, doc_type="nid", name="nid.jpg"):
+        self._auth(user)
+        res = self.client.post(
+            "/api/v1/users/kyc/documents/",
+            {
+                "doc_type": doc_type,
+                "file": SimpleUploadedFile(name, b"fake-document-bytes", content_type="image/jpeg"),
+            },
+            format="multipart",
+        )
+        return res
+
+    def _review(self, user, approved, note=""):
+        self._auth(user)
+        return self.client.post(
+            f"/api/v1/users/kyc/{self.landlord.pk}/review/",
+            {"approved": approved, "note": note},
+            format="json",
+        )
+
+    def _publish_room(self):
+        self._auth(self.landlord)
+        res = self.client.post(
+            "/api/v1/rooms/",
+            {
+                "title": "Panel Studio",
+                "description": "A studio waiting on KYC approval.",
+                "room_type": "studio",
+                "price": "11000.00",
+                "area": "Mirpur",
+                "address": "4 Mirpur Road",
+                "lat": "23.8069",
+                "lng": "90.3687",
+                "amenities": ["WiFi"],
+                "gender_preference": "any",
+                "size_sqft": 300,
+                "is_available": True,
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
+        return Room.objects.get(pk=res.data["id"])
+
+    def test_landlord_uploads_and_owns_document(self):
+        res = self._upload(self.landlord)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
+        self.assertEqual(res.data["status"], "pending")
+        self.assertEqual(res.data["doc_type"], "nid")
+        # The file URL points at the authenticated endpoint, not the public
+        # MEDIA_URL — the privacy contract of the KYC documents.
+        self.assertIn("/users/kyc/documents/", res.data["file"])
+        self.assertIn("/file/", res.data["file"])
+
+        # GET my documents returns exactly the caller's own.
+        self._auth(self.landlord)
+        res = self.client.get("/api/v1/users/kyc/documents/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res.data), 1)
+        self.assertEqual(res.data[0]["id"], KycDocument.objects.get(user=self.landlord).pk)
+
+    def test_documents_are_private_to_owner_and_admin(self):
+        """A second non-admin user sees no foreign documents, and cannot fetch
+        the landlord's file bytes (404 — no existence leak)."""
+        res = self._upload(self.landlord)
+        file_path = res.data["file"].replace("http://testserver", "")
+
+        # Anonymous: the file endpoint demands auth.
+        self.client.force_authenticate(user=None)
+        res = self.client.get(file_path)
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        # Another tenant: own list is empty and the file 404s for them.
+        other = User.objects.create_user(
+            username="other_tenant",
+            email="other_tenant@example.com",
+            password="test12345",
+        )
+        self._auth(other)
+        res = self.client.get("/api/v1/users/kyc/documents/")
+        self.assertEqual(len(res.data), 0)
+        res = self.client.get(file_path)
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+        # The owner can still fetch the bytes.
+        self._auth(self.landlord)
+        res = self.client.get(file_path)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(b"".join(res.streaming_content), b"fake-document-bytes")
+
+    def test_non_admin_cannot_access_panel(self):
+        self._upload(self.landlord)
+        self._auth(self.landlord)
+        res = self.client.get("/api/v1/users/kyc/pending/")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        res = self.client.post(
+            f"/api/v1/users/kyc/{self.landlord.pk}/review/",
+            {"approved": True},
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_admin_approves_kyc_through_panel(self):
+        self._upload(self.landlord)
+        room = self._publish_room()
+
+        # Pending queue lists the landlord with the document attached.
+        self._auth(self.admin)
+        res = self.client.get("/api/v1/users/kyc/pending/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        usernames = {app["username"] for app in res.data}
+        self.assertIn(self.landlord.username, usernames)
+        entry = next(app for app in res.data if app["username"] == self.landlord.username)
+        self.assertFalse(entry["nid_verified"])
+        self.assertEqual(len(entry["documents"]), 1)
+        self.assertEqual(entry["documents"][0]["status"], "pending")
+
+        # Approve -> verified, document approved, audited, landlord notified.
+        res = self._review(self.admin, True, note="Docs look genuine")
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.landlord.refresh_from_db()
+        self.assertTrue(self.landlord.nid_verified)
+
+        doc = KycDocument.objects.get(user=self.landlord)
+        self.assertEqual(doc.status, KycDocument.Status.APPROVED)
+        self.assertEqual(doc.review_note, "Docs look genuine")
+
+        self.assertTrue(
+            AuditLogEntry.objects.filter(
+                action="kyc.approved", target_type="users.User", target_id=str(self.landlord.pk)
+            ).exists()
+        )
+        self.assertTrue(
+            Notification.objects.filter(
+                user=self.landlord, notification_type="kyc_approved"
+            ).exists()
+        )
+
+        # The listing badge flipped and a re-scan drops the fraud signal.
+        self._auth(self.landlord)
+        res = self.client.get(f"/api/v1/rooms/{room.pk}/")
+        self.assertTrue(res.data["verified"])
+        self.assertTrue(res.data["owner"]["nid_verified"])
+        res = self.client.post(f"/api/v1/fraud/rooms/{room.pk}/scan/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        report = FraudReport.objects.get(room=room)
+        self.assertNotIn(
+            FraudSignal.Detector.UNVERIFIED_OWNER, {s.detector for s in report.signals.all()}
+        )
+
+    def test_admin_reject_marks_document_and_audits(self):
+        self._upload(self.landlord)
+        res = self._review(self.admin, False, note="Blurry scan — please re-upload")
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+
+        self.landlord.refresh_from_db()
+        self.assertFalse(self.landlord.nid_verified)
+        doc = KycDocument.objects.get(user=self.landlord)
+        self.assertEqual(doc.status, KycDocument.Status.REJECTED)
+        self.assertEqual(doc.review_note, "Blurry scan — please re-upload")
+        self.assertTrue(AuditLogEntry.objects.filter(action="kyc.rejected").exists())
+        self.assertTrue(
+            Notification.objects.filter(
+                user=self.landlord, notification_type="kyc_rejected"
+            ).exists()
+        )
+
+        # Rejected applicant no longer appears in the pending queue.
+        self._auth(self.admin)
+        res = self.client.get("/api/v1/users/kyc/pending/")
+        self.assertNotIn(self.landlord.username, {app["username"] for app in res.data})
+
+    def test_upload_rejects_non_image_or_pdf(self):
+        """Server-side guardrail: only images/PDFs up to 5 MB are accepted."""
+        self._auth(self.landlord)
+        res = self.client.post(
+            "/api/v1/users/kyc/documents/",
+            {
+                "doc_type": "nid",
+                "file": SimpleUploadedFile(
+                    "evil.exe", b"MZ", content_type="application/x-msdownload"
+                ),
+            },
+            format="multipart",
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.data)
+        self.assertIn("file", res.data)
+        self.assertFalse(KycDocument.objects.filter(user=self.landlord).exists())
+
+    def test_approve_then_revoke_flips_badge_twice(self):
+        self._upload(self.landlord)
+        room = self._publish_room()
+
+        self._review(self.admin, True)
+        self._auth(self.landlord)
+        res = self.client.get(f"/api/v1/rooms/{room.pk}/")
+        self.assertTrue(res.data["verified"])
+
+        # Admin revokes verification -> badges come back off.
+        self._auth(self.admin)
+        res = self._review(self.admin, False, note="Suspicious re-submission")
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.landlord.refresh_from_db()
+        self.assertFalse(self.landlord.nid_verified)
+
+        self._auth(self.landlord)
+        res = self.client.get(f"/api/v1/rooms/{room.pk}/")
+        self.assertFalse(res.data["verified"])
+        self.assertFalse(res.data["owner"]["nid_verified"])
