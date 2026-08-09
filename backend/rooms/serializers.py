@@ -257,6 +257,11 @@ class RoomCreateUpdateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         uploaded_images = validated_data.pop("uploaded_images", [])
+        # A listing from an already-KYC-verified landlord starts verified
+        # (``serializer.save(owner=...)`` puts the owner into validated_data).
+        # The seed command uses ``Room.objects.create`` directly, so its
+        # hand-tuned ``verified`` values are unaffected by this default.
+        validated_data.setdefault("verified", validated_data["owner"].nid_verified)
         room = Room.objects.create(**validated_data)
         self._save_images(room, uploaded_images)
         return room

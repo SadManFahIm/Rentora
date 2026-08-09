@@ -97,11 +97,15 @@ jobs:
 
   e2e:
     # Cross-app E2E suites (fraud auto-scan x booking, payments/tier
-    # promotions). Kept as their own job so an integration regression is
-    # visible at a glance and re-runnable independently, rather than buried
-    # inside the (coverage-gated) backend unit-test job.
-    name: E2E (fraud + payments)
+    # promotions, KYC/verified-badge chain). Kept as their own job so an
+    # integration regression is visible at a glance and re-runnable
+    # independently, rather than buried inside the (coverage-gated) backend
+    # unit-test job. Failures post a PR comment listing the failing tests.
+    name: E2E (fraud + payments + KYC)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     defaults:
       run:
         working-directory: backend
@@ -120,7 +124,45 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run E2E tests
-        run: python manage.py test --tag=e2e
+        id: e2e
+        # Never hard-fail here: the comment must be posted first, then a final
+        # step fails the job (so the PR still shows a red required check).
+        continue-on-error: true
+        run: |
+          set +e
+          python manage.py test --tag=e2e 2>&1 | tee e2e-report.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Build E2E failure comment
+        if: steps.e2e.outputs.exit_code != '0' && github.event_name == 'pull_request'
+        run: |
+          FAILURES=$(grep -cE "^(FAIL|ERROR):" e2e-report.txt || echo 0)
+          {
+            echo "## ❌ E2E tests failed"
+            echo ""
+            echo "**$FAILURES failing test(s)** — run: \`python manage.py test --tag=e2e\`"
+            echo ""
+            echo '<details><summary>Click to expand the failing tests</summary>'
+            echo ''
+            echo '```'
+            grep -E "^(FAIL|ERROR):" e2e-report.txt || echo "(no FAIL/ERROR lines captured)"
+            echo '```'
+            echo '</details>'
+          } > e2e-comment.md
+
+      - name: Post E2E failure comment
+        # Fork PRs get a read-only GITHUB_TOKEN, so commenting can fail there
+        # (office fork -> personal repo PRs). Never fail the check for it.
+        if: steps.e2e.outputs.exit_code != '0' && github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        continue-on-error: true
+        with:
+          path: e2e-comment.md
+
+      - name: Fail the job on E2E failure
+        if: steps.e2e.outputs.exit_code != '0'
+        run: exit 1
 
   coverage-summary:
     name: Coverage summary
