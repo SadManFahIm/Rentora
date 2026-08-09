@@ -57,6 +57,7 @@ class CustomUserDetailsSerializer(UserDetailsSerializer):
             "phone",
             "avatar",
             "role",
+            "is_staff",
             "gender",
             "nid_verified",
             "bio",
@@ -214,6 +215,20 @@ class KycReviewRequestSerializer(serializers.Serializer):
 
     approved = serializers.BooleanField()
     note = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class KycAuditEntrySerializer(serializers.Serializer):
+    """One KYC decision from the append-only audit log, shaped for the admin
+    panel's history view (who decided, on whom, when, with what note)."""
+
+    id = serializers.IntegerField()
+    action = serializers.CharField()
+    actor_username = serializers.CharField()
+    actor_name = serializers.CharField()
+    user_id = serializers.IntegerField(allow_null=True)
+    user_name = serializers.CharField()
+    note = serializers.CharField(default="")
+    created_at = serializers.DateTimeField()
 
 
 class PasskeySerializer(serializers.Serializer):

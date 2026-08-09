@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Check, CheckCheck, Paperclip, Send } from "lucide-react";
+import { Check, CheckCheck, Paperclip, Send, ShieldCheck } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { useChatMessages, useChatRooms, useUploadChatFile } from "../../hooks/useChat";
 import { useWebSocket } from "../../hooks/useWebSocket";
@@ -39,6 +39,17 @@ function initialsOf(u: ChatUser | null | undefined): string {
   if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+/** Small KYC trust badge shown next to a verified participant's name. */
+function VerifiedMark({ verified }: { verified?: boolean }) {
+  if (!verified) return null;
+  return (
+    <ShieldCheck
+      className="size-3.5 shrink-0 text-emerald-500"
+      aria-label="KYC-verified landlord"
+    />
+  );
 }
 
 function Avatar({
@@ -229,8 +240,11 @@ export default function ChatWindow() {
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="truncate text-sm font-semibold text-foreground">
-                      {displayName(room.otherParticipant)}
+                    <div className="flex min-w-0 items-center gap-1">
+                      <span className="truncate text-sm font-semibold text-foreground">
+                        {displayName(room.otherParticipant)}
+                      </span>
+                      <VerifiedMark verified={room.otherParticipant?.nidVerified} />
                     </div>
                     {room.unreadCount > 0 && (
                       <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-orange-600 px-1 text-[10px] font-bold text-white">
@@ -268,8 +282,11 @@ export default function ChatWindow() {
                 fallback={initialsOf(selectedRoom.otherParticipant)}
               />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-bold text-foreground">
-                  {displayName(selectedRoom.otherParticipant)}
+                <div className="flex items-center gap-1">
+                  <span className="truncate text-sm font-bold text-foreground">
+                    {displayName(selectedRoom.otherParticipant)}
+                  </span>
+                  <VerifiedMark verified={selectedRoom.otherParticipant?.nidVerified} />
                 </div>
                 <div className="text-xs text-gray-600 dark:text-gray-400">
                   {selectedRoom.isOtherUserOnline ? (

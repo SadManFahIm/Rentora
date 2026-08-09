@@ -198,8 +198,9 @@ export default function Dashboard() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  // The KYC review tab is admin-only; the KYC upload card is for everyone else.
-  const isAdmin = user?.role === "admin";
+  // The KYC review tab is admin-only (mirrors the backend's staff-or-admin
+  // check); the KYC upload card is for everyone else.
+  const isAdmin = user?.role === "admin" || user?.isStaff === true;
   const visibleTabs = isAdmin ? TABS : TABS.filter((t) => t !== "kyc");
 
   const { data: stats, isLoading: statsLoading } = useDashboard();

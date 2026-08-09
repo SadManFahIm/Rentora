@@ -2,6 +2,7 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    KycAuditTrailView,
     KycDocumentFileView,
     KycDocumentListCreateView,
     KycPendingApplicationsView,
@@ -22,6 +23,7 @@ urlpatterns = [
         name="kyc-document-file",
     ),
     path("kyc/pending/", KycPendingApplicationsView.as_view(), name="kyc-pending"),
+    path("kyc/audit/", KycAuditTrailView.as_view(), name="kyc-audit"),
     path("kyc/<int:user_id>/review/", KycReviewView.as_view(), name="kyc-review"),
     *router.urls,
 ]

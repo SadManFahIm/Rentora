@@ -65,6 +65,8 @@ export interface User {
   firstName?: string;
   lastName?: string;
   role?: UserRole;
+  /** Django staff — treated as admin in the UI (mirrors the backend check). */
+  isStaff?: boolean;
   avatar?: string | null;
   phone?: string;
   bio?: string;
@@ -96,6 +98,8 @@ export interface ChatUser {
   firstName: string;
   lastName: string;
   avatar: string | null;
+  /** KYC-verified — shown as a trust badge next to the participant's name. */
+  nidVerified?: boolean;
 }
 
 export type ChatMessageType = "text" | "image" | "file" | "system";
@@ -481,4 +485,16 @@ export interface KycApplication {
   role: string;
   nidVerified: boolean;
   documents: KycDocument[];
+}
+
+/** One KYC decision in the admin history view (append-only audit trail). */
+export interface KycAuditEntry {
+  id: number;
+  action: "kyc.approved" | "kyc.rejected";
+  actorUsername: string;
+  actorName: string;
+  userId: number | null;
+  userName: string;
+  note: string;
+  createdAt: string;
 }

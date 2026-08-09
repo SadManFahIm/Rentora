@@ -98,6 +98,22 @@ const CAPTURES = [
     out: "auth-login.png",
     waitMs: 3500,
   },
+  // KYC document upload — the landlord's KycCard (Dashboard -> Overview).
+  {
+    user: "kyc.demo",
+    route: "/dashboard",
+    out: "kyc-upload.png",
+    waitMs: 4500,
+  },
+  // KYC admin review panel + decision trail (Dashboard -> KYC -> History).
+  {
+    user: "admin",
+    route: "/dashboard?tab=kyc",
+    click: "history",
+    out: "kyc-admin-panel.png",
+    waitMs: 4500,
+    afterClickMs: 2500,
+  },
   // Email-OTP 2FA step: enable 2FA, sign in through the REAL login form
   // (token injection would bypass the challenge), screenshot the code step,
   // then disable 2FA again so the demo accounts stay in their default state.
