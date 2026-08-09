@@ -443,3 +443,63 @@ class KycAdminPanelE2ETest(APITestCase):
         res = self.client.get(f"/api/v1/rooms/{room.pk}/")
         self.assertFalse(res.data["verified"])
         self.assertFalse(res.data["owner"]["nid_verified"])
+
+    def test_reject_then_upload_then_approve_full_loop(self):
+        """The complete landlord lifecycle: upload -> reject (with note) -> the
+        landlord sees the note -> re-uploads -> approve -> verified badge."""
+        room = self._publish_room()
+
+        # 1. First attempt: rejected with an actionable note.
+        first = self._upload(self.landlord)
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+        res = self._review(self.admin, False, note="Blurry scan — please re-upload")
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+
+        # 2. The landlord's document list exposes the rejection + the note.
+        self._auth(self.landlord)
+        res = self.client.get("/api/v1/users/kyc/documents/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        docs = {d["id"]: d for d in res.data}
+        first_doc = docs[first.data["id"]]
+        self.assertEqual(first_doc["status"], "rejected")
+        self.assertEqual(first_doc["review_note"], "Blurry scan — please re-upload")
+
+        # Still unverified, and the room carries no badge yet.
+        self.landlord.refresh_from_db()
+        self.assertFalse(self.landlord.nid_verified)
+        res = self.client.get(f"/api/v1/rooms/{room.pk}/")
+        self.assertFalse(res.data["verified"])
+
+        # 3. Re-upload a fresh document -> pending again, queue shows the user.
+        second = self._upload(self.landlord, doc_type="passport", name="passport.jpg")
+        self.assertEqual(second.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second.data["status"], "pending")
+
+        self._auth(self.admin)
+        res = self.client.get("/api/v1/users/kyc/pending/")
+        self.assertIn(self.landlord.username, {app["username"] for app in res.data})
+
+        # 4. Admin approves -> verified; both docs resolved; badge flips.
+        res = self._review(self.admin, True, note="Second attempt is clear")
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.landlord.refresh_from_db()
+        self.assertTrue(self.landlord.nid_verified)
+
+        self._auth(self.landlord)
+        res = self.client.get(f"/api/v1/rooms/{room.pk}/")
+        self.assertTrue(res.data["verified"])
+        self.assertTrue(res.data["owner"]["nid_verified"])
+
+        # The audit trail tells the whole story: rejected, then approved.
+        self._auth(self.admin)
+        res = self.client.get("/api/v1/users/kyc/audit/")
+        self.assertEqual([e["action"] for e in res.data], ["kyc.approved", "kyc.rejected"])
+        self.assertEqual(res.data[0]["note"], "Second attempt is clear")
+        self.assertEqual(res.data[1]["note"], "Blurry scan — please re-upload")
+
+        # The re-uploaded document is approved; the rejected first one stays.
+        second_doc = KycDocument.objects.get(pk=second.data["id"])
+        self.assertEqual(second_doc.status, KycDocument.Status.APPROVED)
+        self.assertEqual(second_doc.review_note, "Second attempt is clear")
+        first_doc_db = KycDocument.objects.get(pk=first.data["id"])
+        self.assertEqual(first_doc_db.status, KycDocument.Status.REJECTED)

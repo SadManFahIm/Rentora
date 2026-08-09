@@ -46,6 +46,13 @@ const rejectedDoc: KycDocument = {
   reviewedAt: "2026-01-06T10:00:00Z",
 };
 
+const emptyNoteRejectedDoc: KycDocument = {
+  ...rejectedDoc,
+  id: 3,
+  reviewNote: "",
+  reviewedAt: "2026-01-07T10:00:00Z",
+};
+
 function renderKycCard(userRole: "landlord" | "tenant" = "landlord") {
   mockUseApp.mockReturnValue({ user: { role: userRole, nidVerified: false } });
   return render(<KycCard />);
@@ -96,6 +103,63 @@ describe("KycCard", () => {
 
     expect(screen.getByText("Rejected")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Upload" })).toBeInTheDocument();
+  });
+
+  it("shows the reviewer's rejection note so the landlord knows what to fix", () => {
+    mockUseDocs.mockReturnValue({ data: [rejectedDoc], isLoading: false });
+    renderKycCard();
+
+    expect(screen.getByText("Why it was rejected")).toBeInTheDocument();
+    expect(screen.getByText(/Blurry scan — please re-upload/)).toBeInTheDocument();
+    expect(screen.getByText(/was not approved/)).toBeInTheDocument();
+  });
+
+  it("does not show the rejection banner while a newer document is pending", () => {
+    mockUseDocs.mockReturnValue({ data: [rejectedDoc, pendingDoc], isLoading: false });
+    renderKycCard();
+
+    expect(screen.queryByText("Why it was rejected")).not.toBeInTheDocument();
+    expect(screen.getByText(/under review/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Upload" })).not.toBeInTheDocument();
+  });
+
+  it("shows the note from the most recently rejected document", () => {
+    const olderRejected: KycDocument = {
+      ...rejectedDoc,
+      id: 4,
+      reviewNote: "Older rejection — id unreadable",
+      reviewedAt: "2026-01-05T10:00:00Z",
+    };
+    mockUseDocs.mockReturnValue({
+      data: [olderRejected, rejectedDoc],
+      isLoading: false,
+    });
+    renderKycCard();
+
+    expect(screen.getByText(/Blurry scan — please re-upload/)).toBeInTheDocument();
+    expect(screen.queryByText(/Older rejection/)).not.toBeInTheDocument();
+  });
+
+  it("handles a rejection with no note without dangling 'note below' copy", () => {
+    mockUseDocs.mockReturnValue({ data: [emptyNoteRejectedDoc], isLoading: false });
+    renderKycCard();
+
+    expect(screen.queryByText("Why it was rejected")).not.toBeInTheDocument();
+    expect(screen.getByText(/Upload a clear copy to try again/)).toBeInTheDocument();
+    expect(screen.queryByText(/Review the note below/)).not.toBeInTheDocument();
+  });
+
+  it("shows the verified state even when an old rejected doc exists", () => {
+    mockUseApp.mockReturnValue({ user: { role: "landlord", nidVerified: true } });
+    mockUseDocs.mockReturnValue({ data: [rejectedDoc], isLoading: false });
+    render(<KycCard />);
+
+    expect(
+      screen.getByText(
+        "Verified — your listings carry the trust badge and rank above unverified landlords."
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Why it was rejected")).not.toBeInTheDocument();
   });
 
   it("uploads the chosen file with the selected document type", async () => {
