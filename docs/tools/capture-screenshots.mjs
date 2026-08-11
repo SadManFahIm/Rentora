@@ -205,9 +205,10 @@ const CAPTURES = [
     // Phase 11 — AI smart search: the query arrives via the URL (?q=...),
     // then afterLoad flips the AI Search toggle on, so the smart request
     // carries the query and the "AI understood" chips (budget, area) render
-    // with the ranked results.
+    // with the ranked results. The Bangla *word* query (দশ হাজার + উত্তরা)
+    // exercises the number-word + area-alias parsing added in PR #32.
     user: "rahim.hossain",
-    route: "/rooms?q=%E0%A7%A7%E0%A7%A6%20%E0%A6%B9%E0%A6%BE%E0%A6%9C%E0%A6%BE%E0%A6%B0%20%E0%A6%8F%E0%A6%B0%20%E0%A6%AE%E0%A6%A7%E0%A7%8D%E0%A6%AF%E0%A7%87%20uttara%20student%20room",
+    route: "/rooms?q=%E0%A6%A6%E0%A6%B6%20%E0%A6%B9%E0%A6%BE%E0%A6%9C%E0%A6%BE%E0%A6%B0%20%E0%A6%8F%E0%A6%B0%20%E0%A6%AE%E0%A6%A7%E0%A7%8D%E0%A6%AF%E0%A7%87%20%E0%A6%89%E0%A6%A4%E0%A7%8D%E0%A6%A4%E0%A6%B0%E0%A6%BE",
     out: "phase11-ai-search.png",
     waitMs: 6000,
     beforeCapture: `(() => {
