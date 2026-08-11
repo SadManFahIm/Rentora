@@ -55,6 +55,57 @@ jobs:
           path: backend/coverage.xml
           if-no-files-found: error
 
+  api-contract:
+    # Live contract check of docs/api-reference.md against a running server
+    # (docs/tools/api-verify.py). Catches drift between the hand-maintained
+    # reference and the real API before it reaches main.
+    name: API contract (live docs check)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Migrate database
+        run: python manage.py migrate --noinput
+
+      - name: Live API contract check
+        # Boot a dev server on 8002 (fresh DB — the verify script bootstraps
+        # its own fixture room), wait for readiness, run the endpoint suite.
+        run: |
+          python manage.py runserver 127.0.0.1:8002 --noreload > /tmp/api-server.log 2>&1 &
+          SERVER_PID=$!
+          READY=0
+          for i in $(seq 1 30); do
+            if curl -fsS -o /dev/null http://127.0.0.1:8002/api/v1/schema/ 2>/dev/null; then
+              echo "server ready after ~$((i * 2))s"
+              READY=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$READY" != "1" ]; then
+            echo "::error::API server never became ready"
+            tail -50 /tmp/api-server.log
+            exit 1
+          fi
+          API_BASE=http://127.0.0.1:8002/api/v1 python ../docs/tools/api-verify.py
+          EXIT=$?
+          kill "$SERVER_PID" 2>/dev/null || true
+          exit "$EXIT"
+
   frontend:
     name: Frontend (Vitest + build)
     runs-on: ubuntu-latest
