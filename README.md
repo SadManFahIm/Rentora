@@ -7,10 +7,33 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-343%20(170%20BE%20%2B%20173%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-414%20(229%20BE%20%2B%20185%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+---
+
+## 📚 Table of Contents
+
+- [Product Overview](#-product-overview)
+- [Changelog — Phase 9 · 10 · 11](#changelog)
+- [What's New in v2.0](#changelog--whats-new-in-v20)
+- [Delivery Roadmap](#-delivery-roadmap)
+- [Features](#-features)
+- [Tech Stack](#-tech-stack)
+- [Architecture](#-architecture)
+- [Project Structure](#-project-structure)
+- [Quality Engineering](#-quality-engineering)
+- [Getting Started](#-getting-started)
+- [API Endpoints](#-api-endpoints)
+- [Security](#-security)
+- [Passkeys / WebAuthn](#-passkeys--webauthn--shipped)
+- [Demo Users](#-demo-users)
+- [Screenshots](#-screenshots)
+- [Team Workflow](#-team-workflow)
+- [Developer](#-developer)
+- [License](#-license)
 
 ---
 
@@ -159,14 +182,17 @@
 | **6**     | AI — recommendation engine (content/collaborative/hybrid) + price insight + fair-price prediction                                                    | ✅ Shipped           |
 | **Bonus** | Roommate matching (profile + scoring + request flow)                                                                                                 | ✅ Shipped           |
 | **Bonus** | Fraud engine (6 detectors, auto-scan, review queue)                                                                                                  | ✅ Shipped           |
-| **Bonus** | Paid listing tiers (Free/Featured/Premium monetization)                                                                                              | ✅ Shipped           |     | **Bonus** | Two-factor authentication (email OTP, password-gated enable) | ✅ Shipped |
-| **Bonus** | KYC verification + verified-landlord badge + document upload + audit trail | ✅ Shipped |
+| **Bonus** | Paid listing tiers (Free/Featured/Premium monetization)                                                                                              | ✅ Shipped           |
+| **Bonus** | Two-factor authentication (email OTP, password-gated enable)                                                                                         | ✅ Shipped           |
+| **Bonus** | KYC verification + verified-landlord badge + document upload + audit trail                                                                           | ✅ Shipped           |
 | **Bonus** | 2FA recovery codes (10 one-time backups) + email-verified enable                                                                                     | ✅ Shipped           |
 | **Bonus** | Passkeys / WebAuthn (passwordless login, conditional UI)                                                                                             | ✅ Shipped           |
 | **Bonus** | Geo backend (bbox / radius / landmark queries)                                                                                                       | ✅ Shipped           |
 | **7**     | Map (MapLibre GL, clustering, split view, radius + travel overlay, street search, metro routes, room-count API, directions + metro ETA + area chips) | ✅ Shipped           |
 | **8**     | Docker Compose + production deployment + HTTPS                                                                                                       | ⏳ Next — CI/CD done |
 | **9**     | Reliability & observability — Sentry, JSON logs, Celery + beat, branded emails, audit log, backups, KYC SLA alerts + trend chart                    | ✅ Shipped           |
+| **10**    | Growth & personalization — browser push, search v2 (full-text + saved searches), similar-rooms AI, referral program, wishlist sharing, landlord insights, reviews v2 | ✅ Shipped |
+| **11**    | Search & Discovery v2 — ✨ AI smart search (Bangla+English NL parser, semantic ranking, visual search), Dhaka expansion                              | ✅ Shipped           |
 
 ---
 
@@ -228,8 +254,7 @@
 | zxcvbn-ts               | Password entropy + strength                |
 | Pwned Passwords (HIBP)  | k-anonymity breach lookup                  |
 | Sonner                  | Toast notifications                        |
-| Vitest                  | Unit tests + coverage                      |     | SHA-256 OTP challenge | Email 2FA (hashed codes) |
-| py_webauthn             | WebAuthn/FIDO2 server-side                 |
+| Vitest                  | Unit tests + coverage                      |
 | @simplewebauthn/browser | Passkey ceremony client                    |
 
 ### Backend
@@ -251,6 +276,10 @@
 | Redis                         | Channel layer + caching + Celery broker |
 | Celery                        | Async task queue + beat scheduler       |
 | Sentry (sentry-sdk)           | Error tracking (backend + frontend)     |
+| py_webauthn                   | WebAuthn/FIDO2 server-side (passkeys)   |
+| scikit-learn                  | TF-IDF + LSA semantic search            |
+| Pillow (pHash)                | Visual similarity (look-alike rooms)    |
+| pywebpush                     | Browser push notifications (VAPID)      |
 | pytest / unittest             | Backend tests                           |
 
 ---
@@ -261,21 +290,27 @@
 ┌──────────────────────────────────────────────────────────────┐
 │                        Frontend (React SPA)                    │
 │  Pages ── hooks (TanStack Query) ── services ── Axios API      │
-│  Zustand stores (wishlist/notifications) ── WebSocket client   │
+│  Zustand stores ── WebSocket client ── service worker (push)   │
+│  MapLibre GL (map) · WebAuthn (passkeys) · zxcvbn (strength)   │
 └───────────────┬──────────────────────────────┬────────────────┘
                 │ HTTP /api/v1/*                │ WS /ws/chat/*
 ┌───────────────▼──────────────────────────────▼────────────────┐
 │                    Django (ASGI — Daphne)                      │
 │  ┌────────────┐ ┌────────────┐ ┌────────────────────────────┐ │
 │  │ JWT Auth   │ │ REST apps  │ │ Channels consumer (chat)   │ │
-│  │ dj-rest-   │ │ rooms,     │ │ + presence + notifications │ │
-│  │ auth +     │ │ bookings,  │ └────────────────────────────┘ │
-│  │ allauth    │ │ payments,  │ ┌────────────────────────────┐ │
+│  │ 2FA +      │ │ rooms,     │ │ + presence + notifications │ │
+│  │ passkeys   │ │ bookings,  │ └────────────────────────────┘ │
+│  │ (WebAuthn) │ │ payments,  │ ┌────────────────────────────┐ │
 │  └────────────┘ │ roommates, │ │ Fraud engine (6 detectors)│ │
-│  ┌────────────┐ │ fraud, AI  │ └────────────────────────────┘ │
-│  │ Exception  │ │ pricing…   │ ┌────────────────────────────┐ │
-│  │ envelope   │ └────────────┘ │ Recommendations engine     │ │
-│  └────────────┘                 └────────────────────────────┘ │
+│  ┌────────────┐ │ fraud, AI, │ └────────────────────────────┘ │
+│  │ Exception  │ │ saved-     │ ┌────────────────────────────┐ │
+│  │ envelope   │ │ searches…  │ │ Semantic search (TF-IDF +  │ │
+│  └────────────┘ └────────────┘ │ LSA) · NL parser · pHash   │ │
+│  ┌────────────┐                 └────────────────────────────┘ │
+│  │ Audit log  │  ┌──────────────────────────────────────────┐ │
+│  │ (append-   │  │ Celery + Beat (push, alerts, re-scan)    │ │
+│  │ only)      │  └──────────────────────────────────────────┘ │
+│  └────────────┘  Sentry (errors) · JSON logs · email templates│
 └───────────────┬──────────────────────────────────────────────┘
                 │ ORM / cache / channel layer
         ┌───────▼──────────┐   ┌──────────┐   ┌──────────────┐
@@ -385,11 +420,34 @@ If a check fails, the commit is **blocked** — fix and commit again (bypass wit
 | `ci.yml`               | Backend — Django tests + coverage gate                      | every push / PR |
 | `ci.yml`               | Frontend — Vitest + coverage + `npm run build`              | every push / PR |
 | `ci.yml`               | Lint — ruff + ESLint + Prettier                             | every push / PR |
-| `coverage-summary.yml` | Posts a coverage **PR comment** (badge + file-level detail) | PRs             |     | `ci.yml` `coverage-history` job | Appends per-branch coverage history (`history-<branch>.csv` + SVG chart) to the `coverage-history` branch | pushes to main **and** PRs (same-repo; fork PRs skip) |
+| `coverage-summary.yml` | Posts a coverage **PR comment** (badge + file-level detail) | PRs             |
+| `ci.yml` `coverage-history` job | Appends per-branch coverage history (`history-<branch>.csv` + SVG chart) to the `coverage-history` branch | pushes to main **and** PRs (same-repo; fork PRs skip) |
 
 ---
 
 ## 🚀 Getting Started
+
+### Quick Start (TL;DR)
+
+```bash
+git clone https://github.com/SadmaFaahiim/Rentora.git && cd Rentora
+
+# Backend → http://localhost:8000
+cd backend
+python -m venv venv && venv\Scripts\activate   # (Linux/macOS: source venv/bin/activate)
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py seed_rooms                  # 20+ rooms + demo landlords (password: demo12345)
+python manage.py runserver
+
+# Frontend → http://localhost:3000 (new terminal)
+cd ../frontend
+npm install
+npm run dev
+```
+
+> 💡 `seed_rooms` also creates the demo users below — sign in with any username + `demo12345`.
+> No `.env` files are required; sensible defaults work out of the box.
 
 ### Prerequisites
 
@@ -500,6 +558,11 @@ Frontend runs at `http://localhost:3000`
 | PUT/PATCH | `/api/v1/rooms/:id/`       | Owner  | Update listing                                    |
 | DELETE    | `/api/v1/rooms/:id/`       | Owner  | Delete listing                                    |
 | GET       | `/api/v1/rooms/landmarks/` | Public | List landmarks (for `near_landmark`)              |
+| GET       | `/api/v1/rooms/summary/`   | Public | COUNT/AVG for the current viewport (map badge)    |
+| GET       | `/api/v1/rooms/geocode/?q=` | Public | Geocode a street/area (gazetteer + Nominatim)    |
+| GET       | `/api/v1/rooms/insights/`  | Owner  | Per-listing engagement + price vs area stats      |
+| POST      | `/api/v1/rooms/bulk/`      | Owner  | Bulk-create listings                              |
+| GET       | `/api/v1/rooms/tier-catalog/` | Public | Tier pricing + benefits (drives Promote UI)     |
 | GET       | `/api/v1/rooms/:id/similar-images/` | Public | Rooms whose primary photo looks like this one (pHash) |
 
 **Text filters:** `?area=Dhanmondi&room_type=studio&price__gte=5000&price__lte=15000&is_available=true&q=cozy&ordering=-price&owner=3`
@@ -526,6 +589,7 @@ Frontend runs at `http://localhost:3000`
 | ------ | --------------------------- | ------ | ----------------------------------------- |
 | GET    | `/api/v1/reviews/?room=:id` | Public | Reviews for a room                        |
 | POST   | `/api/v1/reviews/`          | Auth   | Create review (requires approved booking) |
+| GET    | `/api/v1/reviews/summary/?room=:id` | Public | Rating breakdown (5★ histogram + avg + verified badges) |
 
 ### Wishlist
 
@@ -533,6 +597,8 @@ Frontend runs at `http://localhost:3000`
 | ------ | -------------------------- | ---- | ---------------------------- |
 | GET    | `/api/v1/wishlist/`        | Auth | My wishlisted rooms          |
 | POST   | `/api/v1/wishlist/toggle/` | Auth | Toggle wishlist (add/remove) |
+| POST   | `/api/v1/wishlist/share-info/` | Auth | Get my public share token + link |
+| GET    | `/api/v1/wishlist/share/:token/` | Public | Public read-only wishlist (no personal info, 404 on bad token) |
 
 ### Notifications
 
@@ -542,6 +608,25 @@ Frontend runs at `http://localhost:3000`
 | PATCH  | `/api/v1/notifications/:id/`           | Auth | Mark as read     |
 | POST   | `/api/v1/notifications/mark-all-read/` | Auth | Mark all read    |
 | GET    | `/api/v1/notifications/unread-count/`  | Auth | Unread count     |
+| POST   | `/api/v1/notifications/push/subscribe/` | Auth | Register a browser push subscription (VAPID) |
+
+### Saved Searches
+
+| Method   | Endpoint                     | Auth | Description                          |
+| -------- | ---------------------------- | ---- | ------------------------------------ |
+| GET      | `/api/v1/saved-searches/`    | Auth | My saved searches                    |
+| POST     | `/api/v1/saved-searches/`    | Auth | Save the current filter set          |
+| PATCH    | `/api/v1/saved-searches/:id/` | Auth | Rename / toggle active              |
+| DELETE   | `/api/v1/saved-searches/:id/` | Auth | Delete a saved search                |
+| POST     | `/api/v1/saved-searches/:id/check/` | Auth | Manual "check now" for new matches |
+
+> A daily Celery beat task (`check_saved_searches`) notifies you when a **new** matching listing appears.
+
+### Users / Referral
+
+| Method | Endpoint              | Auth | Description                          |
+| ------ | --------------------- | ---- | ------------------------------------ |
+| GET    | `/api/v1/users/referral/` | Auth | My referral code, invite link + who joined |
 
 ### Dashboard
 
@@ -578,6 +663,7 @@ Frontend runs at `http://localhost:3000`
 | Method | Endpoint                           | Auth | Description                 |
 | ------ | ---------------------------------- | ---- | --------------------------- |
 | GET    | `/api/v1/recommendations/?limit=N` | Auth | Hybrid room recommendations |
+| GET    | `/api/v1/recommendations/similar/:id/` | Public | Content-based similar rooms (modal carousel, match % + reasons) |
 
 ### Pricing (AI)
 
@@ -689,6 +775,8 @@ Passwordless sign-in is live — the phishing-resistant successor to passwords +
 
 **Tips**
 
+- All seeded accounts are **landlords** — to explore the **tenant** side (browse, search, wishlist, book, chat), just **register a fresh account** from the login page (unique email required) or use the platform anonymously for browsing.
+- **Admin:** run `python manage.py createsuperuser` then open `http://localhost:8000/admin/` — the fraud review queue, KYC review, and the append-only audit trail live there.
 - Sign in with the **username** (e.g. `rahim.hossain`) **or** the email address (e.g. `rahim.hossain@rentora.com`) — both work.
 - `rahim.hossain` has a roommate profile — log in and open **Roommates** to see live match scores.
 - `tanvir.islam` has listings — open **Dashboard → Fraud** to see the risk cards and try **Re-scan**.
