@@ -57,6 +57,63 @@ UNIVERSITIES: tuple[Landmark, ...] = (
         23.8223,
         90.3644,
     ),
+    Landmark(
+        "jagannath",
+        "Jagannath University",
+        LandmarkKind.UNIVERSITY,
+        23.7098,
+        90.4120,
+    ),
+    Landmark("dmc", "Dhaka Medical College", LandmarkKind.UNIVERSITY, 23.7260, 90.3940),
+    Landmark(
+        "sau",
+        "Sher-e-Bangla Agricultural University",
+        LandmarkKind.UNIVERSITY,
+        23.7760,
+        90.3710,
+    ),
+    Landmark(
+        "aust",
+        "Ahsanullah University of Science & Technology",
+        LandmarkKind.UNIVERSITY,
+        23.7820,
+        90.4130,
+    ),
+    Landmark(
+        "diu",
+        "Daffodil International University",
+        LandmarkKind.UNIVERSITY,
+        23.7520,
+        90.3760,
+    ),
+    Landmark(
+        "stamford",
+        "Stamford University Bangladesh",
+        LandmarkKind.UNIVERSITY,
+        23.7520,
+        90.4110,
+    ),
+    Landmark(
+        "uiu",
+        "United International University",
+        LandmarkKind.UNIVERSITY,
+        23.7610,
+        90.3910,
+    ),
+    Landmark(
+        "miu",
+        "Manarat International University",
+        LandmarkKind.UNIVERSITY,
+        23.8300,
+        90.4250,
+    ),
+    Landmark(
+        "daffodil_uttara",
+        "Daffodil International University (Uttara)",
+        LandmarkKind.UNIVERSITY,
+        23.8750,
+        90.3800,
+    ),
 )
 
 # MRT Line 6, south from Uttara toward Motijheel — the stretch that actually

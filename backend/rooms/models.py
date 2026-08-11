@@ -24,12 +24,29 @@ class Room(models.Model):
         FEMALE = "female", "Female"
 
     class Area(models.TextChoices):
+        # Core areas (Phase 1) + the wider Dhaka sprawl (Phase 11) — the
+        # gazetteer in rooms/streets.py mirrors these so map search and the
+        # natural-language parser recognise the same place names.
         DHANMONDI = "Dhanmondi", "Dhanmondi"
         MIRPUR = "Mirpur", "Mirpur"
         GULSHAN = "Gulshan", "Gulshan"
         BANANI = "Banani", "Banani"
         MOHAMMADPUR = "Mohammadpur", "Mohammadpur"
         AZIMPUR = "Azimpur", "Azimpur"
+        UTTARA = "Uttara", "Uttara"
+        TEJGAON = "Tejgaon", "Tejgaon"
+        BADDA = "Badda", "Badda"
+        RAMPURA = "Rampura", "Rampura"
+        BANASREE = "Banasree", "Banasree"
+        KHILGAON = "Khilgaon", "Khilgaon"
+        MOTIJHEEL = "Motijheel", "Motijheel"
+        OLD_DHAKA = "Old Dhaka", "Old Dhaka"
+        BASHUNDHARA = "Bashundhara", "Bashundhara"
+        LALMATIA = "Lalmatia", "Lalmatia"
+        SHYAMOLI = "Shyamoli", "Shyamoli"
+        SAVAR = "Savar", "Savar"
+        KERANIGANJ = "Keraniganj", "Keraniganj"
+        TONGI = "Tongi", "Tongi"
 
     title = models.CharField(max_length=200)
     description = models.TextField()
@@ -112,3 +129,25 @@ class RoomImage(models.Model):
 
     def __str__(self):
         return f"Image for {self.room.title}"
+
+
+class RoomImageHash(models.Model):
+    """Perceptual-hash cache for image similarity search (Phase 11).
+
+    Computing an average hash over every room photo on every request is
+    wasteful, so each primary image's 64-bit hash is computed once and cached
+    here, keyed by the source file's mtime — when the file changes the hash is
+    recomputed. ``image_updated_at`` mirrors the file mtime at hash time.
+    """
+
+    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="image_hashes")
+    image = models.ForeignKey(RoomImage, on_delete=models.CASCADE, related_name="hash_entries")
+    phash_hex = models.CharField(max_length=16)  # 64-bit average hash, hex
+    image_updated_at = models.DateTimeField()  # source file mtime at hash time
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["phash_hex"], name="room_img_hash_idx")]
+
+    def __str__(self) -> str:
+        return f"hash {self.phash_hex} for {self.room.title}"

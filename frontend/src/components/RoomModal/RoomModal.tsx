@@ -8,6 +8,7 @@ import type { Room } from "../../types";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { VisuallyHidden } from "../ui/visually-hidden";
+import SimilarImages from "../SimilarImages/SimilarImages";
 import SimilarRooms from "../SimilarRooms/SimilarRooms";
 import ReviewsSection from "../ReviewsSection/ReviewsSection";
 import { useCreateBooking } from "../../hooks/useBookings";
@@ -219,6 +220,9 @@ export default function RoomModal({ room, onClose }: RoomModalProps) {
 
               {/* Reviews v2 — rating breakdown + landlord replies */}
               <ReviewsSection roomId={current.id} isOwner={current.ownerId === user?.id} />
+
+              {/* Visual look-alikes (photo similarity) */}
+              <SimilarImages roomId={current.id} onSelect={setCurrent} />
 
               {/* AI similar-rooms carousel */}
               <SimilarRooms roomId={current.id} currentRoomId={current.id} onSelect={setCurrent} />

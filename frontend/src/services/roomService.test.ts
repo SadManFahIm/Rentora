@@ -56,7 +56,7 @@ describe("roomService.getRooms params", () => {
     });
     expect(api.get).toHaveBeenCalledWith("/rooms/", {
       params: {
-        search: "studio",
+        q: "studio",
         area: "Banani",
         room_type: "studio",
         gender_preference: "female",
@@ -143,5 +143,63 @@ describe("roomService.createRoom", () => {
       is_available: true,
     });
     expect(room.id).toBe(7);
+  });
+});
+
+describe("roomService smart search", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("sends smart=1 with the q param and maps nl_parsed", async () => {
+    (api.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: {
+        count: 1,
+        next: null,
+        previous: null,
+        results: [apiRoom()],
+        nl_parsed: {
+          budget_max: 10000,
+          areas: ["Uttara"],
+          room_type: null,
+          gender: null,
+          months: ["July"],
+          hints: ["Budget ≤ ৳10,000", "Uttara", "move-in July"],
+        },
+      },
+    });
+
+    const result = await roomService.searchRoomsSmart({ query: "১০ হাজার uttara" });
+
+    expect(api.get).toHaveBeenCalledWith("/rooms/", {
+      params: { q: "১০ হাজার uttara", smart: "1" },
+    });
+    expect(result.rooms).toHaveLength(1);
+    expect(result.rooms[0].name).toBe("Sunlit Studio, Dhanmondi");
+    expect(result.nlParsed?.budget_max).toBe(10000);
+    expect(result.nlParsed?.hints).toContain("Uttara");
+  });
+
+  it("returns nlParsed null when the backend sends none", async () => {
+    (api.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: { count: 0, next: null, previous: null, results: [] },
+    });
+    const result = await roomService.searchRoomsSmart({ query: "x" });
+    expect(result.nlParsed).toBeNull();
+    expect(result.rooms).toHaveLength(0);
+  });
+});
+
+describe("roomService image similarity", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("fetches similar images for a room and maps phash_distance", async () => {
+    (api.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: [{ ...apiRoom(), id: 8, phash_distance: 2 }],
+    });
+    const matches = await roomService.getSimilarImages(7);
+    expect(api.get).toHaveBeenCalledWith("/rooms/7/similar-images/", {
+      params: { limit: 4 },
+    });
+    expect(matches[0].id).toBe(8);
+    expect(matches[0].phash_distance).toBe(2);
   });
 });
