@@ -153,7 +153,7 @@
 - **Coverage history per branch** — every PR and main push appends its own `history-<branch>.csv` + SVG chart to the `coverage-history` branch (viewable `index.html` linking all branches)
 - 414 automated tests (229 backend + 185 frontend) · coverage gates (BE ≥50%, FE ≥55%)
 - Ruff + ESLint + Prettier with husky/lint-staged pre-commit hooks
-- GitHub Actions CI (backend, frontend, lint, coverage-summary PR comment, per-branch coverage history)
+- GitHub Actions CI (backend, frontend, **live API contract check**, lint, coverage-summary PR comment, per-branch coverage history)
 - Route-level code splitting (React.lazy) — smaller bundles
 
 **Search & Discovery (Phase 11) — ✨ AI Smart Search**
@@ -420,6 +420,7 @@ If a check fails, the commit is **blocked** — fix and commit again (bypass wit
 | ---------------------- | ----------------------------------------------------------- | --------------- |
 | `ci.yml`               | Backend — Django tests + coverage gate                      | every push / PR |
 | `ci.yml`               | Frontend — Vitest + coverage + `npm run build`              | every push / PR |
+| `ci.yml`               | API contract — boots a server + runs the live endpoint suite vs the docs reference (`docs/tools/api-verify.py`) | every push / PR |
 | `ci.yml`               | Lint — ruff + ESLint + Prettier                             | every push / PR |
 | `coverage-summary.yml` | Posts a coverage **PR comment** (badge + file-level detail) | PRs             |
 | `ci.yml` `coverage-history` job | Appends per-branch coverage history (`history-<branch>.csv` + SVG chart) to the `coverage-history` branch | pushes to main **and** PRs (same-repo; fork PRs skip) |

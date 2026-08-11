@@ -127,13 +127,40 @@ def main():
         else:
             fails += 1
             results.append((False, "    nl_parsed missing from smart search response"))
-    # get a room id
+    # get a room id (bootstrap a fixture room on an empty DB — e.g. fresh CI
+    # checkout — so the room-scoped contract checks still run; deleted at the end)
     room_id = None
+    fixture_room = False
     r = requests.get(BASE + "/rooms/", timeout=20)
     if r.status_code == 200:
         rooms = r.json().get("results") or []
         if rooms:
             room_id = rooms[0]["id"]
+        else:
+            fixture = {
+                "title": "API Verify Fixture Room",
+                "description": "Temporary room created by docs/tools/api-verify.py for contract checks.",
+                "room_type": "single",
+                "price": 5000,
+                "area": "Uttara",
+                "address": "Sector 10, Uttara, Dhaka",
+                "lat": 23.8759,
+                "lng": 90.3795,
+                "size_sqft": 120,
+            }
+            r2 = requests.post(
+                BASE + "/rooms/",
+                headers={"Authorization": f"Bearer {token}"},
+                json=fixture,
+                timeout=20,
+            )
+            if r2.status_code in (200, 201):
+                room_id = r2.json().get("id")
+                fixture_room = True
+                results.append((True, f"    bootstrapped fixture room id={room_id} (empty DB)"))
+            else:
+                fails += 1
+                results.append((False, f"    fixture room creation failed: {r2.status_code} {r2.text[:200]}"))
     if room_id:
         check("room detail", "GET", f"/rooms/{room_id}/", [200])
         check("room similar-images", "GET", f"/rooms/{room_id}/similar-images/", [200])
@@ -146,7 +173,8 @@ def main():
         check("booking create", "POST", "/bookings/", [201, 400], auth=token,
               data={"room": room_id, "start_date": "2026-09-01", "message": "API verify"})
         # wishlist toggle
-        check("wishlist toggle", "POST", "/wishlist/toggle/", [200], auth=token, data={"room_id": room_id})
+        # 201 on first add (fresh row), 200 when removing / re-adding
+        check("wishlist toggle", "POST", "/wishlist/toggle/", [200, 201], auth=token, data={"room_id": room_id})
         # roommates matches
         check("roommates profile GET (no profile -> 404)", "GET", "/roommates/profile/", [404], auth=token)
         check("roommates matches (no profile -> 400)", "GET", "/roommates/matches/", [400], auth=token)
@@ -230,6 +258,18 @@ def main():
     # 15. Auth failure modes
     check("rooms auth required on create", "POST", "/rooms/", [401], data={"title": "x"})
     check("bad token 401", "GET", "/auth/user/", [401], auth="not.a.token")
+
+    # cleanup: remove the fixture room we created (owner-only DELETE, we own it)
+    if fixture_room and room_id is not None:
+        try:
+            requests.delete(
+                BASE + f"/rooms/{room_id}/",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=20,
+            )
+            results.append((True, f"    cleaned up fixture room id={room_id}"))
+        except Exception:
+            pass
 
     # ---- report ----
     print("=" * 80)
