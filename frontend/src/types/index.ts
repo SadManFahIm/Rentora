@@ -169,6 +169,8 @@ export interface Filters {
   maxPrice: string;
   /** KYC-verified landlords only (Room.verified). */
   verified: boolean;
+  /** AI smart search toggle: semantic ranking + natural-language parsing. */
+  smart?: boolean;
 }
 
 // Filters as sent to the service layer — every field optional.
@@ -182,7 +184,25 @@ export type RoomFilters = Partial<Filters> & {
   nearLng?: number;
   /** Keep only rooms within this many km of the reference point. */
   radiusKm?: number;
+  /** AI smart search: semantic ranking + natural-language parsing. */
+  smart?: boolean;
 };
+
+/** What the backend understood from a natural-language query (`smart=1`). */
+export interface NlParsed {
+  budget_max: number | null;
+  areas: string[];
+  room_type: string | null;
+  gender: string | null;
+  months: string[];
+  /** Human-readable chips, e.g. "Budget ≤ ৳10,000 · Uttara". */
+  hints: string[];
+}
+
+/** A room surfaced by the image-similarity endpoint. */
+export interface SimilarImageResult extends Room {
+  phash_distance: number;
+}
 
 /** A university or metro station from GET /rooms/landmarks/. */
 export interface Landmark {

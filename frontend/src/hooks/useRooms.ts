@@ -5,8 +5,10 @@ import type {
   GeocodeSuggestion,
   Landmark,
   MapSummary,
+  NlParsed,
   Room,
   RoomFilters,
+  SimilarImageResult,
   TierCatalog,
 } from "../types";
 
@@ -27,6 +29,31 @@ export function useRooms(filters: RoomFilters = {}) {
     queryKey: roomKeys.list(filters),
     queryFn: () => roomService.getRooms(filters),
     staleTime: 60_000,
+  });
+}
+
+/**
+ * AI smart search: semantic ranking + natural-language parsing. Returns the
+ * rooms plus `nlParsed` (what the backend understood) for the chips UI.
+ */
+export function useSmartRooms(filters: RoomFilters = {}) {
+  return useQuery<{ rooms: Room[]; nlParsed: NlParsed | null }>({
+    queryKey: [...roomKeys.list(filters), "smart"] as const,
+    // Only fire when the AI toggle is actually on — otherwise this would
+    // duplicate every plain room-list request with a pointless ?smart=1.
+    queryFn: () => roomService.searchRoomsSmart(filters),
+    enabled: !!filters.smart,
+    staleTime: 60_000,
+  });
+}
+
+/** Rooms whose primary photo looks like the given room (best-effort). */
+export function useSimilarImages(roomId: number | null, limit = 4) {
+  return useQuery<SimilarImageResult[]>({
+    queryKey: [...roomKeys.all, "similar-images", roomId, limit] as const,
+    queryFn: () => roomService.getSimilarImages(roomId as number, limit),
+    enabled: roomId != null,
+    staleTime: 5 * 60 * 1000,
   });
 }
 

@@ -14,6 +14,8 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.filters import OrderingFilter
 from rest_framework.response import Response
 
+from wishlist.models import Wishlist
+
 from .geo import (
     BoundingBox,
     haversine_km,
@@ -21,9 +23,12 @@ from .geo import (
     lng_delta_for_km,
 )
 from .geocoder import nominatim_search
+from .image_search import similar_rooms
 from .landmarks import ALL_LANDMARKS, get_landmark
 from .models import Room, RoomView
+from .nl_query import parse_nl_query
 from .permissions import IsOwnerOrReadOnly
+from .semantic import semantic_candidates
 from .serializers import (
     LandmarkSerializer,
     RoomCreateUpdateSerializer,
@@ -88,6 +93,11 @@ _GEO_PARAMS = [
             "`is_featured`, and a `price__gte`/`price__lte` range; full-text "
             "`search` over title/description/area; and `ordering` by price, "
             "rating or created_at.\n\n"
+            "**Smart search (`smart=1`):** combines keyword + semantic ranking "
+            "(vector space over title/area/description/address/amenities) with "
+            'natural-language parsing — "১০ হাজার এর মধ্যে uttara room" is '
+            "understood as budget ≤ ৳10,000 in Uttara. The response then "
+            "carries an `nl_parsed` object describing what was understood.\n\n"
             "**Geo/map queries:** `bbox` filters to a map viewport; a reference "
             "point (`near_lat`+`near_lng`, or `near_landmark`) with `radius_km` "
             "filters to rooms near a place, and — unless an explicit `ordering` "
@@ -185,6 +195,7 @@ class RoomViewSet(viewsets.ModelViewSet):
             "tier_catalog",
             "geocode",
             "summary",
+            "similar_images",
         ):
             return [permissions.AllowAny()]
         if self.action == "create":
@@ -319,21 +330,119 @@ class RoomViewSet(viewsets.ModelViewSet):
         # explicit ?ordering= (price, rating, …) must still win.
         queryset = super().filter_queryset(queryset)
         query_text = self.request.query_params.get("q")
+        smart = self.request.query_params.get("smart") == "1"
+        # Attached to the list response so the UI can render "what AI
+        # understood" chips (budget/area/move-in month).
+        self.nl_parsed = None
+        semantically_ordered = False
+
         if self.action == "list" and query_text:
             from .search import search_rooms
 
-            queryset = search_rooms(queryset, query_text)
+            if smart:
+                # Smart mode: keyword AND-matching would kill natural-language
+                # queries ("১০ হাজার এর মধ্যে gulshan" shares no literal term
+                # with any listing), so skip the strict pre-filter entirely:
+                # 1. NL parsing turns budget/area/type/gender words into real
+                #    filters over the full set;
+                # 2. the surviving pool is ranked by vector similarity
+                #    (semantic discovery — "student room near Gulshan" can
+                #    still surface a listing that never says "student").
+                parsed = parse_nl_query(query_text)
+                self.nl_parsed = parsed
+                if parsed["areas"]:
+                    queryset = queryset.filter(area__in=parsed["areas"])
+                if parsed["budget_max"]:
+                    queryset = queryset.filter(price__lte=parsed["budget_max"])
+                if parsed["room_type"]:
+                    queryset = queryset.filter(room_type=parsed["room_type"])
+                if parsed["gender"]:
+                    queryset = queryset.filter(gender_preference__in=[parsed["gender"], "any"])
+
+                pool_ids = list(queryset.values_list("id", flat=True))
+                ranked = semantic_candidates(query_text, pool_ids)
+                if ranked:
+                    ordering = Case(
+                        *[
+                            When(pk=room_id, then=Value(position))
+                            for position, (room_id, _score) in enumerate(ranked)
+                        ],
+                        output_field=IntegerField(),
+                    )
+                    queryset = queryset.filter(pk__in=[room_id for room_id, _ in ranked]).order_by(
+                        ordering
+                    )
+                    semantically_ordered = True
+            else:
+                queryset = search_rooms(queryset, query_text)
+
         if self.action == "list" and not self.request.query_params.get("ordering"):
             reference = self._reference_point()
             if reference is not None:
                 queryset = self._order_by_distance(queryset, reference)
+            elif semantically_ordered:
+                # Smart-search ordering already applied above.
+                pass
             else:
-                # Default browse view: promoted listings float to the top;
-                # within a tier, KYC-verified landlords come first.
+                # Default browse view: rooms the user recently viewed or
+                # wishlisted float up (personal boost), then promoted
+                # listings, then KYC-verified landlords, then newest.
+                queryset = self._apply_personal_boost(queryset)
                 queryset = queryset.annotate(
                     tier_rank=self.TIER_RANK, verified_rank=self.VERIFIED_RANK
-                ).order_by("tier_rank", "verified_rank", "-created_at")
+                ).order_by("personal_boost", "tier_rank", "verified_rank", "-created_at")
         return queryset
+
+    def list(self, request, *args, **kwargs):
+        """Attach the smart-search parse result to the list response."""
+        response = super().list(request, *args, **kwargs)
+        parsed = getattr(self, "nl_parsed", None)
+        if parsed is not None:
+            if isinstance(response.data, dict):
+                response.data["nl_parsed"] = parsed
+            else:
+                response.data = {"results": response.data, "nl_parsed": parsed}
+        return response
+
+    def _apply_personal_boost(self, queryset):
+        """Annotate `personal_boost` from the user's recent views + wishlist.
+
+        Browsing order becomes: most recently viewed rooms first, then
+        wishlisted, then the default tier/verified ranking. Only applies to
+        authenticated users and only when no explicit ordering was requested
+        (explicit sorts and map distance ordering always win).
+        """
+        user = getattr(self.request, "user", None)
+        if user is None or not user.is_authenticated:
+            return queryset.annotate(personal_boost=Value(0, output_field=IntegerField()))
+
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        cutoff = timezone.now() - timedelta(days=30)
+        viewed_ids = list(
+            RoomView.objects.filter(viewer=user, viewed_at__gte=cutoff)
+            .order_by("-viewed_at")
+            .values_list("room_id", flat=True)[:20]
+        )
+        wishlisted_ids = list(
+            Wishlist.objects.filter(user=user).values_list("room_id", flat=True)[:20]
+        )
+        if not viewed_ids and not wishlisted_ids:
+            return queryset.annotate(personal_boost=Value(0, output_field=IntegerField()))
+
+        clauses = [When(pk=room_id, then=Value(rank)) for rank, room_id in enumerate(viewed_ids)]
+        next_rank = len(viewed_ids)
+        seen = set(viewed_ids)
+        for room_id in wishlisted_ids:
+            if room_id not in seen:
+                clauses.append(When(pk=room_id, then=Value(next_rank)))
+                next_rank += 1
+                seen.add(room_id)
+        return queryset.annotate(
+            personal_boost=Case(*clauses, default=Value(next_rank), output_field=IntegerField())
+        )
 
     def retrieve(self, request, *args, **kwargs):
         """Log a RoomView for landlord-insight counts, then render normally.
@@ -521,6 +630,35 @@ class RoomViewSet(viewsets.ModelViewSet):
                 ],
             }
         )
+
+    @extend_schema(
+        tags=["Rooms"],
+        summary="Rooms with similar photos",
+        description=(
+            "Visual discovery: rooms whose primary photo looks like this one, "
+            "nearest perceptual-hash distance first. Best-effort — rooms "
+            "without readable photos are simply omitted."
+        ),
+        parameters=[
+            OpenApiParameter(
+                "limit", int, description="Max matches to return (default 8).", required=False
+            )
+        ],
+    )
+    @action(detail=True, methods=["get"], url_path="similar-images")
+    def similar_images(self, request, pk=None):
+        room = self.get_object()
+        limit = int(request.query_params.get("limit", 8) or 8)
+        matches = similar_rooms(room, top_k=limit)
+        serializer = RoomListSerializer(
+            [match[0] for match in matches],
+            many=True,
+            context=self.get_serializer_context(),
+        )
+        data = serializer.data
+        for item, (_room, distance) in zip(data, matches, strict=False):
+            item["phash_distance"] = distance
+        return Response(data)
 
     @extend_schema(
         tags=["Rooms"],

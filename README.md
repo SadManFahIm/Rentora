@@ -127,10 +127,21 @@
 **Engineering**
 
 - **Coverage history per branch** — every PR and main push appends its own `history-<branch>.csv` + SVG chart to the `coverage-history` branch (viewable `index.html` linking all branches)
-- 388 automated tests (210 backend + 178 frontend) · coverage gates (BE ≥50%, FE ≥55%)
+- 412 automated tests (227 backend + 185 frontend) · coverage gates (BE ≥50%, FE ≥55%)
 - Ruff + ESLint + Prettier with husky/lint-staged pre-commit hooks
 - GitHub Actions CI (backend, frontend, lint, coverage-summary PR comment, per-branch coverage history)
 - Route-level code splitting (React.lazy) — smaller bundles
+
+**Search & Discovery (Phase 11) — ✨ AI Smart Search**
+
+- **AI Search toggle** — the Rooms page's search bar grows a gradient **✨ AI Search** button; flip it on and the box accepts *natural language*: "১০ হাজার এর মধ্যে uttara student room" is understood as **budget ≤ ৳10,000 in Uttara** (and "জুলাই move-in" as a July move-in date)
+- **Bangla + English natural-language parser** (`rooms/nl_query.py`) — Bangla digits (০-৯), number words (হাজার/লাখ/কোটি), ৳/টাকা/tk/taka, area names (Room.Area + gazetteer aliases), room-type/gender words and month names in both scripts; the parsed budget/area/type/gender become **real filters**, and the list response carries an `nl_parsed` object
+- **"AI understood" chips** — under the search bar the backend's interpretation renders as tappable-looking pills (`Budget ≤ ৳10,000` · `Uttara` · `move-in July`) so tenants see exactly what was understood
+- **Semantic ranking** — a lightweight vector-space model (scikit-learn TF-IDF character n-grams + LSA, no heavy ML deps, works for both scripts) ranks keyword/NL-filtered rooms by cosine similarity; **semantic discovery** surfaces relevant rooms even when the query shares no literal keyword ("student room near campus" finds the student listings)
+- **Personal ranking boost** — for signed-in tenants the default browse order floats rooms they recently viewed or wishlisted to the top (30-day window), layered under the paid-tier/verified ranking
+- **Look-Alike Rooms (visual search)** — every RoomModal now shows a "Look-Alike Rooms" strip: rooms whose primary photo looks like the current one, via 64-bit **perceptual hashes (pHash)** computed with Pillow and cached in a new `RoomImageHash` table (mtime-keyed, so replaced photos re-hash automatically); `GET /rooms/{id}/similar-images/`
+- **Dhaka coverage expanded** — the listing `Area` choices now span **20 areas** (Uttara, Tejgaon, Badda, Rampura, Banasree, Khilgaon, Motijheel, Old Dhaka, Bashundhara, Lalmatia, Shyamoli, Savar, Keraniganj, Tongi + the original 6) and the map gazetteer gained **40+ new streets/roads** (Panthapath, Bailey Road, Hatirjheel, Badda Link Road, Khilgaon Flyover, Uttara Sectors 10/12/14, Gulshan 1/2 circles, Jashimuddin Avenue …) plus 9 more universities (Jagannath, Dhaka Medical College, AUST, DIU, Stamford, UIU …) — all searchable from the map box and the NL parser
+- **Bug fixes along the way** — the room list now sends the backend's `q` search param correctly (`params.search` → `params.q`), and the API client no longer yanks **anonymous** visitors to `/auth` when a public endpoint 401s (the bounce is now reserved for sessions that actually went stale) — regression-tested
 
 ---
 
@@ -323,12 +334,12 @@ Rentora/
 
 Quality is enforced **in CI and at commit time** — style or coverage drift fails the pipeline automatically.
 
-### Automated tests (340 total)
+### Automated tests (412 total)
 
 | Suite             | Count | Gate                                               |
 | ----------------- | ----- | -------------------------------------------------- |
-| Backend (Django)  | 170   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
-| Frontend (Vitest) | 173   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
+| Backend (Django)  | 227   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
+| Frontend (Vitest) | 185   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
 
 ```bash
 # Backend
@@ -489,8 +500,11 @@ Frontend runs at `http://localhost:3000`
 | PUT/PATCH | `/api/v1/rooms/:id/`       | Owner  | Update listing                                    |
 | DELETE    | `/api/v1/rooms/:id/`       | Owner  | Delete listing                                    |
 | GET       | `/api/v1/rooms/landmarks/` | Public | List landmarks (for `near_landmark`)              |
+| GET       | `/api/v1/rooms/:id/similar-images/` | Public | Rooms whose primary photo looks like this one (pHash) |
 
-**Text filters:** `?area=Dhanmondi&room_type=studio&price__gte=5000&price__lte=15000&is_available=true&search=cozy&ordering=-price&owner=3`
+**Text filters:** `?area=Dhanmondi&room_type=studio&price__gte=5000&price__lte=15000&is_available=true&q=cozy&ordering=-price&owner=3`
+
+**Smart search:** `?q=১০ হাজার এর মধ্যে uttara student room&smart=1` — natural-language parsing (budget/area/type/gender become filters), semantic ranking over the filtered pool, and an `nl_parsed` block in the response describing what was understood.
 
 **Geo filters:**
 
@@ -737,6 +751,10 @@ Passwordless sign-in is live — the phishing-resistant successor to passwords +
 **Phase 10 — Saved Searches** — save the current search from the Rooms page and get alerted about new matching listings:
 
 <img width="1440" alt="Phase 10 Saved Search" src="docs/screenshots/phase10-saved-search.png" />
+
+**Phase 11 — AI Smart Search** — the ✨ AI Search toggle turns the search box into a natural-language query box: "১০ হাজার এর মধ্যে uttara student room" is understood as **budget ≤ ৳10,000 in Uttara** (see the "AI understood" chips under the bar) and ranked semantically — no keyword matching needed:
+
+<img width="1440" alt="Phase 11 AI Smart Search" src="docs/screenshots/phase11-ai-search.png" />
 
 **Verified badge — dark theme** (the ✓ Verified pill stays legible in dark mode):
 

@@ -2,6 +2,7 @@ import { api } from "./api";
 import { mapRoom, type ApiRoom, type Paginated } from "./mappers";
 import type {
   GeocodeSuggestion,
+  NlParsed,
   Room,
   RoomFilters,
   CreateRoomPayload,
@@ -9,6 +10,7 @@ import type {
   Landmark,
   MapSummary,
   RoomInsights,
+  SimilarImageResult,
   SimilarRoomResult,
 } from "../types";
 
@@ -51,7 +53,9 @@ interface ApiSimilarRoom {
 function buildParams(filters: RoomFilters): Record<string, string> {
   const params: Record<string, string> = {};
 
-  if (filters.query) params.search = filters.query;
+  // The backend's full-text/semantic search reads `q` (see rooms/views.py).
+  if (filters.query) params.q = filters.query;
+  if (filters.smart) params.smart = "1";
   if (filters.area && filters.area !== "All") params.area = filters.area;
   if (filters.type && filters.type !== "All") params.room_type = filters.type.toLowerCase();
   if (filters.gender && filters.gender !== "Any")
@@ -124,6 +128,38 @@ export const roomService = {
   async getRoomById(id: number): Promise<Room> {
     const { data } = await api.get<ApiRoom>(`/rooms/${id}/`);
     return mapRoom(data);
+  },
+
+  /**
+   * GET /rooms/?smart=1 — AI smart search: semantic ranking + natural-
+   * language parsing (budget/area/date). Returns the rooms plus `nlParsed`,
+   * what the backend understood, for "AI understood" chips.
+   */
+  async searchRoomsSmart(
+    filters: RoomFilters = {}
+  ): Promise<{ rooms: Room[]; nlParsed: NlParsed | null }> {
+    const { data } = await api.get<Paginated<ApiRoom> & { nl_parsed?: NlParsed }>("/rooms/", {
+      params: { ...buildParams(filters), smart: "1" },
+    });
+    return {
+      rooms: data.results.map(mapRoom),
+      nlParsed: data.nl_parsed ?? null,
+    };
+  },
+
+  /**
+   * GET /rooms/:id/similar-images/ — rooms whose primary photo looks like
+   * this one (perceptual-hash distance, best-effort).
+   */
+  async getSimilarImages(roomId: number, limit = 4): Promise<SimilarImageResult[]> {
+    const { data } = await api.get<(ApiRoom & { phash_distance?: number })[]>(
+      `/rooms/${roomId}/similar-images/`,
+      { params: { limit } }
+    );
+    return data.map((item) => ({
+      ...mapRoom(item),
+      phash_distance: item.phash_distance ?? 0,
+    }));
   },
 
   /** GET /rooms/geocode/ — street/area/landmark autocomplete for the map search box. */

@@ -201,6 +201,29 @@ const CAPTURES = [
     })()`,
     afterLoadMs: 900,
   },
+  {
+    // Phase 11 — AI smart search: the query arrives via the URL (?q=...),
+    // then afterLoad flips the AI Search toggle on, so the smart request
+    // carries the query and the "AI understood" chips (budget, area) render
+    // with the ranked results.
+    user: "rahim.hossain",
+    route: "/rooms?q=%E0%A7%A7%E0%A7%A6%20%E0%A6%B9%E0%A6%BE%E0%A6%9C%E0%A6%BE%E0%A6%B0%20%E0%A6%8F%E0%A6%B0%20%E0%A6%AE%E0%A6%A7%E0%A7%8D%E0%A6%AF%E0%A7%87%20uttara%20student%20room",
+    out: "phase11-ai-search.png",
+    waitMs: 6000,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+    afterLoad: `(() => {
+      const btn = [...document.querySelectorAll('button')].find(b =>
+        b.textContent.trim() === 'AI Search');
+      if (!btn) return 'no-ai-btn';
+      btn.click();
+      return 'ai-on';
+    })()`,
+    afterLoadMs: 2500,
+  },
   // Email-OTP 2FA step: enable 2FA, sign in through the REAL login form
   // (token injection would bypass the challenge), screenshot the code step,
   // then disable 2FA again so the demo accounts stay in their default state.
