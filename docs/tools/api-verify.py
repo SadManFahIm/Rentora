@@ -7,7 +7,11 @@ PASS/FAIL per entry. Checks three layers:
 1. **Status code** — the documented expectation (200/201/403/…).
 2. **Deep schema** — required JSON fields *and their wire types* for key
    endpoints (``CONTRACTS`` below). Missing keys or wrong types fail.
-3. **OpenAPI cross-check** — every tested path+method must exist in the
+3. **Request-body contracts** — every payload the tool sends is validated
+   against ``REQUEST_CONTRACTS`` (documented field names + types) *before*
+   the request, and negative probes (``error_contains``) assert that
+   malformed payloads are rejected with the right field error.
+4. **OpenAPI cross-check** — every tested path+method must exist in the
    live ``/api/v1/schema/`` (drf-spectacular), so the hand-maintained
    reference and the generated schema can't drift apart.
 
@@ -209,15 +213,76 @@ def deep_validate(value, schema, path="root", problems=None):
 
 
 # ---------------------------------------------------------------------------
+# Request-body contracts
+# ---------------------------------------------------------------------------
+# Validates the payloads the tool itself sends against the documented field
+# contract (name + type). Same type tokens / nested schemas as CONTRACTS.
+# Covers every mutation endpoint exercised below, so a doc drift in the
+# request body (e.g. `room` instead of `room_id`) fails the run.
+
+ROOM_CREATE_BODY = {
+    "title": "str",
+    "description": "str",
+    "room_type": "str",
+    "price": "number",
+    "area": "str",
+    "address": "str",
+    "lat": "number",
+    "lng": "number",
+    "size_sqft": "int",
+}
+
+REQUEST_CONTRACTS = {
+    "POST /auth/register/": {"username": "str", "email": "str", "password1": "str", "password2": "str"},
+    "POST /auth/login/": {"username": "str", "password": "str"},
+    "POST /auth/token/refresh/": {"refresh": "str"},
+    "POST /auth/logout/": {"refresh": "str"},
+    "POST /auth/otp/verify/": {"challenge_id": "str", "code": "str"},
+    "POST /auth/otp/toggle/": {"password": "str"},
+    "POST /rooms/": ROOM_CREATE_BODY,
+    "POST /rooms/bulk/": {"items": ROOM_CREATE_BODY},
+    "POST /bookings/": {"room": "int", "start_date": "str", "message": "str"},
+    "POST /wishlist/toggle/": {"room_id": "int"},
+    "POST /saved-searches/": {"name": "str", "filters": "dict"},
+    "POST /notifications/push/subscribe/": {"endpoint": "str", "keys": {"p256dh": "str", "auth": "str"}},
+    "POST /payments/initiate/": {"room": "int", "amount": "number"},
+    "POST /payments/tier-upgrade/initiate/": {"room_id": "int", "tier": "str", "method": "str"},
+    "POST /roommates/requests/": {"to_user": "int", "message": "str"},
+    "POST /pricing/predict/": {"area": "str", "room_type": "str", "size_sqft": "int"},
+    "POST /users/kyc/{id}/review/": {"decision": "str"},
+}
+
+
+def _contract_key(method, path):
+    """Resolve a tested path to its REQUEST_CONTRACTS key (numeric ids -> {id})."""
+    base = path.split("?")[0]
+    segments = ["{id}" if seg.isdigit() else seg for seg in base.rstrip("/").split("/")]
+    for cand in ("/".join(segments), base):
+        if cand in REQUEST_CONTRACTS:
+            return cand
+    return None
+
+
+# ---------------------------------------------------------------------------
 # HTTP check
 # ---------------------------------------------------------------------------
-def check(name, method, path, expected, auth=None, data=None, note="", contract=None, in_schema=True, contract_only_on_error=False):
+def check(name, method, path, expected, auth=None, data=None, note="", contract=None, in_schema=True, contract_only_on_error=False, error_contains=None, skip_body_contract=False):
     global fails
     # in_schema=False: paths that are deliberately NOT API routes — the schema
     # UI (/docs/, /redoc/, /schema/ itself) or negative tests asserting the
     # absence of a route (e.g. PATCH /saved-searches/:id/ -> 405).
     if in_schema:
         tested_paths.append((method.upper(), path.split("?")[0]))
+    # request-body contract: the payload we send must match the documented
+    # field names + types (checked before the request is even made). Negative
+    # probes (deliberately malformed payloads) opt out via skip_body_contract.
+    if data is not None and not skip_body_contract:
+        key = _contract_key(method, path)
+        if key is not None:
+            schema = REQUEST_CONTRACTS[key]
+            for p in deep_validate(data, schema):
+                fails += 1
+                results.append((False, f"    BODY-SCHEMA {p}"))
     url = BASE + path
     headers = {}
     if auth:
@@ -241,6 +306,15 @@ def check(name, method, path, expected, auth=None, data=None, note="", contract=
                 results.append((False, f"    body: {r.text[:300]}"))
             except Exception:
                 pass
+        # error_contains: on a 4xx/5xx response, the body must mention the field
+        # — locks the API's *input validation* contract (rejects with the right
+        # error), not just the status code.
+        if error_contains is not None:
+            if 400 <= r.status_code < 500 and error_contains.lower() in r.text.lower():
+                results.append((True, f"    error mentions '{error_contains}' ✓"))
+            else:
+                fails += 1
+                results.append((False, f"    error_contains '{error_contains}': body was '{r.text[:200]}'"))
         # deep schema validation (only meaningful on a 2xx JSON body; on
         # contract_only_on_error the schema only applies to error responses)
         if ok and contract is not None and body is not None:
@@ -327,6 +401,11 @@ def main():
         "username": USERNAME, "email": EMAIL,
         "password1": PASSWORD, "password2": PASSWORD,
     }, contract="error_envelope", contract_only_on_error=True)
+    # negative: malformed email must be rejected as a validation error
+    check("register bad email -> 400", "POST", "/auth/register/", [400],
+          data={"username": "bad.email.probe", "email": "not-an-email",
+                "password1": PASSWORD, "password2": PASSWORD},
+          contract="error_envelope", error_contains="email", skip_body_contract=True)
     r = check("login", "POST", "/auth/login/", [200], data={
         "username": USERNAME, "password": PASSWORD,
     })
@@ -397,19 +476,15 @@ def main():
                 "lng": 90.3795,
                 "size_sqft": 120,
             }
-            r2 = requests.post(
-                BASE + "/rooms/",
-                headers={"Authorization": f"Bearer {token}"},
-                json=fixture,
-                timeout=20,
-            )
-            if r2.status_code in (200, 201):
+            # routed through check() so the request-body contract applies
+            r2 = check("fixture room create", "POST", "/rooms/", [201, 200], auth=token, data=fixture)
+            if r2 is not None and r2.status_code in (200, 201):
                 room_id = r2.json().get("id")
                 fixture_room = True
                 results.append((True, f"    bootstrapped fixture room id={room_id} (empty DB)"))
             else:
                 fails += 1
-                results.append((False, f"    fixture room creation failed: {r2.status_code} {r2.text[:200]}"))
+                results.append((False, "    fixture room creation failed (see above)"))
     if room_id:
         check("room detail", "GET", f"/rooms/{room_id}/", [200], contract="room_detail")
         check("room similar-images", "GET", f"/rooms/{room_id}/similar-images/", [200], contract="similar_images")
@@ -421,8 +496,16 @@ def main():
         # booking create (may conflict; accept 201/400)
         check("booking create", "POST", "/bookings/", [201, 400], auth=token,
               data={"room": room_id, "start_date": "2026-09-01", "message": "API verify"})
+        # negative: booking without a room must be rejected naming the field
+        check("booking create missing room -> 400", "POST", "/bookings/", [400], auth=token,
+              data={"start_date": "2026-09-01", "message": "no room"},
+              contract="error_envelope", error_contains="room", skip_body_contract=True)
         # wishlist toggle — 201 on first add (fresh row), 200 when removing / re-adding
         check("wishlist toggle", "POST", "/wishlist/toggle/", [200, 201], auth=token, data={"room_id": room_id})
+        # negative: the old `room` field name (the docs bug we caught) must fail
+        # (this view returns a plain {"detail": …} 400 — no unified envelope)
+        check("wishlist toggle wrong field -> 400", "POST", "/wishlist/toggle/", [400], auth=token,
+              data={"room": room_id}, error_contains="room_id", skip_body_contract=True)
         # roommates matches
         check("roommates profile GET (no profile -> 404)", "GET", "/roommates/profile/", [404], auth=token)
         check("roommates matches (no profile -> 400)", "GET", "/roommates/matches/", [400], auth=token)
@@ -439,8 +522,10 @@ def main():
     check("rooms tier-catalog", "GET", "/rooms/tier-catalog/", [200], contract="rooms_tier_catalog")
     check("rooms bulk (array body)", "POST", "/rooms/bulk/", [400, 201], auth=token, data=[])
     check("rooms insights (own listings)", "GET", "/rooms/insights/", [200], auth=token)
-    check("rooms create (tenant role)", "POST", "/rooms/", [403, 201, 400], auth=token,
-          data={"title": "x", "price": 1000, "area": "Uttara"})
+    # negative: missing required fields must be rejected naming them
+    check("rooms create missing price -> 400", "POST", "/rooms/", [400], auth=token,
+          data={"title": "x", "area": "Uttara"}, contract="error_envelope",
+          error_contains="price", skip_body_contract=True)
 
     # 4. Bookings list
     check("bookings list", "GET", "/bookings/", [200], auth=token, contract="bookings_list")
@@ -512,7 +597,8 @@ def main():
     check("referral", "GET", "/users/referral/", [200], auth=token, contract="referral")
 
     # 15. Auth failure modes
-    check("rooms auth required on create", "POST", "/rooms/", [401], data={"title": "x"}, contract="error_envelope")
+    check("rooms auth required on create", "POST", "/rooms/", [401], data={"title": "x"},
+          contract="error_envelope", skip_body_contract=True)
     check("bad token 401", "GET", "/auth/user/", [401], auth="not.a.token")
 
     # cleanup: remove the fixture room we created (owner-only DELETE, we own it)
