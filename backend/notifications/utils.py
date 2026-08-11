@@ -64,6 +64,11 @@ def create_notification(
         action_url=action_url,
     )
     broadcast_notification(notification)
+    # Best-effort browser push: the same notification lands on subscribed
+    # devices even when the user isn't in the app. Never blocks or raises.
+    from .webpush import send_push_to_user
+
+    send_push_to_user(user, notification.title, notification.message, notification.action_url)
     return notification
 
 

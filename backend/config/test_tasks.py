@@ -11,6 +11,7 @@ class CeleryWiringTests(TestCase):
         import payments.tasks  # noqa: F401
         import pricing.tasks  # noqa: F401
         import rooms.tasks  # noqa: F401
+        import savedsearches.tasks  # noqa: F401
         import users.tasks  # noqa: F401
         from config.celery import app
 
@@ -21,6 +22,7 @@ class CeleryWiringTests(TestCase):
             "fraud.tasks.scan_room",
             "payments.tasks.send_payment_reminders",
             "users.tasks.alert_kyc_sla_breaches",
+            "savedsearches.tasks.check_saved_searches",
         ]:
             with self.subTest(task=task_name):
                 self.assertIn(task_name, app.tasks)
@@ -38,6 +40,7 @@ class CeleryWiringTests(TestCase):
                 "scan-rooms-fraud",
                 "send-payment-reminders",
                 "alert-kyc-sla-breaches",
+                "check-saved-searches",
             },
         )
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -70,10 +70,14 @@ function FloatShape({
 export default function Auth() {
   const navigate = useNavigate();
   const { user, authLoading } = useApp();
+  const [searchParams] = useSearchParams();
   const [isLogin, setIsLogin] = useState(true);
   const login = useLogin();
   const register = useRegister();
   const verifyOtp = useVerifyOtp();
+  // Referral program: the inviter's ?ref= code travels through the URL on
+  // the shared signup link straight into the register payload.
+  const refCode = searchParams.get("ref") ?? undefined;
 
   // When login reports a pending email-OTP challenge (2FA account), the
   // form is replaced by a verification-code step.
@@ -301,7 +305,12 @@ export default function Auth() {
       );
     } else {
       register.mutate(
-        { name: values.name, email: values.email, password: values.password },
+        {
+          name: values.name,
+          email: values.email,
+          password: values.password,
+          ref: refCode,
+        },
         {
           onSuccess: (user) => {
             toast.success(`Welcome to Rentora, ${user.name}!`);

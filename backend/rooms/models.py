@@ -72,6 +72,35 @@ class Room(models.Model):
         return self.title
 
 
+class RoomView(models.Model):
+    """One detail-page view of a room (Phase 10 — landlord insights).
+
+    Logged for every room detail GET, deduplicated per (viewer, room) inside
+    a short window so a refresh doesn't inflate the count. Anonymous viewers
+    aren't tracked (we don't cookie users), so counts are a lower bound on
+    real traffic — still the right signal for landlords comparing listings.
+    """
+
+    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="views")
+    viewer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="room_views",
+    )
+    viewed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-viewed_at"]
+        indexes = [
+            models.Index(fields=["room", "viewed_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.viewer or 'anon'} viewed {self.room.title}"
+
+
 class RoomImage(models.Model):
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="images")
     image = models.ImageField(upload_to="rooms/")

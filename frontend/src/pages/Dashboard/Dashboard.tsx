@@ -14,6 +14,10 @@ import {
 import { wishlistService } from "../../services/wishlistService";
 import { useApp } from "../../context/AppContext";
 import FraudTab from "../../components/FraudTab/FraudTab";
+import LandlordInsights from "../../components/LandlordInsights/LandlordInsights";
+import PushNotificationCard from "../../components/PushNotificationCard/PushNotificationCard";
+import ReferralCard from "../../components/ReferralCard/ReferralCard";
+import WishlistShareButton from "../../components/WishlistShareButton/WishlistShareButton";
 import KycCard from "../../components/KycCard/KycCard";
 import AdminKycPanel from "../../components/AdminKycPanel/AdminKycPanel";
 import RoomCard from "../../components/RoomCard/RoomCard";
@@ -43,7 +47,7 @@ import type { Booking, PaymentStatus, Room } from "../../types";
 import { cn } from "../../lib/utils";
 
 type DashboardTab =
-  "overview" | "listings" | "bookings" | "payments" | "wishlist" | "fraud" | "kyc";
+  "overview" | "listings" | "bookings" | "payments" | "wishlist" | "fraud" | "kyc" | "insights";
 const TABS: DashboardTab[] = [
   "overview",
   "listings",
@@ -52,6 +56,7 @@ const TABS: DashboardTab[] = [
   "wishlist",
   "fraud",
   "kyc",
+  "insights",
 ];
 
 interface StatCard {
@@ -199,9 +204,15 @@ export default function Dashboard() {
   const [dateTo, setDateTo] = useState("");
 
   // The KYC review tab is admin-only (mirrors the backend's staff-or-admin
-  // check); the KYC upload card is for everyone else.
+  // check); the KYC upload card is for everyone else. Listing insights are
+  // for landlords (and admins see every listing).
   const isAdmin = user?.role === "admin" || user?.isStaff === true;
-  const visibleTabs = isAdmin ? TABS : TABS.filter((t) => t !== "kyc");
+  const isLandlord = isAdmin || user?.role === "landlord";
+  const visibleTabs = TABS.filter((t) => {
+    if (t === "kyc") return isAdmin;
+    if (t === "insights") return isLandlord;
+    return true;
+  });
 
   const { data: stats, isLoading: statsLoading } = useDashboard();
   const { data: bookings = [], isLoading: bookingsLoading } = useBookings();
@@ -346,6 +357,12 @@ export default function Dashboard() {
                 )}
               </div>
             ))}
+          </div>
+
+          {/* Phase 10 — invite friends + browser notifications */}
+          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <ReferralCard />
+            <PushNotificationCard />
           </div>
 
           {landlordCards && (
@@ -561,7 +578,11 @@ export default function Dashboard() {
         </>
       )}
 
-      {activeTab === "wishlist" &&
+      {activeTab === "wishlist" && (
+          <div className="mb-4 flex justify-end">
+            <WishlistShareButton />
+          </div>
+        ) &&
         (wishlistLoading ? (
           <div className="py-15 text-center text-gray-600 dark:text-gray-400">
             Loading saved rooms…
@@ -585,6 +606,8 @@ export default function Dashboard() {
       {activeTab === "fraud" && <FraudTab />}
 
       {activeTab === "kyc" && isAdmin && <AdminKycPanel />}
+
+      {activeTab === "insights" && isLandlord && <LandlordInsights />}
 
       {selectedRoom && <RoomModal room={selectedRoom} onClose={() => setSelectedRoom(null)} />}
 
