@@ -127,7 +127,7 @@
 **Engineering**
 
 - **Coverage history per branch** — every PR and main push appends its own `history-<branch>.csv` + SVG chart to the `coverage-history` branch (viewable `index.html` linking all branches)
-- 412 automated tests (227 backend + 185 frontend) · coverage gates (BE ≥50%, FE ≥55%)
+- 414 automated tests (229 backend + 185 frontend) · coverage gates (BE ≥50%, FE ≥55%)
 - Ruff + ESLint + Prettier with husky/lint-staged pre-commit hooks
 - GitHub Actions CI (backend, frontend, lint, coverage-summary PR comment, per-branch coverage history)
 - Route-level code splitting (React.lazy) — smaller bundles
@@ -135,7 +135,7 @@
 **Search & Discovery (Phase 11) — ✨ AI Smart Search**
 
 - **AI Search toggle** — the Rooms page's search bar grows a gradient **✨ AI Search** button; flip it on and the box accepts *natural language*: "১০ হাজার এর মধ্যে uttara student room" is understood as **budget ≤ ৳10,000 in Uttara** (and "জুলাই move-in" as a July move-in date)
-- **Bangla + English natural-language parser** (`rooms/nl_query.py`) — Bangla digits (০-৯), number words (হাজার/লাখ/কোটি), ৳/টাকা/tk/taka, area names (Room.Area + gazetteer aliases), room-type/gender words and month names in both scripts; the parsed budget/area/type/gender become **real filters**, and the list response carries an `nl_parsed` object
+- **Bangla + English natural-language parser** (`rooms/nl_query.py`) — Bangla digits (০-৯), **number words** (দশ/বিশ/ত্রিশ… with হাজার/লাখ/কোটি multipliers — "দশ হাজার" → ৳10,000), ৳/টাকা/tk/taka, **area names in both scripts** (Uttara *and* উত্তরা, Dhanmondi *and* ধানমন্ডি — from the gazetteer's new Bangla aliases), room-type/gender words and month names in both scripts; the parsed budget/area/type/gender become **real filters**, and the list response carries an `nl_parsed` object
 - **"AI understood" chips** — under the search bar the backend's interpretation renders as tappable-looking pills (`Budget ≤ ৳10,000` · `Uttara` · `move-in July`) so tenants see exactly what was understood
 - **Semantic ranking** — a lightweight vector-space model (scikit-learn TF-IDF character n-grams + LSA, no heavy ML deps, works for both scripts) ranks keyword/NL-filtered rooms by cosine similarity; **semantic discovery** surfaces relevant rooms even when the query shares no literal keyword ("student room near campus" finds the student listings)
 - **Personal ranking boost** — for signed-in tenants the default browse order floats rooms they recently viewed or wishlisted to the top (30-day window), layered under the paid-tier/verified ranking
@@ -334,11 +334,11 @@ Rentora/
 
 Quality is enforced **in CI and at commit time** — style or coverage drift fails the pipeline automatically.
 
-### Automated tests (412 total)
+### Automated tests (414 total)
 
 | Suite             | Count | Gate                                               |
 | ----------------- | ----- | -------------------------------------------------- |
-| Backend (Django)  | 227   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
+| Backend (Django)  | 229   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
 | Frontend (Vitest) | 185   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
 
 ```bash
@@ -752,7 +752,7 @@ Passwordless sign-in is live — the phishing-resistant successor to passwords +
 
 <img width="1440" alt="Phase 10 Saved Search" src="docs/screenshots/phase10-saved-search.png" />
 
-**Phase 11 — AI Smart Search** — the ✨ AI Search toggle turns the search box into a natural-language query box: "১০ হাজার এর মধ্যে uttara student room" is understood as **budget ≤ ৳10,000 in Uttara** (see the "AI understood" chips under the bar) and ranked semantically — no keyword matching needed:
+**Phase 11 — AI Smart Search** — the ✨ AI Search toggle turns the search box into a natural-language query box: "দশ হাজার এর মধ্যে উত্তরা" (Bangla number *words* + Bangla area names) is understood as **budget ≤ ৳10,000 in Uttara** (see the "AI understood" chips under the bar) and ranked semantically — no keyword matching needed:
 
 <img width="1440" alt="Phase 11 AI Smart Search" src="docs/screenshots/phase11-ai-search.png" />
 
