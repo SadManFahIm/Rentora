@@ -63,11 +63,11 @@ def create_notification(
         message=sanitize_text(message),
         action_url=action_url,
     )
-    _broadcast(notification)
+    broadcast_notification(notification)
     return notification
 
 
-def _broadcast(notification: Notification) -> None:
+def broadcast_notification(notification: Notification) -> None:
     """Push the notification to the recipient's live socket(s), if any.
 
     Safe to call from synchronous code (this whole module is sync) — wraps

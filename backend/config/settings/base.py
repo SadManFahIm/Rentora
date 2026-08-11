@@ -320,6 +320,18 @@ BKASH_IS_SANDBOX = os.getenv("BKASH_IS_SANDBOX", "True") == "True"
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 # ============================================================
+# Alert email throttling (notifications.email_guard)
+# ============================================================
+# Scheduled alert blasts (KYC SLA breaches, fraud flags, …) are rate-limited
+# per recipient per template: at most ALERT_EMAIL_DAILY_BUDGET successful
+# sends per day, and after a failure the recipient is not retried until
+# ALERT_EMAIL_BACKOFF_HOURS * 2 ** (consecutive_failures - 1) have passed
+# (exponential, capped at 7 days). Protects the team from email storms when
+# SMTP misbehaves or a queue is genuinely backed up.
+ALERT_EMAIL_DAILY_BUDGET = int(os.getenv("ALERT_EMAIL_DAILY_BUDGET", "3"))
+ALERT_EMAIL_BACKOFF_HOURS = int(os.getenv("ALERT_EMAIL_BACKOFF_HOURS", "24"))
+
+# ============================================================
 # Email-OTP two-factor authentication (users app)
 # ============================================================
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "Rentora <noreply@rentora.com>")

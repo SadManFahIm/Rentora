@@ -47,3 +47,35 @@ class Notification(models.Model):
 
     def __str__(self) -> str:
         return f"[{self.get_notification_type_display()}] {self.title} → {self.user}"
+
+
+class EmailDeliveryLog(models.Model):
+    """Delivery ledger for rate-limited alert emails.
+
+    Every attempt to send an alert email (e.g. the KYC SLA breach blast)
+    records one row here so the team can see what went out, what was
+    throttled, and what failed — and so the sender can enforce per-recipient
+    daily budgets and failure backoff without an external rate limiter.
+    """
+
+    class Status(models.TextChoices):
+        SENT = "sent", "Sent"
+        FAILED = "failed", "Failed"
+        SKIPPED = "skipped", "Skipped (rate limit / backoff)"
+
+    recipient = models.EmailField()
+    template_name = models.CharField(max_length=100)
+    subject = models.CharField(max_length=200, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices)
+    attempt = models.PositiveIntegerField(default=1)
+    error = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["recipient", "template_name", "created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"[{self.get_status_display()}] {self.template_name} → {self.recipient}"
