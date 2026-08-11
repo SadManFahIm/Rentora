@@ -81,6 +81,7 @@ INSTALLED_APPS = [
     "pricing",
     "roommates",
     "fraud",
+    "savedsearches",
 ]
 
 MIDDLEWARE = [
@@ -332,6 +333,17 @@ ALERT_EMAIL_DAILY_BUDGET = int(os.getenv("ALERT_EMAIL_DAILY_BUDGET", "3"))
 ALERT_EMAIL_BACKOFF_HOURS = int(os.getenv("ALERT_EMAIL_BACKOFF_HOURS", "24"))
 
 # ============================================================
+# Browser push notifications (notifications.webpush)
+# ============================================================
+# VAPID key pair — generate once with `python scripts/generate_vapid.py` and
+# set in the environment. Unset keys make push a safe no-op (local dev/CI
+# never touch a push service). VITE_VAPID_PUBLIC_KEY on the frontend lets the
+# browser build the subscription; it is public by design.
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
+VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "")
+
+# ============================================================
 # Email-OTP two-factor authentication (users app)
 # ============================================================
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "Rentora <noreply@rentora.com>")
@@ -416,6 +428,10 @@ CELERY_BEAT_SCHEDULE = {
     },
     "send-payment-reminders": {
         "task": "payments.tasks.send_payment_reminders",
+        "schedule": 86400.0,  # daily
+    },
+    "check-saved-searches": {
+        "task": "savedsearches.tasks.check_saved_searches",
         "schedule": 86400.0,  # daily
     },
     "alert-kyc-sla-breaches": {

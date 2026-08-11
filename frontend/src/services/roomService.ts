@@ -8,7 +8,40 @@ import type {
   TierCatalog,
   Landmark,
   MapSummary,
+  RoomInsights,
+  SimilarRoomResult,
 } from "../types";
+
+interface ApiRoomInsights {
+  rooms: {
+    id: number;
+    title: string;
+    price: number;
+    area: string;
+    room_type: string;
+    tier: string;
+    verified: boolean;
+    views_7d: number;
+    views_30d: number;
+    views_total: number;
+    wishlist_count: number;
+    booking_requests: number;
+    booking_approved: number;
+    area_avg_price: number | null;
+    price_delta_pct: number | null;
+  }[];
+  summary: {
+    listing_count: number;
+    total_views_30d: number;
+    total_wishlists: number;
+  };
+}
+
+interface ApiSimilarRoom {
+  room: ApiRoom;
+  match_score: number;
+  match_reasons: string[];
+}
 
 // ============================================================
 // ROOM SERVICE — real /rooms/ endpoints
@@ -163,6 +196,70 @@ export const roomService = {
     };
     const { data } = await api.post<ApiRoom>("/rooms/", body);
     return mapRoom(data);
+  },
+
+  /** GET /rooms/insights/ → engagement stats for the landlord's listings. */
+  async getInsights(): Promise<RoomInsights> {
+    const { data } = await api.get<ApiRoomInsights>("/rooms/insights/");
+    return {
+      rooms: data.rooms.map((r) => ({
+        id: r.id,
+        title: r.title,
+        price: r.price,
+        area: r.area,
+        roomType: r.room_type,
+        tier: r.tier,
+        verified: r.verified,
+        views7d: r.views_7d,
+        views30d: r.views_30d,
+        viewsTotal: r.views_total,
+        wishlistCount: r.wishlist_count,
+        bookingRequests: r.booking_requests,
+        bookingApproved: r.booking_approved,
+        areaAvgPrice: r.area_avg_price,
+        priceDeltaPct: r.price_delta_pct,
+      })),
+      summary: {
+        listingCount: data.summary.listing_count,
+        totalViews30d: data.summary.total_views_30d,
+        totalWishlists: data.summary.total_wishlists,
+      },
+    };
+  },
+
+  /** POST /rooms/bulk/ → create several listings at once (landlord). */
+  async bulkCreate(
+    payloads: CreateRoomPayload[]
+  ): Promise<{ createdCount: number; errors: unknown[] }> {
+    const body = payloads.map((payload) => ({
+      title: payload.name,
+      description: payload.description,
+      room_type: payload.type.toLowerCase(),
+      price: payload.price,
+      area: payload.area,
+      address: `${payload.area}, Dhaka`,
+      lat: payload.lat,
+      lng: payload.lng,
+      amenities: payload.amenities,
+      gender_preference: payload.gender.toLowerCase(),
+      size_sqft: payload.size,
+      is_available: payload.available,
+    }));
+    const { data } = await api.post<{ created_count: number; errors: unknown[] }>(
+      "/rooms/bulk/",
+      body
+    );
+    return { createdCount: data.created_count, errors: data.errors };
+  },
+
+  /** GET /recommendations/similar/<room_id>/ → content-based similar rooms. */
+  async getSimilarRooms(roomId: number): Promise<SimilarRoomResult[]> {
+    const { data } = await api.get<ApiSimilarRoom[]>(`/recommendations/similar/${roomId}/`);
+    return data.map((r) => ({
+      room: mapRoom(r.room),
+      matchScore: r.match_score,
+      matchReasons: r.match_reasons,
+    }));
   },
 };
 

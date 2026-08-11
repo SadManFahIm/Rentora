@@ -15,6 +15,7 @@ from dj_rest_auth.views import LoginView
 from drf_spectacular.utils import extend_schema
 
 from users.otp_views import pending_otp_response
+from users.register_serializer import RentoraRegisterSerializer
 
 from .throttling import AuthRateThrottle
 
@@ -51,10 +52,12 @@ class ThrottledLoginView(LoginView):
     summary="Register a new account",
     description=(
         "Create a tenant or landlord account. Returns the new user and JWTs. "
-        "Rate limited to 10 requests/hour per IP address."
+        "Rate limited to 10 requests/hour per IP address. Optionally pass "
+        "`ref` (a referral code) to link the account to the inviter."
     ),
 )
 class ThrottledRegisterView(RegisterView):
-    """dj-rest-auth registration, throttled per IP."""
+    """dj-rest-auth registration, throttled per IP, referral-aware."""
 
     throttle_classes = [AuthRateThrottle]
+    serializer_class = RentoraRegisterSerializer

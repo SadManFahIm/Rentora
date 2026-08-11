@@ -1,3 +1,5 @@
+import uuid
+
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
@@ -29,6 +31,37 @@ class User(AbstractUser):
     # accounts and new signups are unaffected; enabled per-account from the
     # dashboard after the user confirms their current password.
     otp_enabled = models.BooleanField(default=False)
+
+    # Referral program (Phase 10): a short code on every account that friends
+    # can use at signup (`/auth/register?ref=CODE`), plus a back-reference to
+    # who brought this user in.
+    referral_code = models.CharField(
+        max_length=12, unique=True, null=True, blank=True, editable=False
+    )
+    referred_by = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="referrals",
+    )
+    # Public token for sharing a wishlist — random, unguessable, revocable.
+    wishlist_share_token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+
+    def save(self, *args, **kwargs):
+        if not self.referral_code:
+            import secrets
+            import string
+
+            alphabet = string.ascii_uppercase + string.digits
+            for _ in range(5):
+                code = "".join(secrets.choice(alphabet) for _ in range(8))
+                if not User.objects.filter(referral_code=code).exists():
+                    self.referral_code = code
+                    break
+            else:  # pragma: no cover - 5 attempts at 8 chars is astronomically safe
+                self.referral_code = "".join(secrets.choice(alphabet) for _ in range(12))
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.username

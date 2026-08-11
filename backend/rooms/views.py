@@ -1,17 +1,17 @@
 import django_filters
 from django.conf import settings
 from django.db import models
-from django.db.models import Case, IntegerField, Value, When
+from django.db.models import Case, IntegerField, Q, Value, When
 from drf_spectacular.utils import (
     OpenApiExample,
     OpenApiParameter,
     extend_schema,
     extend_schema_view,
 )
-from rest_framework import permissions, viewsets
+from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
-from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.filters import OrderingFilter
 from rest_framework.response import Response
 
 from .geo import (
@@ -22,7 +22,7 @@ from .geo import (
 )
 from .geocoder import nominatim_search
 from .landmarks import ALL_LANDMARKS, get_landmark
-from .models import Room
+from .models import Room, RoomView
 from .permissions import IsOwnerOrReadOnly
 from .serializers import (
     LandmarkSerializer,
@@ -139,12 +139,13 @@ class RoomViewSet(viewsets.ModelViewSet):
 
     queryset = Room.objects.select_related("owner").prefetch_related("images").all()
     filterset_class = RoomFilter
+    # Search v2: full-text on Postgres (with typo tolerance) / icontains
+    # fallback on SQLite, applied manually in `filter_queryset` (SearchFilter
+    # is a plain icontains across fields and can't rank or fuzzy-match).
     filter_backends = [
         django_filters.rest_framework.DjangoFilterBackend,
-        SearchFilter,
         OrderingFilter,
     ]
-    search_fields = ["title", "description", "area"]
     ordering_fields = ["price", "rating", "created_at"]
     ordering = ["-created_at"]
 
@@ -312,11 +313,16 @@ class RoomViewSet(viewsets.ModelViewSet):
         return queryset
 
     def filter_queryset(self, queryset):
-        # Backends (django-filter, search, OrderingFilter's default
-        # `-created_at`) run first; distance ordering is applied *after* so it
-        # isn't clobbered. Nearest-first is the natural default for a "near X"
-        # query, but an explicit ?ordering= (price, rating, …) must still win.
+        # Backends (django-filter, OrderingFilter's default `-created_at`) run
+        # first; distance ordering is applied *after* so it isn't clobbered.
+        # Nearest-first is the natural default for a "near X" query, but an
+        # explicit ?ordering= (price, rating, …) must still win.
         queryset = super().filter_queryset(queryset)
+        query_text = self.request.query_params.get("q")
+        if self.action == "list" and query_text:
+            from .search import search_rooms
+
+            queryset = search_rooms(queryset, query_text)
         if self.action == "list" and not self.request.query_params.get("ordering"):
             reference = self._reference_point()
             if reference is not None:
@@ -328,6 +334,43 @@ class RoomViewSet(viewsets.ModelViewSet):
                     tier_rank=self.TIER_RANK, verified_rank=self.VERIFIED_RANK
                 ).order_by("tier_rank", "verified_rank", "-created_at")
         return queryset
+
+    def retrieve(self, request, *args, **kwargs):
+        """Log a RoomView for landlord-insight counts, then render normally.
+
+        Deduped per (viewer, room) within 5 minutes — page refreshes don't
+        inflate the tally the way genuinely separate visits should.
+        """
+        response = super().retrieve(request, *args, **kwargs)
+        if response.status_code == 200:
+            self._record_view(request, kwargs.get("pk"))
+        return response
+
+    def _record_view(self, request, room_id) -> None:
+        if not room_id:
+            return
+        user = getattr(request, "user", None)
+        # Anonymous visitors aren't tracked (we don't cookie users), so counts
+        # are a lower bound on traffic — but a consistent, comparable one.
+        if user is None or not user.is_authenticated:
+            return
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        cutoff = timezone.now() - timedelta(minutes=5)
+        already = RoomView.objects.filter(
+            room_id=room_id,
+            viewer=user,
+            viewed_at__gte=cutoff,
+        ).exists()
+        if already:
+            return
+        # Analytics must never break room reads — ignore any DB hiccup.
+        from contextlib import suppress
+
+        with suppress(Exception):
+            RoomView.objects.create(room_id=room_id, viewer=user)
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -526,4 +569,122 @@ class RoomViewSet(viewsets.ModelViewSet):
                 "duration_days": settings.LISTING_TIER_DURATION_DAYS,
                 "currency": "BDT",
             }
+        )
+
+    @extend_schema(
+        tags=["Rooms"],
+        summary="Landlord listing insights",
+        description=(
+            "Per-listing engagement for the authenticated landlord: views (7/30d), "
+            "wishlist saves, booking requests and approvals, and how each room's "
+            "price compares to its area/type market average. Admin sees all rooms."
+        ),
+    )
+    @action(detail=False, methods=["get"], url_path="insights")
+    def insights(self, request):
+        """Aggregate engagement + price positioning for the owner's listings."""
+        from datetime import timedelta
+
+        from django.db.models import Count
+        from django.utils import timezone
+
+        from bookings.models import Booking
+        from pricing.models import MarketStat
+
+        rooms_qs = self.get_queryset()
+        if not (request.user.is_staff or request.user.role == request.user.Role.ADMIN):
+            rooms_qs = rooms_qs.filter(owner=request.user)
+
+        now = timezone.now()
+        week_ago = now - timedelta(days=7)
+        month_ago = now - timedelta(days=30)
+
+        market = {(m.area, m.room_type): float(m.avg_price) for m in MarketStat.objects.all()}
+        rooms = rooms_qs.annotate(
+            views_7d=Count("views", filter=Q(views__viewed_at__gte=week_ago), distinct=True),
+            views_30d=Count("views", filter=Q(views__viewed_at__gte=month_ago), distinct=True),
+            views_total=Count("views", distinct=True),
+            wishlist_count=Count("wishlisted_by", distinct=True),
+            booking_requests=Count("bookings", distinct=True),
+            booking_approved=Count(
+                "bookings", filter=Q(bookings__status=Booking.Status.APPROVED), distinct=True
+            ),
+        )
+
+        rows = []
+        for room in rooms:
+            area_avg = market.get((room.area, room.room_type))
+            price = float(room.price)
+            rows.append(
+                {
+                    "id": room.id,
+                    "title": room.title,
+                    "price": price,
+                    "area": room.area,
+                    "room_type": room.room_type,
+                    "tier": room.tier,
+                    "verified": room.verified,
+                    "views_7d": room.views_7d,
+                    "views_30d": room.views_30d,
+                    "views_total": room.views_total,
+                    "wishlist_count": room.wishlist_count,
+                    "booking_requests": room.booking_requests,
+                    "booking_approved": room.booking_approved,
+                    "area_avg_price": area_avg,
+                    "price_delta_pct": (
+                        round((price - area_avg) / area_avg * 100, 1) if area_avg else None
+                    ),
+                }
+            )
+        rows.sort(key=lambda r: r["views_30d"], reverse=True)
+        total_views = sum(r["views_30d"] for r in rows)
+        total_wishlists = sum(r["wishlist_count"] for r in rows)
+        return Response(
+            {
+                "rooms": rows,
+                "summary": {
+                    "listing_count": len(rows),
+                    "total_views_30d": total_views,
+                    "total_wishlists": total_wishlists,
+                },
+            }
+        )
+
+    @extend_schema(
+        tags=["Rooms"],
+        summary="Bulk create listings",
+        description="Create several rooms in one request (landlord only). Body is a "
+        "JSON array of the same room payloads accepted by POST /rooms/. "
+        "Partially succeeds: valid rows are created, per-row errors are reported.",
+    )
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="bulk",
+        permission_classes=[permissions.IsAuthenticated],
+    )
+    def bulk_create(self, request):
+        """Create multiple listings from a JSON array; report per-row errors."""
+        from .serializers import RoomCreateUpdateSerializer
+
+        payload = request.data
+        if not isinstance(payload, list):
+            return Response(
+                {"detail": "Request body must be a JSON array of room objects."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        created = []
+        errors = []
+        for index, row in enumerate(payload):
+            serializer = RoomCreateUpdateSerializer(data=row, context=self.get_serializer_context())
+            if serializer.is_valid():
+                room = serializer.save(owner=request.user)
+                created.append(room.id)
+            else:
+                errors.append({"index": index, "errors": serializer.errors})
+
+        return Response(
+            {"created": created, "created_count": len(created), "errors": errors},
+            status=status.HTTP_201_CREATED if created else status.HTTP_400_BAD_REQUEST,
         )

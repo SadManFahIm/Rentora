@@ -158,6 +158,49 @@ const CAPTURES = [
       return 'light';
     })()`,
   },
+  {
+    // Phase 10 — dashboard growth cards: referral invite + browser push.
+    user: "rahim.hossain",
+    route: "/dashboard",
+    out: "phase10-dashboard-growth.png",
+    waitMs: 4500,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+  },
+  {
+    // Phase 10 — landlord listing insights tab (views, wishlists, price vs area).
+    user: "rahim.hossain",
+    route: "/dashboard?tab=insights",
+    out: "phase10-insights.png",
+    waitMs: 4500,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+  },
+  {
+    // Phase 10 — Search v2: saved-search bar on the Rooms page (dropdown open).
+    user: "rahim.hossain",
+    route: "/rooms?q=studio",
+    out: "phase10-saved-search.png",
+    waitMs: 4000,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+    afterLoad: `(() => {
+      const btn = [...document.querySelectorAll('button')].find(b =>
+        b.textContent.includes('Saved searches'));
+      if (btn) { btn.click(); return 'opened'; }
+      return 'no-btn';
+    })()`,
+    afterLoadMs: 900,
+  },
   // Email-OTP 2FA step: enable 2FA, sign in through the REAL login form
   // (token injection would bypass the challenge), screenshot the code step,
   // then disable 2FA again so the demo accounts stay in their default state.

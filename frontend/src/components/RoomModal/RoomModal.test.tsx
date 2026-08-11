@@ -7,9 +7,21 @@
  * Complements the store/service integration test in services/fraudFlow.test.ts.
  */
 import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import type { Room } from "../../types";
 import RoomModal from "./RoomModal";
+
+// SimilarRooms / ReviewsSection inside the modal use react-query — wrap every
+// render with a fresh client so the hook calls resolve to empty queries.
+function renderModal(room: Room) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <RoomModal room={room} onClose={vi.fn()} />
+    </QueryClientProvider>
+  );
+}
 
 vi.mock("react-router-dom", () => ({
   useNavigate: () => vi.fn(),
@@ -79,35 +91,35 @@ function fraudStatus(severity: "clean" | "low" | "medium" | "high", score = 0) {
 describe("RoomModal fraud badge", () => {
   it("renders the red risk badge when the room is flagged HIGH", () => {
     mockUseRoomFraudStatus.mockReturnValue({ data: fraudStatus("high", 100) });
-    render(<RoomModal room={room} onClose={vi.fn()} />);
+    renderModal(room);
 
     expect(screen.getByText("Under review (high risk)")).toBeInTheDocument();
   });
 
   it("renders the medium-risk badge for a MEDIUM flag", () => {
     mockUseRoomFraudStatus.mockReturnValue({ data: fraudStatus("medium", 60) });
-    render(<RoomModal room={room} onClose={vi.fn()} />);
+    renderModal(room);
 
     expect(screen.getByText("Under review (medium risk)")).toBeInTheDocument();
   });
 
   it("renders the bare badge for an informational LOW flag", () => {
     mockUseRoomFraudStatus.mockReturnValue({ data: fraudStatus("low", 25) });
-    render(<RoomModal room={room} onClose={vi.fn()} />);
+    renderModal(room);
 
     expect(screen.getByText("Under review")).toBeInTheDocument();
   });
 
   it("renders no badge when the room is clean", () => {
     mockUseRoomFraudStatus.mockReturnValue({ data: fraudStatus("clean") });
-    render(<RoomModal room={room} onClose={vi.fn()} />);
+    renderModal(room);
 
     expect(screen.queryByText(/Under review/)).not.toBeInTheDocument();
   });
 
   it("renders no badge while the fraud status is still loading", () => {
     mockUseRoomFraudStatus.mockReturnValue({ data: undefined });
-    render(<RoomModal room={room} onClose={vi.fn()} />);
+    renderModal(room);
 
     expect(screen.queryByText(/Under review/)).not.toBeInTheDocument();
   });

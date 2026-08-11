@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import (
     OpenApiExample,
@@ -9,11 +10,15 @@ from rest_framework import mixins, permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from rooms.models import Room
+from rooms.serializers import RoomListSerializer
 
 from .models import Wishlist
 from .serializers import WishlistSerializer
+
+User = get_user_model()
 
 
 @extend_schema_view(
@@ -117,3 +122,74 @@ class WishlistViewSet(
             {"status": "added", "wishlisted": True},
             status=status.HTTP_201_CREATED,
         )
+
+
+class WishlistShareInfoView(APIView):
+    """The authenticated user's wishlist share token + ready-to-share link.
+
+    The token is the unguessable key for the public view — the frontend needs
+    it to build the "Share my wishlist" button.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Wishlist"],
+        summary="Wishlist share link",
+        description="The authenticated user's wishlist share token and public link.",
+        responses=inline_serializer(
+            "WishlistShareInfoResponse",
+            fields={
+                "token": serializers.CharField(),
+                "link": serializers.CharField(),
+            },
+        ),
+    )
+    def get(self, request):
+        from django.conf import settings
+
+        return Response(
+            {
+                "token": str(request.user.wishlist_share_token),
+                "link": (
+                    f"{settings.FRONTEND_URL}/wishlist/share/{request.user.wishlist_share_token}"
+                ),
+            }
+        )
+
+
+class SharedWishlistView(APIView):
+    """Public, read-only view of a user's wishlist via its share token.
+
+    No authentication: the token *is* the credential (unguessable UUID). Only
+    room summaries are exposed — no personal info beyond the sharer's
+    username. ``404`` on a bad token, so tokens can't be enumerated.
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    @extend_schema(
+        tags=["Wishlist"],
+        summary="Shared wishlist (public)",
+        description=(
+            "Read-only room list for a shared wishlist link. The share token "
+            "acts as the access credential."
+        ),
+        responses=inline_serializer(
+            "SharedWishlistResponse",
+            fields={"owner": serializers.CharField(), "rooms": serializers.ListField()},
+        ),
+    )
+    def get(self, request, token):
+        from django.shortcuts import get_object_or_404
+
+        sharer = get_object_or_404(User, wishlist_share_token=token)
+        rooms = (
+            Wishlist.objects.filter(user=sharer)
+            .select_related("room", "room__owner")
+            .prefetch_related("room__images")
+            .values_list("room", flat=True)
+        )
+        room_qs = Room.objects.filter(pk__in=list(rooms), is_available=True)
+        data = RoomListSerializer(room_qs, many=True, context={"request": request}).data
+        return Response({"owner": sharer.username, "rooms": data})

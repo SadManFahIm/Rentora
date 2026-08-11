@@ -7,6 +7,7 @@ import RoomCardSkeleton from "../../components/RoomCardSkeleton";
 import RoomModal from "../../components/RoomModal/RoomModal";
 import SearchFilter from "../../components/SearchFilter/SearchFilter";
 import AIRecommendations from "../../components/AIRecommendations/AIRecommendations";
+import SavedSearchBar from "../../components/SavedSearchBar/SavedSearchBar";
 import { Button } from "../../components/ui/button";
 import type { Room, Filters } from "../../types";
 import { cn } from "../../lib/utils";
@@ -76,6 +77,9 @@ export default function Rooms() {
   return (
     <>
       <SearchFilter filters={filters} setFilters={setFilters} />
+      <div className="mx-auto mt-4 flex max-w-7xl justify-end px-4 md:px-6 lg:px-8">
+        <SavedSearchBar filters={filters} />
+      </div>
 
       <div className="mx-auto max-w-7xl px-4 py-12 md:px-6 md:py-16 lg:px-8">
         <div className="mb-6 flex items-center justify-between">

@@ -231,6 +231,8 @@ export interface RegisterPayload {
   name: string;
   email: string;
   password: string;
+  /** Optional referral code that attributed this signup (Phase 10). */
+  ref?: string;
 }
 
 export interface AuthResult {
@@ -516,4 +518,96 @@ export interface KycAuditEntry {
   userName: string;
   note: string;
   createdAt: string;
+}
+
+// ============================================================
+// Phase 10 — Growth & Personalization
+// ============================================================
+
+/** A saved room-search the user can be alerted about (Search v2). */
+export interface SavedSearch {
+  id: number;
+  name: string;
+  filters: {
+    q?: string;
+    area?: string;
+    room_type?: string;
+    gender_preference?: string;
+    price_min?: number;
+    price_max?: number;
+    verified?: boolean;
+  };
+  lastCheckedAt: string | null;
+  createdAt: string;
+}
+
+/** Referral program payload (GET /users/referral/). */
+export interface ReferralInfo {
+  code: string;
+  link: string;
+  invitedCount: number;
+  invited: { username: string; joinedAt: string }[];
+}
+
+/** One room's landlord-insights row (GET /rooms/insights/). */
+export interface RoomInsightRow {
+  id: number;
+  title: string;
+  price: number;
+  area: string;
+  roomType: string;
+  tier: string;
+  verified: boolean;
+  views7d: number;
+  views30d: number;
+  viewsTotal: number;
+  wishlistCount: number;
+  bookingRequests: number;
+  bookingApproved: number;
+  areaAvgPrice: number | null;
+  priceDeltaPct: number | null;
+}
+
+export interface RoomInsights {
+  rooms: RoomInsightRow[];
+  summary: {
+    listingCount: number;
+    totalViews30d: number;
+    totalWishlists: number;
+  };
+}
+
+/** Rating breakdown + recent reviews (GET /reviews/summary/?room=). */
+export interface ReviewSummary {
+  room: number;
+  averageRating: number;
+  totalReviews: number;
+  countsPerStar: Record<"1" | "2" | "3" | "4" | "5", number>;
+  recent: ReviewItem[];
+}
+
+export interface ReviewItem {
+  id: number;
+  room: number;
+  user: { id: number; username: string; firstName: string; avatar: string | null };
+  rating: number;
+  comment: string;
+  verifiedStay: boolean;
+  photos: string[];
+  reply: string;
+  repliedAt: string | null;
+  createdAt: string;
+}
+
+/** Similar rooms payload (GET /recommendations/similar/<room_id>/). */
+export interface SimilarRoomResult {
+  room: Room;
+  matchScore: number;
+  matchReasons: string[];
+}
+
+/** Wishlist share info (GET /wishlist/share-info/). */
+export interface WishlistShareInfo {
+  token: string;
+  link: string;
 }
