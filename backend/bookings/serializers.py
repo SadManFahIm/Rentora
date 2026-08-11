@@ -152,17 +152,40 @@ class ReviewSerializer(serializers.ModelSerializer):
     """Read representation used for list/retrieve."""
 
     user = RoomOwnerSerializer(read_only=True)
+    # Room-owner reply (set via the dedicated `reply` action, never the author
+    # editing their own review), photo URLs and stay-verification.
+    reply = serializers.CharField(read_only=True)
+    replied_at = serializers.DateTimeField(read_only=True)
 
     class Meta:
         model = Review
-        fields = ["id", "room", "user", "rating", "comment", "verified_stay", "created_at"]
+        fields = [
+            "id",
+            "room",
+            "user",
+            "rating",
+            "comment",
+            "verified_stay",
+            "photos",
+            "reply",
+            "replied_at",
+            "created_at",
+        ]
         read_only_fields = fields
 
 
 class ReviewCreateSerializer(serializers.ModelSerializer):
+    # Tenant photo proof — URLs of images already uploaded via the room media
+    # endpoint (kept as plain strings; validated here for shape only).
+    photos = serializers.ListField(
+        child=serializers.CharField(max_length=500),
+        required=False,
+        default=list,
+    )
+
     class Meta:
         model = Review
-        fields = ["id", "room", "rating", "comment"]
+        fields = ["id", "room", "rating", "comment", "photos"]
 
     def validate_comment(self, value: str) -> str:
         """Strip any HTML from the review comment to prevent stored XSS."""

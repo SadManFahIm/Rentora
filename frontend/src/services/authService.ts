@@ -159,13 +159,15 @@ export const authService = {
   },
 
   /** POST /auth/register/ → persist tokens, return the mapped user. */
-  async register({ name, email, password }: RegisterPayload): Promise<User> {
+  async register({ name, email, password, ref }: RegisterPayload): Promise<User> {
     const { data } = await api.post<AuthApiResponse>("/auth/register/", {
       username: usernameFromEmail(email),
       email,
       password1: password,
       password2: password,
       name,
+      // Referral program: attribute the signup to whoever shared their link.
+      ...(ref ? { ref } : {}),
     });
     setTokens(data.access, data.refresh);
     return mapUser(data.user);

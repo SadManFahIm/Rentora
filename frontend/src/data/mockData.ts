@@ -38,6 +38,20 @@ export const AREAS: string[] = [
   "Banani",
   "Mohammadpur",
   "Azimpur",
+  "Uttara",
+  "Tejgaon",
+  "Badda",
+  "Rampura",
+  "Banasree",
+  "Khilgaon",
+  "Motijheel",
+  "Old Dhaka",
+  "Bashundhara",
+  "Lalmatia",
+  "Shyamoli",
+  "Savar",
+  "Keraniganj",
+  "Tongi",
 ];
 export const ROOM_TYPES: string[] = ["All", "Single", "Shared", "Studio"];
 export const AMENITIES_LIST: string[] = [

@@ -106,7 +106,10 @@ api.interceptors.response.use(
     }
 
     // ---- 401 with no way to recover → bounce to auth ----
-    if (status === 401 && !isAuthPath(original?.url)) {
+    // Only bounce when we *had* a session (any token present): an anonymous
+    // visitor's 401s (e.g. the saved-searches list on the rooms page) are
+    // expected and must not yank them to /auth.
+    if (status === 401 && !isAuthPath(original?.url) && (getAccessToken() || getRefreshToken())) {
       redirectToAuth();
     } else if (status === 429) {
       toast.error("Too many requests — please slow down and try again shortly.");

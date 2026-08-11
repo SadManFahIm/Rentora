@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { LayoutGrid, List, SearchX } from "lucide-react";
+import { LayoutGrid, List, SearchX, Sparkles } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
-import { useRooms } from "../../hooks/useRooms";
+import { useRooms, useSmartRooms } from "../../hooks/useRooms";
 import RoomCard from "../../components/RoomCard/RoomCard";
 import RoomCardSkeleton from "../../components/RoomCardSkeleton";
 import RoomModal from "../../components/RoomModal/RoomModal";
 import SearchFilter from "../../components/SearchFilter/SearchFilter";
 import AIRecommendations from "../../components/AIRecommendations/AIRecommendations";
+import SavedSearchBar from "../../components/SavedSearchBar/SavedSearchBar";
 import { Button } from "../../components/ui/button";
 import type { Room, Filters } from "../../types";
 import { cn } from "../../lib/utils";
@@ -22,6 +23,7 @@ const DEFAULT_FILTERS: Filters = {
   minPrice: "",
   maxPrice: "",
   verified: false,
+  smart: false,
 };
 
 export default function Rooms() {
@@ -66,8 +68,14 @@ export default function Rooms() {
     setSearchParams(params, { replace: true });
   }, [filters.query, searchParams, setSearchParams]);
 
-  // Filtering + sorting happen in the service layer (mock server-side).
-  const { data: rooms = [], isLoading } = useRooms(filters);
+  // Smart mode (AI toggle): semantic ranking + natural-language parsing,
+  // with the backend's "what was understood" chips shown above the list.
+  const smartActive = Boolean(filters.smart);
+  const smart = useSmartRooms(filters);
+  const regular = useRooms(filters);
+  const rooms = smartActive ? (smart.data?.rooms ?? []) : (regular.data ?? []);
+  const isLoading = smartActive ? smart.isLoading : regular.isLoading;
+  const nlHints = smartActive ? (smart.data?.nlParsed?.hints ?? []) : [];
 
   const gridClass = gridView
     ? "grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
@@ -76,6 +84,26 @@ export default function Rooms() {
   return (
     <>
       <SearchFilter filters={filters} setFilters={setFilters} />
+      <div className="mx-auto mt-4 flex max-w-7xl items-center justify-between gap-3 px-4 md:px-6 lg:px-8">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {smartActive && nlHints.length > 0 && (
+            <>
+              <span className="flex items-center gap-1 text-xs font-semibold text-orange-600 dark:text-orange-400">
+                <Sparkles className="size-3.5" /> AI understood:
+              </span>
+              {nlHints.map((hint) => (
+                <span
+                  key={hint}
+                  className="rounded-full border border-orange-300 bg-orange-50 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-300"
+                >
+                  {hint}
+                </span>
+              ))}
+            </>
+          )}
+        </div>
+        <SavedSearchBar filters={filters} />
+      </div>
 
       <div className="mx-auto max-w-7xl px-4 py-12 md:px-6 md:py-16 lg:px-8">
         <div className="mb-6 flex items-center justify-between">

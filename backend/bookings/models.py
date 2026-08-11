@@ -52,6 +52,13 @@ class Review(models.Model):
     rating = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
     comment = models.TextField()
     verified_stay = models.BooleanField(default=False)
+    # Landlord reply (Phase 10 — Reviews v2): the room owner can answer a
+    # review once; `reply` text + `replied_at` timestamp together mean "has
+    # been answered".
+    reply = models.TextField(blank=True)
+    replied_at = models.DateTimeField(null=True, blank=True)
+    # Tenant photo proof — list of uploaded image URLs.
+    photos = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
