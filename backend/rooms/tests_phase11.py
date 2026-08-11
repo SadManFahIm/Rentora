@@ -63,6 +63,19 @@ class NlParserTests(APITestCase):
         self.assertIn("Uttara", parsed["areas"])
         self.assertTrue(any("10,000" in h for h in parsed["hints"]))
 
+    def test_bangla_number_words_and_area_names(self):
+        # "দশ হাজার" = 10,000 and "উত্তরা" = Uttara (Bangla gazetteer alias).
+        parsed = parse_nl_query("দশ হাজার এর মধ্যে উত্তরা")
+        self.assertEqual(parsed["budget_max"], 10000)
+        self.assertIn("Uttara", parsed["areas"])
+        self.assertTrue(any("10,000" in h for h in parsed["hints"]))
+        self.assertTrue(any("Uttara" in h for h in parsed["hints"]))
+
+    def test_bangla_word_budget_twenty_thousand(self):
+        parsed = parse_nl_query("বিশ হাজার এর মধ্যে ধানমন্ডি")
+        self.assertEqual(parsed["budget_max"], 20000)
+        self.assertIn("Dhanmondi", parsed["areas"])
+
     def test_english_budget_type_gender_month(self):
         parsed = parse_nl_query("৳12000 gulshan single male, july move-in")
         self.assertEqual(parsed["budget_max"], 12000)
