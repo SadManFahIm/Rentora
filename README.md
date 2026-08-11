@@ -561,8 +561,8 @@ Frontend runs at `http://localhost:3000`
 | GET       | `/api/v1/rooms/landmarks/` | Public | List landmarks (for `near_landmark`)              |
 | GET       | `/api/v1/rooms/summary/`   | Public | COUNT/AVG for the current viewport (map badge)    |
 | GET       | `/api/v1/rooms/geocode/?q=` | Public | Geocode a street/area (gazetteer + Nominatim)    |
-| GET       | `/api/v1/rooms/insights/`  | Owner  | Per-listing engagement + price vs area stats      |
-| POST      | `/api/v1/rooms/bulk/`      | Owner  | Bulk-create listings                              |
+| GET       | `/api/v1/rooms/insights/`  | Auth (own listings) | Per-listing engagement + price vs area stats      |
+| POST      | `/api/v1/rooms/bulk/`      | Auth  | Bulk-create listings (JSON array body)            |
 | GET       | `/api/v1/rooms/tier-catalog/` | Public | Tier pricing + benefits (drives Promote UI)     |
 | GET       | `/api/v1/rooms/:id/similar-images/` | Public | Rooms whose primary photo looks like this one (pHash) |
 
@@ -597,8 +597,8 @@ Frontend runs at `http://localhost:3000`
 | Method | Endpoint                   | Auth | Description                  |
 | ------ | -------------------------- | ---- | ---------------------------- |
 | GET    | `/api/v1/wishlist/`        | Auth | My wishlisted rooms          |
-| POST   | `/api/v1/wishlist/toggle/` | Auth | Toggle wishlist (add/remove) |
-| POST   | `/api/v1/wishlist/share-info/` | Auth | Get my public share token + link |
+| POST   | `/api/v1/wishlist/toggle/` | Auth | Toggle wishlist (`room_id` body) |
+| GET    | `/api/v1/wishlist/share-info/` | Auth | Get my public share token + link |
 | GET    | `/api/v1/wishlist/share/:token/` | Public | Public read-only wishlist (no personal info, 404 on bad token) |
 
 ### Notifications
@@ -617,7 +617,6 @@ Frontend runs at `http://localhost:3000`
 | -------- | ---------------------------- | ---- | ------------------------------------ |
 | GET      | `/api/v1/saved-searches/`    | Auth | My saved searches                    |
 | POST     | `/api/v1/saved-searches/`    | Auth | Save the current filter set          |
-| PATCH    | `/api/v1/saved-searches/:id/` | Auth | Rename / toggle active              |
 | DELETE   | `/api/v1/saved-searches/:id/` | Auth | Delete a saved search                |
 | POST     | `/api/v1/saved-searches/:id/check/` | Auth | Manual "check now" for new matches |
 
