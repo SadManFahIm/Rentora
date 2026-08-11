@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, ShieldCheck, SlidersHorizontal, X } from "lucide-react";
+import { Search, ShieldCheck, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { AREAS, ROOM_TYPES, AMENITIES_LIST } from "../../data/mockData";
 import type { Filters, SortOption, GenderPref } from "../../types";
 import { Input } from "../ui/input";
@@ -51,6 +51,7 @@ export default function SearchFilter({ filters, setFilters }: SearchFilterProps)
       minPrice: "",
       maxPrice: "",
       verified: false,
+      smart: false,
     });
     setShowPanel(false);
   };
@@ -63,12 +64,36 @@ export default function SearchFilter({ filters, setFilters }: SearchFilterProps)
           <div className="relative min-w-60 flex-1">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-gray-500" />
             <Input
-              className="h-11 rounded-xl pl-10"
-              placeholder="Search by name or area..."
+              className={cn("h-11 rounded-xl pl-10", filters.smart && "pr-2")}
+              placeholder={
+                filters.smart
+                  ? "Try: ১০ হাজার এর মধ্যে uttara student room, জুলাই move-in…"
+                  : "Search by name or area..."
+              }
               value={filters.query}
               onChange={(e) => update("query", e.target.value)}
             />
+            {filters.smart && (
+              <span className="absolute right-3.5 top-1/2 hidden -translate-y-1/2 rounded-full bg-gradient-to-r from-orange-500 to-pink-500 px-2 py-0.5 text-[10px] font-bold text-white sm:block">
+                AI
+              </span>
+            )}
           </div>
+
+          <button
+            type="button"
+            onClick={() => update("smart", !filters.smart)}
+            className={cn(
+              "flex h-11 items-center gap-1.5 rounded-xl border px-3.5 text-sm font-semibold transition-colors",
+              filters.smart
+                ? "border-orange-600 bg-gradient-to-r from-orange-500 to-pink-500 text-white shadow-sm"
+                : "border-gray-300 bg-background text-gray-600 hover:border-orange-600 hover:text-orange-600 dark:border-gray-700 dark:text-gray-400"
+            )}
+            title="Smart search: understand natural language (budget, area, move-in) + semantic ranking"
+          >
+            <Sparkles className="size-4" />
+            AI Search
+          </button>
 
           <div className="hidden flex-wrap gap-2 lg:flex">
             {AREAS.map((a) => (

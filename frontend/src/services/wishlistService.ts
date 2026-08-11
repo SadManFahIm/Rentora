@@ -1,6 +1,6 @@
 import { api } from "./api";
 import { mapRoom, type ApiRoom, type Paginated } from "./mappers";
-import type { Room } from "../types";
+import type { Room, WishlistShareInfo } from "../types";
 
 // ============================================================
 // WISHLIST SERVICE — real /wishlist/ endpoints
@@ -36,6 +36,12 @@ export const wishlistService = {
       room_id: roomId,
     });
     return data;
+  },
+
+  /** GET /wishlist/share-info/ → share token + public link (Phase 10). */
+  async getShareInfo(): Promise<WishlistShareInfo> {
+    const { data } = await api.get<{ token: string; link: string }>("/wishlist/share-info/");
+    return { token: data.token, link: data.link };
   },
 };
 

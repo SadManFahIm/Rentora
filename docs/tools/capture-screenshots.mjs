@@ -158,6 +158,73 @@ const CAPTURES = [
       return 'light';
     })()`,
   },
+  {
+    // Phase 10 — dashboard growth cards: referral invite + browser push.
+    user: "rahim.hossain",
+    route: "/dashboard",
+    out: "phase10-dashboard-growth.png",
+    waitMs: 4500,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+  },
+  {
+    // Phase 10 — landlord listing insights tab (views, wishlists, price vs area).
+    user: "rahim.hossain",
+    route: "/dashboard?tab=insights",
+    out: "phase10-insights.png",
+    waitMs: 4500,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+  },
+  {
+    // Phase 10 — Search v2: saved-search bar on the Rooms page (dropdown open).
+    user: "rahim.hossain",
+    route: "/rooms?q=studio",
+    out: "phase10-saved-search.png",
+    waitMs: 4000,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+    afterLoad: `(() => {
+      const btn = [...document.querySelectorAll('button')].find(b =>
+        b.textContent.includes('Saved searches'));
+      if (btn) { btn.click(); return 'opened'; }
+      return 'no-btn';
+    })()`,
+    afterLoadMs: 900,
+  },
+  {
+    // Phase 11 — AI smart search: the query arrives via the URL (?q=...),
+    // then afterLoad flips the AI Search toggle on, so the smart request
+    // carries the query and the "AI understood" chips (budget, area) render
+    // with the ranked results. The Bangla *word* query (দশ হাজার + উত্তরা)
+    // exercises the number-word + area-alias parsing added in PR #32.
+    user: "rahim.hossain",
+    route: "/rooms?q=%E0%A6%A6%E0%A6%B6%20%E0%A6%B9%E0%A6%BE%E0%A6%9C%E0%A6%BE%E0%A6%B0%20%E0%A6%8F%E0%A6%B0%20%E0%A6%AE%E0%A6%A7%E0%A7%8D%E0%A6%AF%E0%A7%87%20%E0%A6%89%E0%A6%A4%E0%A7%8D%E0%A6%A4%E0%A6%B0%E0%A6%BE",
+    out: "phase11-ai-search.png",
+    waitMs: 6000,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+    afterLoad: `(() => {
+      const btn = [...document.querySelectorAll('button')].find(b =>
+        b.textContent.trim() === 'AI Search');
+      if (!btn) return 'no-ai-btn';
+      btn.click();
+      return 'ai-on';
+    })()`,
+    afterLoadMs: 2500,
+  },
   // Email-OTP 2FA step: enable 2FA, sign in through the REAL login form
   // (token injection would bypass the challenge), screenshot the code step,
   // then disable 2FA again so the demo accounts stay in their default state.

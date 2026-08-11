@@ -8,6 +8,7 @@ from .views import (
     KycPendingApplicationsView,
     KycReviewView,
     KycSlaStatsView,
+    ReferralInfoView,
     UserViewSet,
 )
 
@@ -27,5 +28,6 @@ urlpatterns = [
     path("kyc/audit/", KycAuditTrailView.as_view(), name="kyc-audit"),
     path("kyc/sla/", KycSlaStatsView.as_view(), name="kyc-sla"),
     path("kyc/<int:user_id>/review/", KycReviewView.as_view(), name="kyc-review"),
+    path("referral/", ReferralInfoView.as_view(), name="referral-info"),
     *router.urls,
 ]

@@ -63,11 +63,16 @@ def create_notification(
         message=sanitize_text(message),
         action_url=action_url,
     )
-    _broadcast(notification)
+    broadcast_notification(notification)
+    # Best-effort browser push: the same notification lands on subscribed
+    # devices even when the user isn't in the app. Never blocks or raises.
+    from .webpush import send_push_to_user
+
+    send_push_to_user(user, notification.title, notification.message, notification.action_url)
     return notification
 
 
-def _broadcast(notification: Notification) -> None:
+def broadcast_notification(notification: Notification) -> None:
     """Push the notification to the recipient's live socket(s), if any.
 
     Safe to call from synchronous code (this whole module is sync) — wraps

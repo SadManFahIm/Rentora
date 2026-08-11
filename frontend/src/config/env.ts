@@ -8,6 +8,8 @@ interface AppEnv {
   WS_BASE_URL: string;
   /** Sentry DSN — empty when error tracking is not configured. */
   SENTRY_DSN: string;
+  /** Web Push VAPID public key — empty when push notifications are off. */
+  VAPID_PUBLIC_KEY: string;
 }
 
 /** Derive the ws(s):// origin from the REST API base URL, e.g.
@@ -31,6 +33,7 @@ export const env: AppEnv = {
   API_BASE_URL: apiBaseUrl,
   WS_BASE_URL: import.meta.env.VITE_WS_BASE_URL ?? deriveWsBaseUrl(apiBaseUrl),
   SENTRY_DSN: import.meta.env.VITE_SENTRY_DSN ?? "",
+  VAPID_PUBLIC_KEY: import.meta.env.VITE_VAPID_PUBLIC_KEY ?? "",
 };
 
 export default env;

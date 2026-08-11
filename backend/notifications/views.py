@@ -3,12 +3,13 @@ from drf_spectacular.utils import (
     extend_schema_view,
     inline_serializer,
 )
-from rest_framework import mixins, permissions, serializers, viewsets
+from rest_framework import mixins, permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from .models import Notification
+from .models import Notification, PushSubscription
 from .serializers import NotificationSerializer
 
 
@@ -89,3 +90,79 @@ class NotificationViewSet(
         """Return ``{"count": N}`` — the user's unread notification count."""
         count = self.get_queryset().filter(is_read=False).count()
         return Response({"count": count})
+
+
+class PushSubscriptionView(APIView):
+    """Register / unregister a browser Web Push subscription.
+
+    The browser sends the subscription it built with the app's VAPID public
+    key; we store it and start pushing notifications to it. POST is
+    idempotent (same endpoint re-saved), DELETE removes it.
+
+    Endpoints
+    ---------
+    * ``POST   /api/v1/notifications/push/subscribe/`` — ``{endpoint, auth, p256dh}``
+    * ``DELETE /api/v1/notifications/push/subscribe/`` — ``{endpoint}``
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Notifications"],
+        summary="Register a push subscription",
+        description="Store a browser Web Push subscription for the authenticated user.",
+        request=inline_serializer(
+            "PushSubscribeRequest",
+            fields={
+                "endpoint": serializers.URLField(),
+                "auth": serializers.CharField(),
+                "p256dh": serializers.CharField(),
+            },
+        ),
+        responses=inline_serializer(
+            "PushSubscribeResponse",
+            fields={"status": serializers.CharField()},
+        ),
+    )
+    def post(self, request: Request) -> Response:
+        endpoint = request.data.get("endpoint", "").strip()
+        auth = request.data.get("auth", "").strip()
+        p256dh = request.data.get("p256dh", "").strip()
+        if not endpoint or not auth or not p256dh:
+            return Response(
+                {"detail": "endpoint, auth and p256dh are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        _, created = PushSubscription.objects.update_or_create(
+            user=request.user,
+            endpoint=endpoint,
+            defaults={"auth": auth, "p256dh": p256dh},
+        )
+        return Response(
+            {"status": "created" if created else "updated"},
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        tags=["Notifications"],
+        summary="Unregister a push subscription",
+        description="Remove a stored push subscription by its endpoint.",
+        request=inline_serializer(
+            "PushUnsubscribeRequest",
+            fields={"endpoint": serializers.URLField()},
+        ),
+        responses=inline_serializer(
+            "PushUnsubscribeResponse",
+            fields={"status": serializers.CharField()},
+        ),
+    )
+    def delete(self, request: Request) -> Response:
+        endpoint = request.data.get("endpoint", "").strip()
+        if not endpoint:
+            return Response(
+                {"detail": "endpoint is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        deleted, _ = PushSubscription.objects.filter(user=request.user, endpoint=endpoint).delete()
+        return Response({"status": "deleted" if deleted else "not_found"})

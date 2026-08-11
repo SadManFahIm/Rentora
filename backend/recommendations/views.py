@@ -3,11 +3,13 @@ import logging
 from django.core.cache import cache
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions
+from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .serializers import RecommendationSerializer
 from .services.hybrid import get_hybrid_recommendations
+from .services.similar import get_similar_rooms
 
 logger = logging.getLogger(__name__)
 
@@ -47,4 +49,39 @@ class RecommendationListView(APIView):
         data = RecommendationSerializer(payload, many=True, context={"request": request}).data
 
         cache.set(cache_key, data, timeout=CACHE_TIMEOUT_SECONDS)
+        return Response(data)
+
+
+class SimilarRoomsView(APIView):
+    """Content-based "similar rooms" for one listing (Phase 10).
+
+    Reads are public (no auth) — the carousel appears on shared room links
+    and for anonymous visitors too.
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    @extend_schema(
+        tags=["Recommendations"],
+        summary="Similar rooms for a listing",
+        description=(
+            "Rooms most similar to the given room by area, type, price band "
+            "and amenities, ranked by similarity score."
+        ),
+    )
+    def get(self, request, room_id: int):
+        from rooms.models import Room
+
+        try:
+            room = Room.objects.get(pk=room_id)
+        except Room.DoesNotExist:
+            raise NotFound("Room not found.") from None
+
+        limit = int(request.query_params.get("limit", 8))
+        scored_rooms = get_similar_rooms(room, limit=limit)
+        payload = [
+            {"room": sr.room, "match_score": sr.score, "match_reasons": sr.reasons}
+            for sr in scored_rooms
+        ]
+        data = RecommendationSerializer(payload, many=True, context={"request": request}).data
         return Response(data)

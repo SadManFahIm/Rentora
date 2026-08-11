@@ -444,3 +444,38 @@ class KycReviewView(APIView):
                     )
                 )
         return Response(KycPendingUserSerializer(target, context={"request": request}).data)
+
+
+class ReferralInfoView(APIView):
+    """Referral program (Phase 10): the user's code, share link and stats.
+
+    ``GET /api/v1/users/referral/`` returns the authenticated user's referral
+    code, a ready-to-share signup link, and how many accounts they've brought
+    in (with usernames/join dates). The frontend renders the invite card from
+    this single payload.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Users"],
+        summary="Referral code + stats",
+        description="The authenticated user's referral code, share link, and invited users.",
+    )
+    def get(self, request):
+        referrals = request.user.referrals.order_by("date_joined")
+        invited = [
+            {
+                "username": u.username,
+                "joined_at": u.date_joined.isoformat(),
+            }
+            for u in referrals
+        ]
+        return Response(
+            {
+                "code": request.user.referral_code,
+                "link": (f"{settings.FRONTEND_URL}/auth/register?ref={request.user.referral_code}"),
+                "invited_count": len(invited),
+                "invited": invited,
+            }
+        )

@@ -1,7 +1,12 @@
 from django.conf import settings
 from django.db.models import Q
-from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
-from rest_framework import permissions, status, viewsets
+from drf_spectacular.utils import (
+    OpenApiExample,
+    extend_schema,
+    extend_schema_view,
+    inline_serializer,
+)
+from rest_framework import permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -152,9 +157,11 @@ class ReviewViewSet(viewsets.ModelViewSet):
         return ReviewSerializer
 
     def get_permissions(self):
-        if self.action in ("list", "retrieve"):
+        if self.action in ("list", "retrieve", "summary"):
             return [permissions.AllowAny()]
         if self.action == "create":
+            return [permissions.IsAuthenticated()]
+        if self.action == "reply":
             return [permissions.IsAuthenticated()]
         return [permissions.IsAuthenticated(), IsReviewAuthorOrReadOnly()]
 
@@ -164,3 +171,77 @@ class ReviewViewSet(viewsets.ModelViewSet):
         review = serializer.save()
         output = ReviewSerializer(review, context=self.get_serializer_context())
         return Response(output.data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
+        tags=["Reviews"],
+        summary="Rating breakdown for a room",
+        description=(
+            "Aggregated rating stats for one room: average, total, counts "
+            "per star and the recent reviews (with any landlord replies)."
+        ),
+    )
+    @action(detail=False, methods=["get"], url_path="summary")
+    def summary(self, request):
+        """Rating breakdown + recent reviews for ``?room=<id>``."""
+        room_id = request.query_params.get("room")
+        if not room_id:
+            return Response(
+                {"detail": "room query param is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        reviews = self.get_queryset().filter(room_id=room_id)
+        from django.db.models import Avg, Count
+
+        agg = reviews.aggregate(avg=Avg("rating"), total=Count("id"))
+        per_star = {str(star): reviews.filter(rating=star).count() for star in range(1, 6)}
+        recent = ReviewSerializer(
+            reviews[:10], many=True, context=self.get_serializer_context()
+        ).data
+        return Response(
+            {
+                "room": int(room_id),
+                "average_rating": round(float(agg["avg"] or 0), 2),
+                "total_reviews": agg["total"],
+                "counts_per_star": per_star,
+                "recent": recent,
+            }
+        )
+
+    @extend_schema(
+        tags=["Reviews"],
+        summary="Landlord reply to a review",
+        description=(
+            "The room owner (or an admin) answers a review. One reply per "
+            "review — replying again overwrites the earlier text and timestamp."
+        ),
+        request=inline_serializer(
+            "ReviewReplyRequest",
+            fields={"reply": serializers.CharField()},
+        ),
+        responses=inline_serializer(
+            "ReviewReplyResponse",
+            fields={"status": serializers.CharField(), "reply": serializers.CharField()},
+        ),
+    )
+    @action(detail=True, methods=["post"], url_path="reply")
+    def reply(self, request, pk=None):
+        """Room owner / admin sets the landlord reply on a review."""
+        from django.utils import timezone
+
+        review = self.get_object()
+        is_staff = request.user.is_staff or request.user.role == request.user.Role.ADMIN
+        if not is_staff and review.room.owner_id != request.user.id:
+            return Response(
+                {"detail": "Only the room owner can reply."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        text = (request.data.get("reply") or "").strip()
+        if not text:
+            return Response(
+                {"detail": "reply is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        review.reply = text[:2000]
+        review.replied_at = timezone.now()
+        review.save(update_fields=["reply", "replied_at"])
+        return Response({"status": "ok", "reply": review.reply})
