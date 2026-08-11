@@ -27,6 +27,7 @@
 - [Quality Engineering](#-quality-engineering)
 - [Getting Started](#-getting-started)
 - [API Endpoints](#-api-endpoints)
+- [Documentation](#documentation)
 - [Security](#-security)
 - [Passkeys / WebAuthn](#-passkeys--webauthn--shipped)
 - [Demo Users](#-demo-users)
@@ -720,6 +721,8 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 | `/api/v1/docs/`   | Swagger UI            |
 | `/api/v1/redoc/`  | ReDoc                 |
 | `/api/v1/schema/` | OpenAPI schema (YAML) |
+
+> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook)
 
 ---
 
