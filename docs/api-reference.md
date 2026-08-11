@@ -3,6 +3,7 @@
 > Base URL: `http://localhost:8000/api/v1` (dev) · Interactive docs: `/api/v1/docs/` (Swagger), `/api/v1/redoc/` (ReDoc), schema at `/api/v1/schema/`.
 > Auth: `Authorization: Bearer <access_token>` for authenticated endpoints.
 > This reference is hand-maintained alongside the README; the OpenAPI schema at `/api/v1/schema/` is always the source of truth.
+> **Live-verified:** every endpoint below was checked against a running dev server (status code + response shape, incl. auth failure modes and admin 403s). Re-run anytime with `python docs/tools/api-verify.py`.
 
 ---
 
@@ -87,8 +88,8 @@
 | GET | `/rooms/landmarks/` | Public | universities 🎓 / metro 🚇 for map layers |
 | GET | `/rooms/summary/` | Public | `COUNT/AVG` for the current viewport — powers the "N of M in view" badge |
 | GET | `/rooms/geocode/?q=` | Public | gazetteer + Nominatim fallback |
-| GET | `/rooms/insights/` | Owner | per-listing views 7d/30d, wishlists, bookings, price vs area |
-| POST | `/rooms/bulk/` | Owner | bulk listing creation |
+| GET | `/rooms/insights/` | Auth (own listings) | per-listing views 7d/30d, wishlists, bookings, price vs area |
+| POST | `/rooms/bulk/` | Auth | bulk listing creation (JSON array body, per-row errors) |
 | GET | `/rooms/tier-catalog/` | Public | tier pricing + benefits (Promote UI) |
 | GET | `/rooms/:id/similar-images/` | Public | look-alike rooms via pHash |
 
@@ -135,8 +136,8 @@ Reviews support **landlord replies** and **photo attachments** (Phase 10).
 | Method | Endpoint | Auth | Notes |
 | --- | --- | --- | --- |
 | GET | `/wishlist/` | Auth | my saved rooms |
-| POST | `/wishlist/toggle/` | Auth | `{room: id}` → add/remove (idempotent) |
-| POST | `/wishlist/share-info/` | Auth | my public share token + link |
+| POST | `/wishlist/toggle/` | Auth | `{room_id: <int>}` → add/remove (idempotent) |
+| GET | `/wishlist/share-info/` | Auth | my public share token + link |
 | GET | `/wishlist/share/:token/` | Public | read-only room summaries; 404 on unknown token (no enumeration) |
 
 ---
@@ -161,8 +162,7 @@ Every in-app notification is fanned out to email (branded template) + browser pu
 | --- | --- | --- | --- |
 | GET | `/saved-searches/` | Auth | my saved searches |
 | POST | `/saved-searches/` | Auth | save current filter set `{name, filters}` |
-| PATCH | `/saved-searches/:id/` | Auth | rename / toggle active |
-| DELETE | `/saved-searches/:id/` | Auth | delete |
+| DELETE | `/saved-searches/:id/` | Auth | delete (rename/toggle-active update endpoint not exposed) |
 | POST | `/saved-searches/:id/check/` | Auth | manual "check now" for new matches |
 
 A daily Celery beat task notifies you when a **new** matching listing appears (never re-alerts the same rooms).
