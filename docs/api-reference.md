@@ -3,7 +3,7 @@
 > Base URL: `http://localhost:8000/api/v1` (dev) · Interactive docs: `/api/v1/docs/` (Swagger), `/api/v1/redoc/` (ReDoc), schema at `/api/v1/schema/`.
 > Auth: `Authorization: Bearer <access_token>` for authenticated endpoints.
 > This reference is hand-maintained alongside the README; the OpenAPI schema at `/api/v1/schema/` is always the source of truth.
-> **Live-verified:** every endpoint below is checked against a running server on three layers — status code, **deep JSON schema** (required fields + wire types) and **OpenAPI cross-check** (every tested path must exist in `/api/v1/schema/`). Re-run anytime with `python docs/tools/api-verify.py`.
+> **Live-verified:** every endpoint below is checked against a running server on four layers — status code, **deep JSON schema** (required fields + wire types), **request-body contracts** (payloads validated against documented field names/types, plus malformed-payload probes asserting the right field error) and **OpenAPI cross-check** (every tested path must exist in `/api/v1/schema/`). Re-run anytime with `python docs/tools/api-verify.py`.
 
 ---
 

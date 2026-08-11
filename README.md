@@ -420,7 +420,7 @@ If a check fails, the commit is **blocked** — fix and commit again (bypass wit
 | ---------------------- | ----------------------------------------------------------- | --------------- |
 | `ci.yml`               | Backend — Django tests + coverage gate                      | every push / PR |
 | `ci.yml`               | Frontend — Vitest + coverage + `npm run build`              | every push / PR |
-| `ci.yml`               | API contract — boots a server + runs the live endpoint suite vs the docs reference (**status codes + deep JSON schema + OpenAPI path cross-check**, `docs/tools/api-verify.py`) | every push / PR |
+| `ci.yml`               | API contract — boots a server + runs the live endpoint suite vs the docs reference (**status codes + deep JSON schema + request-body contracts + OpenAPI path cross-check**, `docs/tools/api-verify.py`) | every push / PR |
 | `ci.yml`               | Lint — ruff + ESLint + Prettier                             | every push / PR |
 | `coverage-summary.yml` | Posts a coverage **PR comment** (badge + file-level detail) | PRs             |
 | `ci.yml` `coverage-history` job | Appends per-branch coverage history (`history-<branch>.csv` + SVG chart) to the `coverage-history` branch | pushes to main **and** PRs (same-repo; fork PRs skip) |
