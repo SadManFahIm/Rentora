@@ -30,8 +30,9 @@ def alert_kyc_sla_breaches():
     from django.utils import timezone
 
     from config.sanitizers import sanitize_text
-    from notifications.emails import send_html_email
-    from notifications.models import Notification
+    from notifications.email_guard import send_alert_email
+    from notifications.models import EmailDeliveryLog, Notification
+    from notifications.utils import broadcast_notification
 
     from .models import KycDocument
     from .views import SLA_OLDEST_PENDING_BREACH_H
@@ -89,6 +90,9 @@ def alert_kyc_sla_breaches():
 
     today = timezone.localdate()
     alerted = 0
+    emails_sent = 0
+    emails_skipped = 0
+    emails_failed = 0
     for breach in breaches:
         title = breach["title"]
         message = breach["message"]
@@ -97,7 +101,7 @@ def alert_kyc_sla_breaches():
             # so (admin, type, title) is unique per day per condition. A
             # retried or racing beat run cannot stack identical alerts even
             # if it runs concurrently.
-            _, created = Notification.objects.get_or_create(
+            notification, created = Notification.objects.get_or_create(
                 user=admin,
                 notification_type=Notification.Type.KYC_SLA_BREACH,
                 title=sanitize_text(f"{title} — {today:%b %d}"),
@@ -108,7 +112,12 @@ def alert_kyc_sla_breaches():
             )
             if not created:
                 continue
-            send_html_email(
+            # Live WebSocket push — the admin's open dashboard/Navbar socket
+            # receives this instantly via the notifications channel layer.
+            broadcast_notification(notification)
+            # Emails are best-effort and throttled (daily budget + failure
+            # backoff) so a misbehaving SMTP can never spam the team.
+            delivery = send_alert_email(
                 subject=f"[{settings.SITE_NAME}] {title}",
                 to_email=admin.email,
                 template_name="kyc_sla_alert",
@@ -119,9 +128,28 @@ def alert_kyc_sla_breaches():
                     "action_url": f"{settings.FRONTEND_URL}/dashboard?tab=kyc",
                 },
             )
+            if delivery.status == EmailDeliveryLog.Status.SENT:
+                emails_sent += 1
+            elif delivery.status == EmailDeliveryLog.Status.SKIPPED:
+                emails_skipped += 1
+            else:
+                emails_failed += 1
             alerted += 1
 
     logger.info(
-        "KYC SLA breach alert: %s condition(s), %d admin notification(s)", len(breaches), alerted
+        "KYC SLA breach alert: %s condition(s), %d admin notification(s), "
+        "%d email(s) sent, %d skipped, %d failed",
+        len(breaches),
+        alerted,
+        emails_sent,
+        emails_skipped,
+        emails_failed,
     )
-    return {"breaches": [b["key"] for b in breaches], "alerted": alerted}
+    return {
+        "breaches": [b["key"] for b in breaches],
+        "alerted": alerted,
+        "websocket_pushed": alerted,
+        "emails_sent": emails_sent,
+        "emails_skipped": emails_skipped,
+        "emails_failed": emails_failed,
+    }

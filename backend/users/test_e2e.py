@@ -553,6 +553,121 @@ class KycAdminPanelE2ETest(APITestCase):
         self.assertEqual(second["alerted"], 0)
         self.assertEqual(len(mail.outbox), 0)
 
+    def test_sla_breach_task_broadcasts_over_websocket(self):
+        """Every created alert notification is pushed live to the admin's
+        notification channel group (the Navbar socket shows it instantly)."""
+        from datetime import timedelta
+        from unittest.mock import patch
+
+        from django.utils import timezone as tz
+
+        from users.tasks import alert_kyc_sla_breaches
+
+        old = KycDocument.objects.create(
+            user=self.landlord,
+            doc_type="nid",
+            file=SimpleUploadedFile("old.jpg", b"x" * 10, content_type="image/jpeg"),
+            status=KycDocument.Status.PENDING,
+        )
+        KycDocument.objects.filter(pk=old.pk).update(created_at=tz.now() - timedelta(days=3))
+
+        with (
+            patch("notifications.utils.broadcast_notification") as mock_broadcast,
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            result = alert_kyc_sla_breaches()
+
+        # One breach x one admin -> exactly one notification broadcast.
+        self.assertEqual(result["websocket_pushed"], 1)
+        self.assertEqual(mock_broadcast.call_count, 1)
+        pushed = mock_broadcast.call_args.args[0]
+        self.assertEqual(pushed.notification_type, Notification.Type.KYC_SLA_BREACH)
+        self.assertEqual(pushed.user_id, self.admin.pk)
+
+    def test_sla_breach_task_rate_limits_email_blast(self):
+        """A multi-condition breach still respects the per-recipient daily
+        budget: later emails are skipped, not sent."""
+        from datetime import timedelta
+
+        from django.core import mail
+        from django.test import override_settings
+        from django.utils import timezone as tz
+
+        from notifications.models import EmailDeliveryLog
+        from users.tasks import alert_kyc_sla_breaches
+
+        # Two simultaneous breaches: stuck queue + slipping week.
+        old = KycDocument.objects.create(
+            user=self.landlord,
+            doc_type="nid",
+            file=SimpleUploadedFile("old.jpg", b"x" * 10, content_type="image/jpeg"),
+            status=KycDocument.Status.PENDING,
+        )
+        KycDocument.objects.filter(pk=old.pk).update(created_at=tz.now() - timedelta(days=3))
+        old_resolved = KycDocument.objects.create(
+            user=self.landlord,
+            doc_type="passport",
+            file=SimpleUploadedFile("old_resolved.jpg", b"y" * 10, content_type="image/jpeg"),
+            status=KycDocument.Status.APPROVED,
+            reviewed_at=tz.now() - timedelta(days=10),
+        )
+        KycDocument.objects.filter(pk=old_resolved.pk).update(
+            created_at=tz.now() - timedelta(days=11)
+        )
+
+        with (
+            override_settings(ALERT_EMAIL_DAILY_BUDGET=1),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            result = alert_kyc_sla_breaches()
+
+        self.assertEqual(set(result["breaches"]), {"oldest_pending", "trend_negative"})
+        self.assertEqual(result["alerted"], 2)
+        # Both notifications were created and pushed; only the first email
+        # went out, the second was throttled by the daily budget.
+        self.assertEqual(result["emails_sent"], 1)
+        self.assertEqual(result["emails_skipped"], 1)
+        self.assertEqual(result["emails_failed"], 0)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(
+            EmailDeliveryLog.objects.filter(status=EmailDeliveryLog.Status.SENT).count(), 1
+        )
+        skipped = EmailDeliveryLog.objects.get(status=EmailDeliveryLog.Status.SKIPPED)
+        self.assertIn("daily budget", skipped.error)
+
+    def test_sla_breach_task_logs_failed_email_without_raising(self):
+        """A send failure is recorded in the delivery ledger and the task
+        still completes — email is best-effort."""
+        from datetime import timedelta
+        from unittest.mock import patch
+
+        from django.utils import timezone as tz
+
+        from notifications.models import EmailDeliveryLog
+        from users.tasks import alert_kyc_sla_breaches
+
+        old = KycDocument.objects.create(
+            user=self.landlord,
+            doc_type="nid",
+            file=SimpleUploadedFile("old.jpg", b"x" * 10, content_type="image/jpeg"),
+            status=KycDocument.Status.PENDING,
+        )
+        KycDocument.objects.filter(pk=old.pk).update(created_at=tz.now() - timedelta(days=3))
+
+        # send_html_email failing (returning 0) simulates SMTP trouble.
+        with (
+            patch("notifications.email_guard.send_html_email", return_value=0),
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            result = alert_kyc_sla_breaches()
+
+        self.assertEqual(result["alerted"], 1)
+        self.assertEqual(result["emails_failed"], 1)
+        self.assertEqual(result["emails_sent"], 0)
+        failed = EmailDeliveryLog.objects.get(status=EmailDeliveryLog.Status.FAILED)
+        self.assertEqual(failed.recipient, self.admin.email)
+        self.assertEqual(failed.template_name, "kyc_sla_alert")
+
     def test_rejection_sends_email_with_note_and_reupload_link(self):
         """Rejecting a document emails the landlord with the reviewer's note
         and a direct re-upload link; approving sends no rejection email.
