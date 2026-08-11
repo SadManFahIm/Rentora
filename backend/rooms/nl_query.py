@@ -27,6 +27,40 @@ from .streets import STREETS
 # ---------------------------------------------------------------- numerals
 
 _BANGLA_DIGITS = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
+# Bangla number *words* (দশ, বিশ…) — the digit path ("১০") is handled above.
+_NUMBER_WORDS = {
+    "এক": 1,
+    "দুই": 2,
+    "তিন": 3,
+    "চার": 4,
+    "পাঁচ": 5,
+    "ছয়": 6,
+    "ছয়": 6,
+    "সাত": 7,
+    "আট": 8,
+    "নয়": 9,
+    "নয়": 9,
+    "দশ": 10,
+    "এগারো": 11,
+    "বারো": 12,
+    "তেরো": 13,
+    "চৌদ্দ": 14,
+    "পনেরো": 15,
+    "ষোল": 16,
+    "ষোলো": 16,
+    "সতেরো": 17,
+    "আঠারো": 18,
+    "উনিশ": 19,
+    "বিশ": 20,
+    "ত্রিশ": 30,
+    "চল্লিশ": 40,
+    "পঞ্চাশ": 50,
+    "ষাট": 60,
+    "সত্তর": 70,
+    "আশি": 80,
+    "নব্বই": 90,
+    "শত": 100,
+}
 # Multipliers used in Bangla number words (and their English equivalents).
 _MULTIPLIERS = {
     "হাজার": 1_000,
@@ -125,9 +159,20 @@ def parse_bangla_number(token: str) -> int | None:
 
 
 def _parse_number_with_unit(text: str) -> int | None:
-    """Parse '১০ হাজার', '12 thousand', '12000' (with optional currency)."""
-    t = normalize_bangla(text).lower().strip()
-    match = re.match(r"^[৳tkটাকাঃ]*\s*([\d,]+)\s*([\d,]*)\s*(হাজার|লাখ|কোটি|thousand|k)?", t)
+    """Parse '১০ হাজার', 'দশ হাজার', '12 thousand', '12000' (optional currency)."""
+    t = re.sub(r"^[৳tkটাকাঃ ]+", "", normalize_bangla(text).lower().strip())
+    # Bangla number words: "দশ হাজার" -> 10000, "বিশ হাজার" -> 20000.
+    word_match = re.match(r"^([\u0980-\u09ff]+)\s*(হাজার|লাখ|লক্ষ|কোটি|thousand)?", t)
+    if word_match:
+        word = word_match.group(1)
+        if word in _NUMBER_WORDS:
+            value = _NUMBER_WORDS[word]
+            mult = word_match.group(2)
+            if mult:
+                value *= _MULTIPLIERS.get(mult, 1_000)
+            return value
+    # Digit path: "১০ হাজার", "12 thousand", "12000".
+    match = re.match(r"^([\d,]+)\s*([\d,]*)\s*(হাজার|লাখ|কোটি|thousand|k)?", t)
     if not match:
         return None
     number_part = (match.group(1) + (match.group(2) or "")).replace(",", "")
