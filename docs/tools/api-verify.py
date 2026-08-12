@@ -309,6 +309,23 @@ def deep_validate(value, schema, path="root", problems=None):
             else:
                 deep_validate(value[key], real, f"{path}.{key}", problems)
         return problems
+    if isinstance(schema, tuple):
+        # A union (e.g. (dict_contract, "null") from a nullable object). Try
+        # each variant: dict contracts recurse deeply, scalars/null use _ok.
+        # A failed deep branch must not leave its problems behind (the next
+        # variant may match).
+        for variant in schema:
+            if isinstance(variant, dict):
+                if isinstance(value, dict):
+                    before = len(problems)
+                    deep_validate(value, variant, path, problems)
+                    if len(problems) == before:
+                        return problems
+                    del problems[before:]
+            elif _ok(variant, value):
+                return problems
+        problems.append(f"{path}: expected {schema}, got {_type_token(value)}")
+        return problems
     if not _ok(schema, value):
         problems.append(f"{path}: expected {schema}, got {_type_token(value)}")
     return problems

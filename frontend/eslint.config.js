@@ -7,7 +7,11 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import prettier from "eslint-config-prettier";
 
 export default tseslint.config(
-  { ignores: ["dist", "build", "node_modules"] },
+  {
+    // `src/generated` holds CI-generated OpenAPI types (openapi.d.ts) —
+    // machine-written, not linted/format-checked.
+    ignores: ["dist", "build", "node_modules", "src/generated"],
+  },
   {
     files: ["**/*.{ts,tsx}"],
     extends: [

@@ -32,18 +32,20 @@ export interface Paginated<T> {
 export interface ApiRoomImage {
   id: number;
   image: string;
-  is_primary: boolean;
+  /** Optional in the schema — the backend model has a default. */
+  is_primary?: boolean;
   created_at: string;
 }
 
 export interface ApiOwner {
   id: number;
   username: string;
-  first_name: string;
-  last_name: string;
-  avatar: string | null;
-  phone: string;
-  nid_verified: boolean;
+  /** Optional in the schema (User model allows blank names). */
+  first_name?: string;
+  last_name?: string;
+  avatar?: string | null;
+  phone?: string;
+  nid_verified?: boolean;
 }
 
 export interface ApiRoom {
@@ -56,15 +58,18 @@ export interface ApiRoom {
   lat?: string | number;
   lng?: string | number;
   amenities?: string[];
-  gender_preference: string;
+  /** Optional in the schema — the backend model has a default. */
+  gender_preference?: string;
   size_sqft: number;
-  is_available: boolean;
+  /** Optional in the schema — the backend model has a default. */
+  is_available?: boolean;
   tier?: string;
   tier_expires_at?: string | null;
   is_featured: boolean;
-  rating: string | number;
-  total_reviews: number;
-  verified: boolean;
+  /** Optional in the schema (aggregate computed per room). */
+  rating?: string | number;
+  total_reviews?: number;
+  verified?: boolean;
   owner?: ApiOwner | null;
   images?: ApiRoomImage[];
   created_at: string;
@@ -96,7 +101,8 @@ export interface ApiNotification {
   notification_type_display: string;
   title: string;
   message: string;
-  is_read: boolean;
+  /** Optional in the schema — the backend model has a default. */
+  is_read?: boolean;
   action_url: string;
   created_at: string;
 }
@@ -104,9 +110,10 @@ export interface ApiNotification {
 export interface ApiChatUser {
   id: number;
   username: string;
-  first_name: string;
-  last_name: string;
-  avatar: string | null;
+  /** Optional in the schema (User model allows blank names). */
+  first_name?: string;
+  last_name?: string;
+  avatar?: string | null;
   nid_verified?: boolean;
 }
 
@@ -141,8 +148,9 @@ export interface ApiUser {
   id?: number;
   username: string;
   email: string;
-  first_name: string;
-  last_name: string;
+  /** Optional in the schema (User model allows blank names). */
+  first_name?: string;
+  last_name?: string;
   phone?: string;
   avatar?: string | null;
   role?: string;
@@ -224,12 +232,15 @@ export function mapRoom(api: ApiRoom): Room {
     area: api.area,
     lat: Number(api.lat ?? 0),
     lng: Number(api.lng ?? 0),
-    rating: Number(api.rating),
-    reviews: api.total_reviews,
+    rating: Number(api.rating ?? 0),
+    reviews: api.total_reviews ?? 0,
     img: pickImage(api),
     amenities: api.amenities ?? [],
-    gender: genderLabel(api.gender_preference),
-    available: api.is_available,
+    // gender_preference is optional in the schema (model default) — default
+    // to the backend's own default so the card never renders an empty badge.
+    gender: genderLabel(api.gender_preference ?? "any"),
+    // is_available is optional in the schema (model default True).
+    available: api.is_available ?? true,
     tier: (api.tier as Room["tier"]) ?? "free",
     tierExpiresAt: api.tier_expires_at ?? null,
     featured: api.is_featured || api.tier === "featured" || api.tier === "premium",
@@ -238,7 +249,7 @@ export function mapRoom(api: ApiRoom): Room {
     owner,
     ownerId: api.owner?.id ?? null,
     ownerAvatar: initials(owner),
-    verified: api.verified,
+    verified: api.verified ?? false,
     distanceKm: api.distance_km != null ? Number(api.distance_km) : null,
     proximity: api.proximity
       ? {
@@ -279,7 +290,7 @@ export function mapNotification(api: ApiNotification): Notification {
   return {
     id: api.id,
     text: api.message || api.title,
-    read: api.is_read,
+    read: api.is_read ?? false,
     time: relativeTime(api.created_at),
   };
 }
@@ -288,9 +299,9 @@ export function mapChatUser(api: ApiChatUser): ChatUser {
   return {
     id: api.id,
     username: api.username,
-    firstName: api.first_name,
-    lastName: api.last_name,
-    avatar: api.avatar,
+    firstName: api.first_name ?? "",
+    lastName: api.last_name ?? "",
+    avatar: api.avatar ?? null,
     nidVerified: api.nid_verified,
   };
 }

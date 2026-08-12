@@ -6,6 +6,8 @@
 > **Live-verified:** every endpoint below is checked against a running server on four layers — status code, **deep JSON schema** (required fields + wire types), **request-body contracts** (payloads validated against documented field names/types, plus malformed-payload probes asserting the right field error) and **OpenAPI cross-check** (every tested path must exist in `/api/v1/schema/`). Response and request contracts are **auto-generated from the live OpenAPI schema at runtime** — no hand-maintained tables to drift; a small override table handles only genuinely ambiguous shapes (e.g. `allOf` inheritance, `SerializerMethodField` types). Re-run anytime with `python docs/tools/api-verify.py`.
 >
 > Auto-generation also caught and fixed **real backend schema bugs**: `SerializerMethodField`-backed fields (`is_featured`, `passkeys`) mis-declared as `string`, action endpoints (`summary`, `tier-catalog`, `insights`, `bulk`, reviews `summary`) declaring the wrong 200 response schema, and nullable fields not honoring `null` in wire responses.
+>
+> **Frontend contract check:** the frontend's hand-written wire types (`frontend/src/services/mappers.ts`) are typechecked against these schemas in CI (`openapi-typescript` generates `frontend/src/generated/openapi.d.ts` from the live schema, then `tsc -p frontend/tsconfig.contract.json` asserts each generated component satisfies the corresponding wire type via `frontend/src/lib/schemaContract.ts`). A field rename/removal or incompatible type change fails the PR. **Schema-drift PR comment:** every PR's head schema is diffed against base by `docs/tools/schema-drift.py` and a sticky comment lists any endpoint/component changes (doc-only changes are ignored).
 
 ---
 

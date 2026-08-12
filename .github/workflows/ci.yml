@@ -106,6 +106,115 @@ jobs:
           kill "$SERVER_PID" 2>/dev/null || true
           exit "$EXIT"
 
+  schema-drift:
+    # Diff the PR head's OpenAPI schema against the base branch and post a
+    # sticky PR comment when the contract moved (endpoints added/removed,
+    # request/response schema refs changed, component fields/types changed).
+    # Doc-only changes (descriptions/examples) are NOT drift. Fork PRs get a
+    # read-only GITHUB_TOKEN so commenting may fail there — never fail CI for it.
+    name: Schema drift (API diff comment)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Dump base schema (worktree at base SHA)
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          git worktree add /tmp/base "$BASE_SHA"
+          (cd /tmp/base/backend && python manage.py spectacular --file /tmp/base-schema.json --format openapi-json 2>/dev/null)
+          git worktree remove /tmp/base --force
+
+      - name: Dump head schema
+        run: python manage.py spectacular --file /tmp/head-schema.json --format openapi-json 2>/dev/null
+
+      - name: Run drift diff
+        id: drift
+        # Exit 1 = drift found; that must NOT fail the job (we want the comment
+        # posted, and drift itself is information, not a hard failure). Use
+        # `set +e` because the default bash -e would abort before EXIT=$?.
+        run: |
+          set +e
+          python ../docs/tools/schema-drift.py /tmp/base-schema.json /tmp/head-schema.json --out /tmp/drift.md
+          EXIT=$?
+          set -e
+          echo "drift_found=$([ $EXIT -eq 1 ] && echo 1 || echo 0)" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Post drift comment
+        if: steps.drift.outputs.drift_found == '1'
+        uses: marocchino/sticky-pull-request-comment@v2
+        continue-on-error: true
+        with:
+          header: api-schema-drift
+          path: /tmp/drift.md
+
+  frontend-contract:
+    # Regenerate the frontend's TypeScript types from the live OpenAPI schema
+    # and typecheck the hand-written wire types (services/mappers.ts) against
+    # them via src/lib/schemaContract.ts. A backend field rename/removal or
+    # incompatible type change fails this check before the PR can merge.
+    name: Frontend contract (schema -> TS types)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Dump OpenAPI schema
+        run: |
+          mkdir -p ../frontend/src/generated
+          python manage.py spectacular --file ../frontend/src/generated/openapi.json --format openapi-json 2>/dev/null
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Generate TypeScript types from schema
+        run: npx openapi-typescript src/generated/openapi.json -o src/generated/openapi.d.ts
+        working-directory: frontend
+
+      - name: Typecheck wire types against schema
+        run: npx tsc --noEmit -p tsconfig.contract.json
+        working-directory: frontend
+
   frontend:
     name: Frontend (Vitest + build)
     runs-on: ubuntu-latest
