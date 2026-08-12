@@ -594,6 +594,15 @@ export interface RoomInsightRow {
   bookingApproved: number;
   areaAvgPrice: number | null;
   priceDeltaPct: number | null;
+  listingQuality: ListingQuality | null;
+}
+
+/** Transparent 0-100 listing completeness score (rooms/listing_quality.py). */
+export interface ListingQuality {
+  score: number | null;
+  level: string | null;
+  categoryScores: Record<string, number>;
+  suggestions: string[];
 }
 
 export interface RoomInsights {

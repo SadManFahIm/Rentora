@@ -843,6 +843,7 @@ class RoomViewSet(viewsets.ModelViewSet):
 
         from bookings.models import Booking
         from pricing.models import MarketStat
+        from rooms.listing_quality import get_listing_quality
 
         rooms_qs = self.get_queryset()
         if not (request.user.is_staff or request.user.role == request.user.Role.ADMIN):
@@ -852,7 +853,9 @@ class RoomViewSet(viewsets.ModelViewSet):
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=30)
 
-        market = {(m.area, m.room_type): float(m.avg_price) for m in MarketStat.objects.all()}
+        market_stats = list(MarketStat.objects.all())
+        market = {(m.area, m.room_type): float(m.avg_price) for m in market_stats}
+        market_objects = {(m.area, m.room_type): m for m in market_stats}
         rooms = rooms_qs.annotate(
             views_7d=Count("views", filter=Q(views__viewed_at__gte=week_ago), distinct=True),
             views_30d=Count("views", filter=Q(views__viewed_at__gte=month_ago), distinct=True),
@@ -887,6 +890,7 @@ class RoomViewSet(viewsets.ModelViewSet):
                     "price_delta_pct": (
                         round((price - area_avg) / area_avg * 100, 1) if area_avg else None
                     ),
+                    "listing_quality": get_listing_quality(room, market_objects),
                 }
             )
         rows.sort(key=lambda r: r["views_30d"], reverse=True)
