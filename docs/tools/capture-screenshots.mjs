@@ -358,6 +358,97 @@ const CAPTURES = [
     })()`,
     afterLoadMs: 2500,
   },
+  // Phase 7 v2 — intelligent map: AI Smart Search. Open the AI Map panel
+  // and fire the Bangla example chip so the parsed intent chips + real
+  // matched rooms render next to the map (which flies to Uttara).
+  {
+    user: "rahim.hossain",
+    route: "/map",
+    out: "map-intel-ai-search.png",
+    waitMs: 8000,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+    afterLoad: `(async () => {
+      const open = [...document.querySelectorAll('button')]
+        .find(b => b.textContent.includes('AI Map'));
+      if (!open) return 'no-ai-map-btn';
+      open.click();
+      await new Promise(r => setTimeout(r, 800));
+      const chip = [...document.querySelectorAll('button')]
+        .find(b => b.textContent.includes('উত্তরায়'));
+      if (!chip) return 'no-chip';
+      chip.click();
+      return 'queried';
+    })()`,
+    afterLoadMs: 4500,
+  },
+  // Phase 7 v2 — area intelligence: Areas tab with an area selected so the
+  // stats card (rent, demand, metro access, trend) + compare chips render.
+  {
+    user: "rahim.hossain",
+    route: "/map",
+    out: "map-intel-areas.png",
+    waitMs: 8000,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+    afterLoad: `(async () => {
+      const open = [...document.querySelectorAll('button')]
+        .find(b => b.textContent.includes('AI Map'));
+      if (!open) return 'no-ai-map-btn';
+      open.click();
+      await new Promise(r => setTimeout(r, 800));
+      const areas = [...document.querySelectorAll('button')]
+        .find(b => b.textContent.trim() === 'Areas');
+      if (!areas) return 'no-areas-tab';
+      areas.click();
+      await new Promise(r => setTimeout(r, 1200));
+      const chip = [...document.querySelectorAll('button')]
+        .find(b => /Uttara|Mirpur|Dhanmondi/.test(b.textContent) && b.textContent.includes('·'));
+      if (!chip) return 'no-area-chip';
+      chip.click();
+      return 'area-selected';
+    })()`,
+    afterLoadMs: 2500,
+  },
+  // Phase 7 v2 — affordability: Budget tab with the slider set to ৳10,000
+  // so the per-area % bars render.
+  {
+    user: "rahim.hossain",
+    route: "/map",
+    out: "map-intel-affordability.png",
+    waitMs: 8000,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+    afterLoad: `(async () => {
+      const open = [...document.querySelectorAll('button')]
+        .find(b => b.textContent.includes('AI Map'));
+      if (!open) return 'no-ai-map-btn';
+      open.click();
+      await new Promise(r => setTimeout(r, 800));
+      const budgetTab = [...document.querySelectorAll('button')]
+        .find(b => b.textContent.trim() === 'Budget');
+      if (!budgetTab) return 'no-budget-tab';
+      budgetTab.click();
+      await new Promise(r => setTimeout(r, 1200));
+      const slider = document.querySelector('#aff-budget');
+      if (!slider) return 'no-slider';
+      const proto = Object.getPrototypeOf(slider);
+      Object.getOwnPropertyDescriptor(proto, 'value').set.call(slider, '10000');
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      slider.dispatchEvent(new Event('change', { bubbles: true }));
+      return 'budget-set';
+    })()`,
+    afterLoadMs: 2500,
+  },
   // Phase 11+ — duplicate-image fraud admin: filter the Fraud Operations
   // panel by the duplicate_image detector to show the matched-listing chips.
   // Demo data: two listings share one photo (seeded via the scan demo).

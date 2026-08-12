@@ -1,3 +1,5 @@
+from typing import Any
+
 import django_filters
 from django.conf import settings
 from django.db import models
@@ -26,6 +28,16 @@ from .geo import (
 from .geocoder import nominatim_search
 from .image_search import similar_rooms
 from .landmarks import ALL_LANDMARKS, get_landmark
+from .map_intel import (
+    affordability_stats,
+    area_statistics,
+    commute_eta,
+    ideal_areas,
+    map_search_rooms,
+    nearest_metro_km,
+    parse_map_query,
+    value_score,
+)
 from .models import Room, RoomView
 from .nl_query import parse_nl_query
 from .permissions import IsOwnerOrReadOnly
@@ -198,6 +210,12 @@ class RoomViewSet(viewsets.ModelViewSet):
             "geocode",
             "summary",
             "similar_images",
+            "map_intel",
+            "map_commute",
+            "map_value",
+            "map_affordability",
+            "map_ideal_areas",
+            "map_search",
         ):
             return [permissions.AllowAny()]
         if self.action == "create":
@@ -721,6 +739,207 @@ class RoomViewSet(viewsets.ModelViewSet):
         for item, (_room, distance) in zip(data, matches, strict=False):
             item["phash_distance"] = distance
         return Response(data)
+
+    # ----- Intelligent Rental Decision Map (Phase 7 v2) --------------------
+
+    @extend_schema(
+        tags=["Map Intelligence"],
+        summary="Area intelligence stats",
+        description=(
+            "Per-area aggregates for the map's Area Intelligence panel: average/median "
+            "rent, listing counts, average size, demand (views/saves/bookings vs supply), "
+            "metro access and price trend. Optional `area` filter for one area. "
+            "Everything is calculated from live platform data; areas without data "
+            "report nulls, never invented numbers."
+        ),
+        parameters=[
+            OpenApiParameter(
+                "area", str, required=False, description="Single area name (e.g. `Uttara`)."
+            )
+        ],
+    )
+    @action(detail=False, methods=["get"], url_path="map-intel/stats")
+    def map_intel(self, request):
+        area = request.query_params.get("area")
+        return Response(area_statistics(area))
+
+    @extend_schema(
+        tags=["Map Intelligence"],
+        summary="Commute ETA between two points",
+        description=(
+            "Travel-time estimate between two coordinates for walking/driving "
+            "(straight-line heuristics) or transit (MRT Line-6 interpolation when "
+            "both ends are within 1.2 km of a station). Estimates are labelled "
+            "`estimate: true`; transit returns `minutes: null` with an honest "
+            "explanation when routing isn't available."
+        ),
+        parameters=[
+            OpenApiParameter("from_lat", float),
+            OpenApiParameter("from_lng", float),
+            OpenApiParameter("to_lat", float),
+            OpenApiParameter("to_lng", float),
+            OpenApiParameter(
+                "mode", str, required=False, description="walking | driving | transit"
+            ),
+        ],
+    )
+    @action(detail=False, methods=["get"], url_path="map-intel/commute")
+    def map_commute(self, request):
+        try:
+            from_lat = float(request.query_params["from_lat"])
+            from_lng = float(request.query_params["from_lng"])
+            to_lat = float(request.query_params["to_lat"])
+            to_lng = float(request.query_params["to_lng"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValidationError(
+                {"detail": "from_lat/from_lng/to_lat/to_lng must all be numbers."}
+            ) from exc
+        mode = request.query_params.get("mode", "walking")
+        if mode not in ("walking", "driving", "transit"):
+            raise ValidationError({"mode": "mode must be walking, driving or transit."})
+        eta = commute_eta(from_lat, from_lng, to_lat, to_lng, mode)
+        return Response(
+            {
+                "mode": eta.mode,
+                "minutes": eta.minutes,
+                "distance_km": eta.distance_km,
+                "estimate": eta.estimate,
+                "detail": eta.detail,
+            }
+        )
+
+    @extend_schema(
+        tags=["Map Intelligence"],
+        summary="Listing value scores",
+        description=(
+            "Transparent 0-100 value scores for a comma-separated list of room ids "
+            "(`ids=1,2,3`). Blend of price fit vs the area market, amenities, "
+            "listing quality, verification, demand and metro access — weights in "
+            "settings. Never exposes internal fraud scores."
+        ),
+        parameters=[OpenApiParameter("ids", str, description="Comma-separated room ids.")],
+    )
+    @action(detail=False, methods=["get"], url_path="map-intel/value")
+    def map_value(self, request):
+        raw = request.query_params.get("ids", "")
+        ids = [int(i) for i in raw.split(",") if i.strip().isdigit()]
+        rooms = Room.objects.filter(pk__in=ids).only(
+            "id", "price", "area", "room_type", "amenities", "verified", "lat", "lng", "updated_at"
+        )
+        return Response({r.id: value_score(r) for r in rooms})
+
+    @extend_schema(
+        tags=["Map Intelligence"],
+        summary="Affordability by area",
+        description=(
+            "Percentage of currently listed rooms per area that fit a budget "
+            "(`budget=12000`). Used by the map's affordability layer — real "
+            "listing shares, not an arbitrary score."
+        ),
+        parameters=[OpenApiParameter("budget", float)],
+    )
+    @action(detail=False, methods=["get"], url_path="map-intel/affordability")
+    def map_affordability(self, request):
+        try:
+            budget = float(request.query_params.get("budget", 0))
+        except ValueError as exc:
+            raise ValidationError({"budget": "budget must be a number."}) from exc
+        if budget <= 0:
+            raise ValidationError({"budget": "budget must be positive."})
+        return Response(affordability_stats(budget))
+
+    @extend_schema(
+        tags=["Map Intelligence"],
+        summary="Ideal areas for a user profile",
+        description=(
+            "Ranked area recommendations from budget fit + commute (optional work "
+            "point + max minutes) + availability + metro access, each with "
+            "explainable reasons built from the same calculated facts."
+        ),
+        parameters=[
+            OpenApiParameter("budget", float),
+            OpenApiParameter("work_lat", float, required=False),
+            OpenApiParameter("work_lng", float, required=False),
+            OpenApiParameter("max_commute", int, required=False, description="Default 45 min"),
+            OpenApiParameter("room_type", str, required=False),
+        ],
+    )
+    @action(detail=False, methods=["get"], url_path="map-intel/ideal-areas")
+    def map_ideal_areas(self, request):
+        try:
+            budget = float(request.query_params.get("budget", 0))
+        except ValueError as exc:
+            raise ValidationError({"budget": "budget must be a number."}) from exc
+        if budget <= 0:
+            raise ValidationError({"budget": "budget must be positive."})
+        work_lat = request.query_params.get("work_lat")
+        work_lng = request.query_params.get("work_lng")
+        try:
+            lat = float(work_lat) if work_lat else None
+            lng = float(work_lng) if work_lng else None
+        except ValueError as exc:
+            raise ValidationError({"work_lat": "work_lat/work_lng must be numbers."}) from exc
+        max_commute = int(request.query_params.get("max_commute", 45) or 45)
+        room_type = request.query_params.get("room_type") or None
+        return Response(ideal_areas(budget, lat, lng, max_commute, room_type))
+
+    @extend_schema(
+        tags=["Map Intelligence"],
+        summary="Natural-language map search",
+        description=(
+            "Turn a Bangla/English/Banglish query into a structured, map-actionable "
+            "intent: filters (area/budget/type/amenities/metro-walk) + the matching "
+            "rooms + a fly-to target (area centre or nearest metro) so the map can "
+            "zoom, filter and render in one call. Example: 'উত্তরায় ১২ হাজারের মধ্যে "
+            "metro station থেকে ১০ মিনিট walking distance-এর মধ্যে furnished room'."
+        ),
+        parameters=[OpenApiParameter("q", str, description="Free-text query.")],
+    )
+    @action(detail=False, methods=["get"], url_path="map-intel/search")
+    def map_search(self, request):
+        q = (request.query_params.get("q") or "").strip()
+        if not q:
+            return Response({"intent": parse_map_query(""), "rooms": [], "count": 0})
+        intent = parse_map_query(q)
+        rooms = map_search_rooms(intent)
+        serializer = RoomListSerializer(
+            rooms[:20], many=True, context=self.get_serializer_context()
+        )
+        # Fly-to target: area centre, or nearest metro when metro_walk asked.
+        target: dict[str, Any] | None = None
+        if intent["areas"]:
+            centre = area_center(intent["areas"][0])
+            if centre:
+                target = {
+                    "lat": centre[0],
+                    "lng": centre[1],
+                    "kind": "area",
+                    "name": intent["areas"][0],
+                }
+        if intent.get("metro_walk") and rooms:
+            best = min(
+                (r for r in rooms if r.lat is not None and r.lng is not None),
+                key=lambda r: nearest_metro_km(r) or 999,
+                default=None,
+            )
+            if best is not None:
+                station, _dist = nearest_metro_km(best, return_station=True)
+                if station is not None:
+                    target = {
+                        "lat": station.lat,
+                        "lng": station.lng,
+                        "kind": "metro",
+                        "name": station.name,
+                    }
+        return Response(
+            {
+                "query": q,
+                "intent": intent,
+                "count": len(rooms),
+                "rooms": serializer.data,
+                "target": target,
+            }
+        )
 
     @extend_schema(
         tags=["Rooms"],

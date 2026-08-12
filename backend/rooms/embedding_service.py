@@ -173,7 +173,10 @@ class LiteEmbeddingProvider(EmbeddingProvider):
 
 
 def _hash_token(token: str, dim: int) -> int:
-    digest = hashlib.md5(token.encode("utf-8")).digest()
+    # nosec B324: MD5 here is feature hashing (token -> fixed bucket), not a
+    # cryptographic hash — collision resistance is irrelevant and deliberately
+    # cheap. The secret-hash rules (B303/B324) do not apply.
+    digest = hashlib.md5(token.encode("utf-8")).digest()  # nosec B324
     return int.from_bytes(digest[:4], "big") % dim
 
 

@@ -27,6 +27,7 @@ import {
   MapPin,
   Search,
   Share2,
+  Sparkles,
   TrainFront,
   Thermometer,
   Users as UsersIcon,
@@ -34,6 +35,8 @@ import {
 } from "lucide-react";
 import { useGeocode, useLandmarks, useMapSummary, useRooms } from "../../hooks/useRooms";
 import RoomModal from "../../components/RoomModal/RoomModal";
+import MapIntelPanel, { type MapIntelMode } from "../../components/MapIntelPanel/MapIntelPanel";
+import { useValueScores } from "../../hooks/useMapIntel";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { useUiStore } from "../../stores/uiStore";
@@ -142,6 +145,7 @@ export default function Map() {
   const roomsRef = useRef<Room[]>([]);
   // Guards the once-per-map registration of cluster click/hover handlers.
   const clusterHandlersRef = useRef<maplibregl.Map | null>(null);
+  const pickDestinationRef = useRef(false);
   // The cluster stats popup — closed before opening another / on map move so
   // a stale "N rooms here" bubble can't linger over changed geometry.
   const clusterPopupRef = useRef<maplibregl.Popup | null>(null);
@@ -170,6 +174,18 @@ export default function Map() {
 
   // ---- radius search state --------------------------------------------
   const [radiusCenter, setRadiusCenter] = useState<{
+    lat: number;
+    lng: number;
+    label: string;
+  } | null>(null);
+  // Intelligent Map (Phase 7 v2): AI search / area intel / commute panel.
+  const [intelMode, setIntelMode] = useState<MapIntelMode>(null);
+  const [selectedIntelArea, setSelectedIntelArea] = useState<string | null>(null);
+  const [pickDestination, setPickDestination] = useState(false);
+  // The map-click pick mode for the commute destination. A ref mirrors the
+  // state so the once-per-map click handler can read it without re-registering.
+  pickDestinationRef.current = pickDestination;
+  const [destination, setDestination] = useState<{
     lat: number;
     lng: number;
     label: string;
@@ -234,6 +250,9 @@ export default function Map() {
   // Authoritative room counts for the badge (COUNT/AVG server-side — the
   // paginated list caps at one page, so client-side counting undercounts).
   const { data: summary } = useMapSummary(filters);
+  // Value scores for the visible viewport (Intelligent Map — transparent
+  // price/quality/demand/metro blend, server-computed and cached).
+  const { data: valueScores } = useValueScores(rooms.slice(0, 40).map((r) => r.id));
   roomsRef.current = rooms;
 
   // ---- map bootstrap ---------------------------------------------------
@@ -323,9 +342,19 @@ export default function Map() {
     });
     map.on("moveend", syncViewbox);
 
-    // Clicking empty map space clears the radius search and the active pin.
+    // Clicking empty map space clears the radius search and the active pin —
+    // unless the user is picking a commute destination.
     map.on("click", (e: maplibregl.MapMouseEvent) => {
       if (e.originalEvent.target === map.getCanvas()) {
+        if (pickDestinationRef.current) {
+          setDestination({
+            lat: e.lngLat.lat,
+            lng: e.lngLat.lng,
+            label: "Pinned point",
+          });
+          setPickDestination(false);
+          return;
+        }
         setRadiusCenter(null);
         setActiveRoomId(null);
       }
@@ -769,12 +798,16 @@ export default function Map() {
           ${dirButton("driving", "🚗 Drive")}
           ${dirButton("transit", "🚇 Transit")}
         </div>`;
+      const valueLine = valueScores?.[room.id]
+        ? `<div class="map-popup__value">⭐ Value score <b>${valueScores[room.id].score}/100</b> · ${valueScores[room.id].factors.metro}/100 transit</div>`
+        : "";
       const popup = new maplibregl.Popup({ offset: 22, closeButton: false, maxWidth: "290px" })
         .setHTML(`
         <div class="map-popup">
           <div class="map-popup__price">৳${room.price.toLocaleString()}<span>/mo</span></div>
           <div class="map-popup__name">${esc(room.name)}</div>
           <div class="map-popup__meta">${esc(room.area)} · ${esc(room.type)} · ★ ${room.rating} (${room.reviews})</div>
+          ${valueLine}
           ${metroLine}
           ${distanceLine}
           ${directionsRow}
@@ -792,7 +825,23 @@ export default function Map() {
     });
     // radiusCenter feeds the popup's directions origin, so markers rebuild
     // when the search point moves (they also refetch rooms then anyway).
-  }, [rooms, mapReady, clustering, radiusCenter]);
+  }, [rooms, mapReady, clustering, radiusCenter, valueScores]);
+
+  // Destination pin for the commute mode — a teal flag the user drops by
+  // clicking the map (or via the panel), persisted in URL state.
+  useEffect(() => {
+    if (!mapReady || !destination) return;
+    const el = document.createElement("div");
+    el.className = "map-destination-pin";
+    el.setAttribute("aria-label", "Commute destination");
+    el.innerHTML = "🎯";
+    const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
+      .setLngLat([destination.lng, destination.lat])
+      .addTo(mapRef.current!);
+    return () => {
+      marker.remove();
+    };
+  }, [mapReady, destination]);
 
   // Keep the active room highlighted without re-creating all markers
   // (re-creating on activeRoomId change would detach the open popup).
@@ -1197,6 +1246,18 @@ export default function Map() {
             >
               <ListIcon className="size-4" /> List
             </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "gap-1.5 rounded-lg",
+                intelMode &&
+                  "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+              )}
+              onClick={() => setIntelMode((m) => (m ? null : "ai"))}
+            >
+              <Sparkles className="size-4" /> AI Map
+            </Button>
           </div>
 
           {/* Radius search */}
@@ -1401,6 +1462,27 @@ export default function Map() {
             </>
           )}
         </div>
+
+        {/* Intelligent Map panel — AI search / area intel / commute */}
+        <MapIntelPanel
+          open={!!intelMode}
+          mode={intelMode}
+          onMode={setIntelMode}
+          onClose={() => setIntelMode(null)}
+          rooms={rooms}
+          onFlyTo={(lat, lng, zoom = 14) => mapRef.current?.flyTo({ center: [lng, lat], zoom })}
+          onSetRadius={(lat, lng, label, km = radiusKm) => {
+            setRadiusCenter({ lat, lng, label });
+            setRadiusKm(km);
+          }}
+          selectedArea={selectedIntelArea}
+          onSelectArea={setSelectedIntelArea}
+          dark={darkMode}
+          destination={destination}
+          onSetDestination={setDestination}
+          pickDestination={pickDestination}
+          onTogglePick={() => setPickDestination((p) => !p)}
+        />
 
         {selectedRoom && <RoomModal room={selectedRoom} onClose={() => setSelectedRoom(null)} />}
       </div>
