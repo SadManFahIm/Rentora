@@ -3,7 +3,9 @@
 > Base URL: `http://localhost:8000/api/v1` (dev) · Interactive docs: `/api/v1/docs/` (Swagger), `/api/v1/redoc/` (ReDoc), schema at `/api/v1/schema/`.
 > Auth: `Authorization: Bearer <access_token>` for authenticated endpoints.
 > This reference is hand-maintained alongside the README; the OpenAPI schema at `/api/v1/schema/` is always the source of truth.
-> **Live-verified:** every endpoint below is checked against a running server on four layers — status code, **deep JSON schema** (required fields + wire types), **request-body contracts** (payloads validated against documented field names/types, plus malformed-payload probes asserting the right field error) and **OpenAPI cross-check** (every tested path must exist in `/api/v1/schema/`). Re-run anytime with `python docs/tools/api-verify.py`.
+> **Live-verified:** every endpoint below is checked against a running server on four layers — status code, **deep JSON schema** (required fields + wire types), **request-body contracts** (payloads validated against documented field names/types, plus malformed-payload probes asserting the right field error) and **OpenAPI cross-check** (every tested path must exist in `/api/v1/schema/`). Response and request contracts are **auto-generated from the live OpenAPI schema at runtime** — no hand-maintained tables to drift; a small override table handles only genuinely ambiguous shapes (e.g. `allOf` inheritance, `SerializerMethodField` types). Re-run anytime with `python docs/tools/api-verify.py`.
+>
+> Auto-generation also caught and fixed **real backend schema bugs**: `SerializerMethodField`-backed fields (`is_featured`, `passkeys`) mis-declared as `string`, action endpoints (`summary`, `tier-catalog`, `insights`, `bulk`, reviews `summary`) declaring the wrong 200 response schema, and nullable fields not honoring `null` in wire responses.
 
 ---
 

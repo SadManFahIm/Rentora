@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from config.sanitizers import sanitize_text
@@ -103,6 +104,7 @@ class _EffectiveTierMixin(serializers.Serializer):
         effective = getattr(obj, "effective_tier", None)
         return effective or obj.tier
 
+    @extend_schema_field(serializers.BooleanField())
     def get_is_featured(self, obj):
         return self.get_tier(obj) != "free"
 
@@ -116,6 +118,7 @@ class RoomListSerializer(_EffectiveTierMixin, RoomProximityMixin, serializers.Mo
 
     images = RoomImageSerializer(many=True, read_only=True)
     owner = RoomOwnerSerializer(read_only=True)
+    amenities = serializers.ListField(child=serializers.CharField(), required=False)
 
     class Meta:
         model = Room
@@ -151,6 +154,7 @@ class RoomDetailSerializer(_EffectiveTierMixin, RoomProximityMixin, serializers.
 
     images = RoomImageSerializer(many=True, read_only=True)
     owner = RoomOwnerSerializer(read_only=True)
+    amenities = serializers.ListField(child=serializers.CharField(), required=False)
     price_insight = serializers.SerializerMethodField(
         help_text="How this room's price compares to its market segment; null if there "
         "isn't yet a big-enough market sample for its (area, room_type) to compare against."
@@ -195,6 +199,7 @@ class RoomDetailSerializer(_EffectiveTierMixin, RoomProximityMixin, serializers.
             "updated_at",
         ]
 
+    @extend_schema_field({"type": "object", "nullable": True})
     def get_price_insight(self, obj):
         # Imported lazily so `rooms` never has to import `pricing` at module
         # load time — keeps `pricing` an optional, bolt-on concern rather
@@ -222,6 +227,7 @@ class RoomCreateUpdateSerializer(serializers.ModelSerializer):
         child=serializers.ImageField(), write_only=True, required=False
     )
     images = RoomImageSerializer(many=True, read_only=True)
+    amenities = serializers.ListField(child=serializers.CharField(), required=False)
 
     class Meta:
         model = Room

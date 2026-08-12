@@ -2,6 +2,7 @@ from dj_rest_auth.registration.serializers import RegisterSerializer
 from dj_rest_auth.serializers import UserDetailsSerializer
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .models import KycDocument
@@ -67,6 +68,7 @@ class CustomUserDetailsSerializer(UserDetailsSerializer):
         )
         read_only_fields = ("email", "nid_verified")
 
+    @extend_schema_field(serializers.ListField(child=serializers.DictField()))
     def get_passkeys(self, obj):
         return [
             {
