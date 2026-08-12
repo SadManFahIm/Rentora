@@ -7,8 +7,9 @@ from drf_spectacular.utils import (
     OpenApiParameter,
     extend_schema,
     extend_schema_view,
+    inline_serializer,
 )
-from rest_framework import permissions, status, viewsets
+from rest_framework import permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.filters import OrderingFilter
@@ -578,6 +579,36 @@ class RoomViewSet(viewsets.ModelViewSet):
             OpenApiParameter("area", str, description="Filter to a single area (e.g. `Mirpur`)."),
         ],
     )
+    @extend_schema(
+        tags=["Rooms"],
+        summary="Rooms summary (map chips + stats)",
+        description=(
+            "Aggregate counts and price stats for the room search — with the same "
+            "bbox/radius/area filters as the list endpoint, so the map's area "
+            "chips and the stats bar always match the visible listings."
+        ),
+        responses=inline_serializer(
+            "RoomsSummaryResponse",
+            fields={
+                "total": serializers.IntegerField(),
+                "available": serializers.IntegerField(),
+                "avg_price": serializers.FloatField(allow_null=True),
+                "min_price": serializers.FloatField(allow_null=True),
+                "max_price": serializers.FloatField(allow_null=True),
+                "by_area": serializers.ListField(
+                    child=inline_serializer(
+                        "RoomsSummaryAreaCount",
+                        fields={
+                            "area": serializers.CharField(),
+                            "count": serializers.IntegerField(),
+                            "lat": serializers.FloatField(required=False),
+                            "lng": serializers.FloatField(required=False),
+                        },
+                    )
+                ),
+            },
+        ),
+    )
     @action(detail=False, methods=["get"])
     def summary(self, request):
         queryset = Room.objects.all()
@@ -666,6 +697,24 @@ class RoomViewSet(viewsets.ModelViewSet):
         description="Public price/benefit catalog for paid listing tiers (Free / Featured / "
         "Premium) and their duration, so the frontend can render the promotion "
         "UI without hardcoding prices.",
+        responses=inline_serializer(
+            "TierCatalogResponse",
+            fields={
+                "tiers": serializers.ListField(
+                    child=inline_serializer(
+                        "TierCatalogEntry",
+                        fields={
+                            "tier": serializers.CharField(),
+                            "label": serializers.CharField(),
+                            "price": serializers.FloatField(),
+                            "benefits": serializers.ListField(child=serializers.CharField()),
+                        },
+                    )
+                ),
+                "duration_days": serializers.IntegerField(),
+                "currency": serializers.CharField(),
+            },
+        ),
     )
     @action(detail=False, methods=["get"], url_path="tier-catalog")
     def tier_catalog(self, request):
@@ -716,6 +765,41 @@ class RoomViewSet(viewsets.ModelViewSet):
             "Per-listing engagement for the authenticated landlord: views (7/30d), "
             "wishlist saves, booking requests and approvals, and how each room's "
             "price compares to its area/type market average. Admin sees all rooms."
+        ),
+        responses=inline_serializer(
+            "RoomsInsightsResponse",
+            fields={
+                "rooms": serializers.ListField(
+                    child=inline_serializer(
+                        "RoomsInsightRow",
+                        fields={
+                            "id": serializers.IntegerField(),
+                            "title": serializers.CharField(),
+                            "price": serializers.FloatField(),
+                            "area": serializers.CharField(),
+                            "room_type": serializers.CharField(),
+                            "tier": serializers.CharField(),
+                            "verified": serializers.BooleanField(),
+                            "views_7d": serializers.IntegerField(),
+                            "views_30d": serializers.IntegerField(),
+                            "views_total": serializers.IntegerField(),
+                            "wishlist_count": serializers.IntegerField(),
+                            "booking_requests": serializers.IntegerField(),
+                            "booking_approved": serializers.IntegerField(),
+                            "area_avg_price": serializers.FloatField(allow_null=True),
+                            "price_delta_pct": serializers.FloatField(allow_null=True),
+                        },
+                    )
+                ),
+                "summary": inline_serializer(
+                    "RoomsInsightsSummary",
+                    fields={
+                        "listing_count": serializers.IntegerField(),
+                        "total_views_30d": serializers.IntegerField(),
+                        "total_wishlists": serializers.IntegerField(),
+                    },
+                ),
+            },
         ),
     )
     @action(detail=False, methods=["get"], url_path="insights")
@@ -794,6 +878,23 @@ class RoomViewSet(viewsets.ModelViewSet):
         description="Create several rooms in one request (landlord only). Body is a "
         "JSON array of the same room payloads accepted by POST /rooms/. "
         "Partially succeeds: valid rows are created, per-row errors are reported.",
+        request=RoomCreateUpdateSerializer(many=True),
+        responses=inline_serializer(
+            "RoomsBulkCreateResponse",
+            fields={
+                "created": serializers.ListField(child=serializers.IntegerField()),
+                "created_count": serializers.IntegerField(),
+                "errors": serializers.ListField(
+                    child=inline_serializer(
+                        "RoomsBulkCreateError",
+                        fields={
+                            "index": serializers.IntegerField(),
+                            "errors": serializers.DictField(child=serializers.CharField()),
+                        },
+                    )
+                ),
+            },
+        ),
     )
     @action(
         detail=False,
