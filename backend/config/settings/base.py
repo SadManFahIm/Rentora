@@ -351,6 +351,68 @@ PRICE_ANOMALY_ENABLED = os.getenv("PRICE_ANOMALY_ENABLED", "True") == "True"
 PRICE_ANOMALY_THRESHOLD = float(os.getenv("PRICE_ANOMALY_THRESHOLD", "0.20"))
 
 # ============================================================
+# Listing Intelligence (Phase 11+) — voice search, saved-search AI matching,
+# listing quality score, fraud-aware ranking
+# ============================================================
+# Voice search is browser-side (Web Speech API) — this flag mirrors it so the
+# backend docs/config stay the source of truth; the frontend gates the mic
+# button on feature detection + VITE_VOICE_SEARCH_ENABLED.
+VOICE_SEARCH_ENABLED = os.getenv("VOICE_SEARCH_ENABLED", "True") == "True"
+VOICE_SEARCH_LANGUAGE = os.getenv("VOICE_SEARCH_LANGUAGE", "bn-BD")
+
+# AI saved-search matcher: relevance-score every new/updated room against the
+# user's saved searches and notify only above SAVED_SEARCH_MATCH_THRESHOLD.
+SAVED_SEARCH_AI_MATCHING_ENABLED = os.getenv("SAVED_SEARCH_AI_MATCHING_ENABLED", "True") == "True"
+# 0..1 relevance floor: 0.75+ = relevant match, 0.85+ = highly relevant, 0.95+ = excellent.
+SAVED_SEARCH_MATCH_THRESHOLD = float(os.getenv("SAVED_SEARCH_MATCH_THRESHOLD", "0.75"))
+# Component weights of the match score (must roughly sum to 1).
+SAVED_SEARCH_MATCH_WEIGHTS = {
+    "area": 0.25,
+    "price": 0.20,
+    "room_type": 0.15,
+    "semantic": 0.20,
+    "preference": 0.10,
+    "quality": 0.10,
+}
+# A price cut of >= this fraction (0.10 = 10%) since the last check triggers a
+# price-drop notification for matching saved searches.
+PRICE_DROP_NOTIFICATION_THRESHOLD = float(os.getenv("PRICE_DROP_NOTIFICATION_THRESHOLD", "0.10"))
+# Don't re-notify the same user about the same room within this many hours
+# (unless something material — e.g. another significant price drop — happens).
+SAVED_SEARCH_COOLDOWN_HOURS = int(os.getenv("SAVED_SEARCH_COOLDOWN_HOURS", "24"))
+
+# Listing quality score (rooms/listing_quality.py) — transparent 0-100
+# completeness score, exposed on detail + landlord insights.
+LISTING_QUALITY_SCORE_ENABLED = os.getenv("LISTING_QUALITY_SCORE_ENABLED", "True") == "True"
+# Category weights (sum 100) — adapt to the actual Room model fields.
+LISTING_QUALITY_WEIGHTS = {
+    "basic": 20,
+    "description": 20,
+    "photos": 20,
+    "location": 15,
+    "amenities": 15,
+    "pricing": 10,
+}
+# (min_score, level) thresholds, descending.
+LISTING_QUALITY_LEVELS = [
+    (90, "excellent"),
+    (75, "good"),
+    (60, "fair"),
+    (40, "needs_improvement"),
+    (0, "poor"),
+]
+# Quality as a *secondary* search-ranking signal — tiny weight, applied only
+# within the already-relevant pool so it can never override query/area/price.
+LISTING_QUALITY_RANKING_ENABLED = os.getenv("LISTING_QUALITY_RANKING_ENABLED", "True") == "True"
+LISTING_QUALITY_RANKING_WEIGHT = float(os.getenv("LISTING_QUALITY_RANKING_WEIGHT", "0.05"))
+
+# Fraud-aware search ranking: demote risky listings using the EXISTING fraud
+# engine's score (FraudReport.score / 100). Listings are never hidden — only
+# penalised in ranking (moderation policy decides visibility, not ranking).
+FRAUD_AWARE_RANKING_ENABLED = os.getenv("FRAUD_AWARE_RANKING_ENABLED", "True") == "True"
+FRAUD_RANKING_PENALTY_WEIGHT = float(os.getenv("FRAUD_RANKING_PENALTY_WEIGHT", "0.20"))
+
+# ============================================================
 # Alert email throttling (notifications.email_guard)
 # ============================================================
 # Scheduled alert blasts (KYC SLA breaches, fraud flags, …) are rate-limited

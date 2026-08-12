@@ -53,7 +53,7 @@ Rentora is a **two-tier web application** — a React single-page app (SPA) talk
 | `pricing` | Market stats, price insight, fair-price prediction | `MarketStat` |
 | `roommates` | Profiles + weighted matching | `RoommateProfile`, `RoommateRequest` |
 | `fraud` | 6-detector engine + review queue | `FraudReport`, `FraudScanRun` |
-| `savedsearches` | Saved filter sets + daily match alerts | `SavedSearch` |
+| `savedsearches` | Saved filter sets + AI relevance matching + price-drop alerts | `SavedSearch` (notifications carry `meta`) |
 | `audit` | Append-only event trail | `AuditLogEntry` |
 
 > `dashboard`, `recommendations` and `pricing` are thin view layers over other apps' data — they stay separate so their API surface can evolve independently.
@@ -132,9 +132,38 @@ Room.flagged=true ──► "under review" badge ──► auto-scan on listing 
    + rooms/image_search.py ──► pHash of primary photo → look-alike rooms
    + rooms/price_anomaly.py ──► price vs predicted market badge (reuses pricing model,
                                 trained once per request)
+   + rooms/listing_quality.py ─► 0-100 completeness score + suggestions (weights in
+                                 LISTING_QUALITY_WEIGHTS) — detail page chip, insights
+                                 column, tiny secondary ranking lift (0.05)
+   + rooms/ranking.py        ──► quality lifts + fraud-risk penalty applied only inside
+                                 the relevant pool (never overrides explicit intent)
 ```
 
-The vector spaces are built **in-process and cached by fingerprint** (no external model, no index to maintain) — correct for the catalog size today, and each signal is independently disable-able (`SEMANTIC_SEARCH_ENABLED`, `FUZZY_SEARCH_ENABLED`, `AREA_ALIAS_ENABLED`, `PERSONALIZED_SEARCH_ENABLED`, `PRICE_ANOMALY_ENABLED`) with graceful fallback to the next leg.
+### 2.7 Saved-search AI matcher + price-drop alerts (Phase 11+)
+
+```
+Room created / price changed
+   │
+   ├─ rooms/signals.py ─────► RoomPriceHistory row on every real price change
+   ├─ savedsearches/tasks.py ► match_room_event (immediate) + check_saved_searches (beat digest)
+   ├─ savedsearches/services.py ─► score_saved_search_match: hard filters gate FIRST,
+   │                               then weighted area/price/room-type/semantic/preference/
+   │                               quality score ≥ SAVED_SEARCH_MATCH_THRESHOLD (0.75)
+   │                               → reasons ("✓ Matches your preferred area") + level
+   ├─ notifications/utils.py ► dedupe via cooldown (SAVED_SEARCH_COOLDOWN_HOURS), meta:
+   │                           {room_id, saved_search_id, level, match_score}
+   └─ price-drop alert: latest_price_drop() over RoomPriceHistory ≥ 10% → alert
+```
+
+### 2.8 Voice search (Phase 11+)
+
+No backend service: `frontend/src/hooks/useVoiceSearch.ts` wraps the browser **Web Speech API**
+(bn-BD default) and drops the transcript into the existing `?q=` search input — the whole
+Phase 11 pipeline (NL parser → aliases → semantic ranking → personalization → quality/fraud)
+applies unchanged. Raw audio is never stored or uploaded; unsupported/denied states degrade
+gracefully to text search.
+
+The vector spaces are built **in-process and cached by fingerprint** (no external model, no index to maintain) — correct for the catalog size today, and each signal is independently disable-able (`SEMANTIC_SEARCH_ENABLED`, `FUZZY_SEARCH_ENABLED`, `AREA_ALIAS_ENABLED`, `PERSONALIZED_SEARCH_ENABLED`, `PRICE_ANOMALY_ENABLED`, `LISTING_QUALITY_SCORE_ENABLED`, `FRAUD_AWARE_RANKING_ENABLED`, `VOICE_SEARCH_ENABLED`, `SAVED_SEARCH_AI_MATCHING_ENABLED`) with graceful fallback to the next leg.
 
 ---
 

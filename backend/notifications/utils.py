@@ -24,6 +24,7 @@ def create_notification(
     title: str,
     message: str,
     action_url: str = "",
+    meta: dict | None = None,
 ) -> Notification:
     """Create, persist, and push a :class:`~notifications.models.Notification`.
 
@@ -62,6 +63,7 @@ def create_notification(
         title=sanitize_text(title),
         message=sanitize_text(message),
         action_url=action_url,
+        meta=meta or {},
     )
     broadcast_notification(notification)
     # Best-effort browser push: the same notification lands on subscribed

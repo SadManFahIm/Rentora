@@ -131,6 +131,27 @@ class RoomImage(models.Model):
         return f"Image for {self.room.title}"
 
 
+class RoomPriceHistory(models.Model):
+    """Every price change of a listing (Phase 11+ — price-drop intelligence).
+
+    One row per observed price, written by a post-save signal only when the
+    price actually changed, so ``latest two rows = the most recent change``.
+    Powers saved-search "price dropped by X%" alerts and landlord price
+    history without a heavier audit trail.
+    """
+
+    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="price_history")
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    changed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-id"]
+        indexes = [models.Index(fields=["room", "changed_at"], name="room_price_hist_idx")]
+
+    def __str__(self) -> str:
+        return f"{self.room.title}: ৳{self.price} @ {self.changed_at:%Y-%m-%d}"
+
+
 class RoomImageHash(models.Model):
     """Perceptual-hash cache for image similarity search (Phase 11).
 

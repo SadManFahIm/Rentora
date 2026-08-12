@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Search, ShieldCheck, SlidersHorizontal, Sparkles, X } from "lucide-react";
+import { Mic, MicOff, Search, ShieldCheck, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { AREAS, ROOM_TYPES, AMENITIES_LIST } from "../../data/mockData";
+import { useVoiceSearch } from "../../hooks/useVoiceSearch";
 import type { Filters, SortOption, GenderPref } from "../../types";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
@@ -27,8 +28,27 @@ const pillClass = (active: boolean) =>
       : "border-gray-300 bg-background text-gray-600 hover:border-orange-600 hover:text-orange-600 dark:border-gray-700 dark:text-gray-400"
   );
 
+const VOICE_STATUS_TIP: Record<string, string> = {
+  listening: "Listening… speak in Bangla or English",
+  processing: "Processing…",
+  denied: "Microphone access was denied — enable it in your browser settings.",
+  unsupported: "Voice search isn't supported in this browser — text search still works.",
+  error: "Something went wrong with voice input — try again or type your query.",
+};
+
 export default function SearchFilter({ filters, setFilters }: SearchFilterProps) {
   const [showPanel, setShowPanel] = useState(false);
+  const { supported, status, start, stop } = useVoiceSearch({
+    onTranscript: (transcript) => update("query", transcript),
+  });
+
+  const toggleVoice = () => {
+    if (status === "listening") {
+      stop();
+    } else {
+      start();
+    }
+  };
 
   const update = <K extends keyof Filters>(key: K, value: Filters[K]) =>
     setFilters((f) => ({ ...f, [key]: value }));
@@ -73,12 +93,45 @@ export default function SearchFilter({ filters, setFilters }: SearchFilterProps)
               value={filters.query}
               onChange={(e) => update("query", e.target.value)}
             />
+            {supported && (
+              <button
+                type="button"
+                onClick={toggleVoice}
+                title={VOICE_STATUS_TIP[status] ?? "Search by voice"}
+                aria-label={status === "listening" ? "Stop voice search" : "Search by voice"}
+                className={cn(
+                  "absolute right-3 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-full transition-colors",
+                  status === "listening"
+                    ? "animate-pulse bg-red-500 text-white"
+                    : "text-gray-500 hover:bg-gray-100 hover:text-orange-600 dark:text-gray-400 dark:hover:bg-gray-800"
+                )}
+              >
+                {status === "listening" ? (
+                  <MicOff className="size-4" />
+                ) : (
+                  <Mic className="size-4" />
+                )}
+              </button>
+            )}
             {filters.smart && (
-              <span className="absolute right-3.5 top-1/2 hidden -translate-y-1/2 rounded-full bg-gradient-to-r from-orange-500 to-pink-500 px-2 py-0.5 text-[10px] font-bold text-white sm:block">
+              <span
+                className={cn(
+                  "absolute top-1/2 hidden -translate-y-1/2 rounded-full bg-gradient-to-r from-orange-500 to-pink-500 px-2 py-0.5 text-[10px] font-bold text-white sm:block",
+                  supported ? "right-12" : "right-3.5"
+                )}
+              >
                 AI
               </span>
             )}
           </div>
+          {(status === "listening" ||
+            status === "denied" ||
+            status === "unsupported" ||
+            status === "error") && (
+            <p className="w-full text-xs text-gray-500 dark:text-gray-400">
+              {VOICE_STATUS_TIP[status]}
+            </p>
+          )}
 
           <button
             type="button"

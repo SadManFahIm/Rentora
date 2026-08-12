@@ -31,6 +31,12 @@ interface ApiRoomInsights {
     booking_approved: number;
     area_avg_price: number | null;
     price_delta_pct: number | null;
+    listing_quality: {
+      score: number | null;
+      level: string | null;
+      category_scores: Record<string, number>;
+      suggestions: string[];
+    } | null;
   }[];
   summary: {
     listing_count: number;
@@ -254,6 +260,14 @@ export const roomService = {
         bookingApproved: r.booking_approved,
         areaAvgPrice: r.area_avg_price,
         priceDeltaPct: r.price_delta_pct,
+        listingQuality: r.listing_quality
+          ? {
+              score: r.listing_quality.score,
+              level: r.listing_quality.level,
+              categoryScores: r.listing_quality.category_scores,
+              suggestions: r.listing_quality.suggestions,
+            }
+          : null,
       })),
       summary: {
         listingCount: data.summary.listing_count,

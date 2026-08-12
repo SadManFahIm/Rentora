@@ -60,6 +60,30 @@ def _base_score(sem: float, lex: float, has_sem: bool, has_lex: bool) -> float:
     return 0.0
 
 
+def _load_pool_rooms(pool_ids: list[int]) -> list[Room]:
+    """One batched fetch of the pool with exactly the columns the ranking
+    signals read (profile vector + quality score) and images prefetched, so
+    quality scoring never issues a per-room query."""
+    return list(
+        Room.objects.filter(id__in=pool_ids)
+        .only(
+            "id",
+            "title",
+            "description",
+            "price",
+            "area",
+            "address",
+            "lat",
+            "lng",
+            "room_type",
+            "amenities",
+            "gender_preference",
+            "size_sqft",
+        )
+        .prefetch_related("images")
+    )
+
+
 def _personalization_scores(user, pool_ids: list[int]) -> dict[int, float] | None:
     """Reuse the recommendation engine's profile scoring for the pool."""
     if user is None or not getattr(user, "is_authenticated", False):
@@ -68,16 +92,45 @@ def _personalization_scores(user, pool_ids: list[int]) -> dict[int, float] | Non
         return None
     from recommendations.services.content_based import get_user_preference_scores
 
-    # only() the exact attributes the profile vector reads — anything less
-    # would trigger a per-room deferred-column query (N+1).
-    rooms = list(
-        Room.objects.filter(id__in=pool_ids).only(
-            "id", "price", "area", "room_type", "amenities", "gender_preference"
-        )
-    )
+    rooms = _load_pool_rooms(pool_ids)
     if not rooms:
         return None
     return get_user_preference_scores(user, rooms)
+
+
+def _quality_scores(pool_ids: list[int]) -> dict[int, float] | None:
+    """0..1 listing-quality scores for the pool, one batched fetch + one
+    MarketStat read (built once per ranking, never per room)."""
+    if not getattr(settings, "LISTING_QUALITY_RANKING_ENABLED", True):
+        return None
+    rooms = _load_pool_rooms(pool_ids)
+    if not rooms:
+        return None
+    from pricing.models import MarketStat
+
+    market_stats = {(stat.area, stat.room_type): stat for stat in MarketStat.objects.all()}
+    from .listing_quality import get_listing_quality
+
+    return {
+        room.id: min(get_listing_quality(room, market_stats)["score"] or 0, 100) / 100.0
+        for room in rooms
+    }
+
+
+def _fraud_scores(pool_ids: list[int]) -> dict[int, float] | None:
+    """0..1 risk for the pool from the EXISTING fraud engine (one query).
+
+    FraudReport.score (0-100) is normalized; rooms without a report (or a
+    clean report) get 0. Never hides a listing — only ranks it down.
+    """
+    if not getattr(settings, "FRAUD_AWARE_RANKING_ENABLED", True):
+        return None
+    from fraud.models import FraudReport
+
+    rows = FraudReport.objects.filter(room_id__in=pool_ids, score__gt=0).values_list(
+        "room_id", "score"
+    )
+    return {room_id: min(int(score), 100) / 100.0 for room_id, score in rows}
 
 
 def hybrid_rank(
@@ -135,6 +188,27 @@ def hybrid_rank(
             + order[PERSONALIZATION_POOL:]
         )
 
+    # Secondary signals — applied only inside the top-relevant pool, so
+    # quality can never lift an irrelevant room and fraud demotion always
+    # yields to explicit relevance. Both are independently disable-able and
+    # computed once per ranking call (batched, not per room).
+    quality_map = _quality_scores(pool_ids)
+    fraud_map = _fraud_scores(pool_ids)
+    if quality_map or fraud_map:
+        quality_weight = float(getattr(settings, "LISTING_QUALITY_RANKING_WEIGHT", 0.05))
+        fraud_weight = float(getattr(settings, "FRAUD_RANKING_PENALTY_WEIGHT", 0.20))
+        for room_id in order[:PERSONALIZATION_POOL]:
+            if quality_map:
+                q = quality_map.get(room_id, 0.5)
+                final[room_id] = final[room_id] * (1.0 - quality_weight) + q * quality_weight
+            if fraud_map:
+                risk = fraud_map.get(room_id, 0.0)
+                final[room_id] = max(final[room_id] - fraud_weight * risk, 0.0)
+        order = (
+            sorted(order[:PERSONALIZATION_POOL], key=final.get, reverse=True)
+            + order[PERSONALIZATION_POOL:]
+        )
+
     ids = order[:top_k]
 
     metadata = {}
@@ -146,6 +220,8 @@ def hybrid_rank(
                 "personalization_score": (
                     round(pers_map.get(room_id, 0.0), 4) if pers_map else None
                 ),
+                "quality_score": round(quality_map.get(room_id, 0.0), 4) if quality_map else None,
+                "fraud_risk": round(fraud_map.get(room_id, 0.0), 4) if fraud_map else None,
                 "final_score": round(final[room_id], 4),
             }
 

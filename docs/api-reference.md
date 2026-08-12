@@ -92,7 +92,7 @@
 | GET | `/rooms/landmarks/` | Public | universities 🎓 / metro 🚇 for map layers |
 | GET | `/rooms/summary/` | Public | `COUNT/AVG` for the current viewport — powers the "N of M in view" badge |
 | GET | `/rooms/geocode/?q=` | Public | gazetteer + Nominatim fallback |
-| GET | `/rooms/insights/` | Auth (own listings) | per-listing views 7d/30d, wishlists, bookings, price vs area |
+| GET | `/rooms/insights/` | Auth (own listings) | per-listing views 7d/30d, wishlists, bookings, price vs area, listing quality score |
 | POST | `/rooms/bulk/` | Auth | bulk listing creation (JSON array body, per-row errors) |
 | GET | `/rooms/tier-catalog/` | Public | tier pricing + benefits (Promote UI) |
 | GET | `/rooms/:id/similar-images/` | Public | look-alike rooms via pHash |
@@ -103,6 +103,10 @@
 **Smart search:** `?q=১০ হাজার এর মধ্যে uttara student room&smart=1` — NL parsing (budget/area/type/gender become filters) + **hybrid ranking**: neural embeddings (optional `sentence-transformers`, or the built-in bilingual lite provider) blended with TF-IDF/LSA at `SEMANTIC_SEARCH_WEIGHT`/`TFIDF_SEARCH_WEIGHT`; typo-tolerant **area aliases** (`mirpore` → Mirpur, `ধানমণ্ডি ২৭` → Dhanmondi); per-user **personalization** for signed-in tenants (relevance + `PERSONALIZATION_WEIGHT` blend, hard filters always win). Response carries `nl_parsed` for the "AI understood" chips; `?debug_rank=1` (debug builds only) adds `rank_meta` with per-room semantic/lexical/personalization/final scores.
 
 **List card field — `price_anomaly`** (optional, nullable): `{available, predicted_price, difference_percentage, direction: above_market|below_market, badge}` — rendered only when the fair-price model is confident and `|actual − predicted| / predicted ≥ PRICE_ANOMALY_THRESHOLD`. Disable with `PRICE_ANOMALY_ENABLED=false`.
+
+**Detail field — `listing_quality`** (always present): `{score: 0-100|null, level: excellent|good|fair|needs_improvement|poor|null, category_scores, suggestions: string[]}` — a transparent completeness score (never a valuation or fraud score). Disable with `LISTING_QUALITY_SCORE_ENABLED=false`.
+
+**Smart ranking — quality + fraud secondary signals** (`?q=...&smart=1`): within the already-relevant pool, listing quality lifts (`LISTING_QUALITY_RANKING_WEIGHT=0.05`) and the existing fraud engine's risk score demotes (`FRAUD_AWARE_RANKING_ENABLED`, `FRAUD_RANKING_PENALTY_WEIGHT=0.20`). `?debug_rank=1` shows `quality_score` and `fraud_risk` per room in `rank_meta`.
 **Geo:**
 ```
 ?bbox=min_lng,min_lat,max_lng,max_lat     map viewport
@@ -172,6 +176,8 @@ Every in-app notification is fanned out to email (branded template) + browser pu
 | POST | `/saved-searches/:id/check/` | Auth | manual "check now" for new matches |
 
 A daily Celery beat task notifies you when a **new** matching listing appears (never re-alerts the same rooms).
+
+**AI matching (Phase 11+)** — since `SAVED_SEARCH_AI_MATCHING_ENABLED=true` (default), alerts are relevance-gated: hard filters always gate first (area/budget/type/gender), then a weighted score (`SAVED_SEARCH_MATCH_WEIGHTS`) must clear `SAVED_SEARCH_MATCH_THRESHOLD` (0.75) to notify, with plain-language reasons (`✓ Matches your preferred area`). A room **create/price-change** event task (`match_room_event`) alerts immediately; a ≥ `PRICE_DROP_NOTIFICATION_THRESHOLD` (10%) price cut (tracked via `RoomPriceHistory`) triggers a price-drop alert for matching searches; the per-user/room **cooldown** (`SAVED_SEARCH_COOLDOWN_HOURS` = 24) dedupes repeats. Notifications carry `meta: {room_id, saved_search_id, level, match_score}`.
 
 ---
 

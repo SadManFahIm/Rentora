@@ -51,6 +51,27 @@ _NEAREST_LANDMARK_SCHEMA = {
     },
 }
 
+_LISTING_QUALITY_SCHEMA = {
+    "type": "object",
+    "required": ["score", "level", "category_scores", "suggestions"],
+    "properties": {
+        "score": {"type": "number", "nullable": True},
+        "level": {"type": "string", "nullable": True},
+        "category_scores": {
+            "type": "object",
+            "properties": {
+                "basic": {"type": "number"},
+                "description": {"type": "number"},
+                "photos": {"type": "number"},
+                "location": {"type": "number"},
+                "amenities": {"type": "number"},
+                "pricing": {"type": "number"},
+            },
+        },
+        "suggestions": {"type": "array", "items": {"type": "string"}},
+    },
+}
+
 
 class RoomProximityMixin(serializers.Serializer):
     """Adds map/proximity fields shared by the list and detail representations.
@@ -228,6 +249,10 @@ class RoomDetailSerializer(_EffectiveTierMixin, RoomProximityMixin, serializers.
         help_text="How this room's price compares to its market segment; null if there "
         "isn't yet a big-enough market sample for its (area, room_type) to compare against."
     )
+    listing_quality = serializers.SerializerMethodField(
+        help_text="Transparent 0-100 listing completeness score with actionable "
+        "suggestions; empty payload when the feature is disabled."
+    )
     nearby_landmarks = serializers.SerializerMethodField(
         help_text="All universities and metro stations within NEARBY_RADIUS_KM of the room, nearest first."
     )
@@ -261,12 +286,24 @@ class RoomDetailSerializer(_EffectiveTierMixin, RoomProximityMixin, serializers.
             "verified",
             "images",
             "price_insight",
+            "listing_quality",
             "proximity",
             "nearby_landmarks",
             "distance_km",
             "created_at",
             "updated_at",
         ]
+
+    @extend_schema_field(_LISTING_QUALITY_SCHEMA)
+    def get_listing_quality(self, obj: Room) -> dict:
+        """Transparent 0-100 completeness score + actionable suggestions.
+
+        Never null: when the feature is disabled the payload is
+        ``{score: null, level: null, category_scores: {}, suggestions: []}``.
+        """
+        from .listing_quality import get_listing_quality as quality_for
+
+        return quality_for(obj)
 
     @extend_schema_field({"type": "object", "nullable": True})
     def get_price_insight(self, obj):
