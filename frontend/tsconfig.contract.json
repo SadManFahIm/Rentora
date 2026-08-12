@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": ["src/lib/schemaContract.ts", "src/generated", "vite-env.d.ts"],
+  // Clear the base config's excludes — this check NEEDS the generated types
+  // and the contract file (which the app build deliberately excludes).
+  "exclude": []
+}

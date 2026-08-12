@@ -38,6 +38,19 @@ def _nearby_payload(pair: tuple[Landmark, float] | None) -> dict | None:
     }
 
 
+_NEAREST_LANDMARK_SCHEMA = {
+    "type": "object",
+    "nullable": True,
+    "required": ["key", "name", "kind", "distance_km"],
+    "properties": {
+        "key": {"type": "string"},
+        "name": {"type": "string"},
+        "kind": {"type": "string"},
+        "distance_km": {"type": "number"},
+    },
+}
+
+
 class RoomProximityMixin(serializers.Serializer):
     """Adds map/proximity fields shared by the list and detail representations.
 
@@ -58,6 +71,16 @@ class RoomProximityMixin(serializers.Serializer):
         "request supplied near_lat/near_lng or near_landmark."
     )
 
+    @extend_schema_field(
+        {
+            "type": "object",
+            "required": ["nearest_university", "nearest_metro"],
+            "properties": {
+                "nearest_university": _NEAREST_LANDMARK_SCHEMA,
+                "nearest_metro": _NEAREST_LANDMARK_SCHEMA,
+            },
+        }
+    )
     def get_proximity(self, obj: Room) -> dict:
         lat, lng = float(obj.lat), float(obj.lng)
         return {
