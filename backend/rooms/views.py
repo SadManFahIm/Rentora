@@ -29,6 +29,7 @@ from .landmarks import ALL_LANDMARKS, get_landmark
 from .models import Room, RoomView
 from .nl_query import parse_nl_query
 from .permissions import IsOwnerOrReadOnly
+from .ranking import hybrid_rank
 from .semantic import semantic_candidates
 from .serializers import (
     LandmarkSerializer,
@@ -361,19 +362,40 @@ class RoomViewSet(viewsets.ModelViewSet):
                     queryset = queryset.filter(gender_preference__in=[parsed["gender"], "any"])
 
                 pool_ids = list(queryset.values_list("id", flat=True))
-                ranked = semantic_candidates(query_text, pool_ids)
-                if ranked:
+                # Debug-only ranking transparency (settings.DEBUG or an
+                # explicit ?debug_rank=1) — never exposed to normal users.
+                debug_rank = bool(
+                    settings.DEBUG or self.request.query_params.get("debug_rank") == "1"
+                )
+                if getattr(settings, "SEMANTIC_SEARCH_ENABLED", True):
+                    rank_result = hybrid_rank(
+                        query_text,
+                        pool_ids,
+                        user=self.request.user,
+                        include_metadata=debug_rank,
+                    )
+                else:
+                    # Legacy TF-IDF/LSA-only ranking when neural search is
+                    # disabled via the SEMANTIC_SEARCH_ENABLED flag.
+                    legacy = semantic_candidates(query_text, pool_ids)
+                    rank_result = (
+                        {"ids": [room_id for room_id, _score in legacy], "metadata": {}}
+                        if legacy is not None
+                        else None
+                    )
+                if rank_result:
+                    ranked_ids = rank_result["ids"]
                     ordering = Case(
                         *[
                             When(pk=room_id, then=Value(position))
-                            for position, (room_id, _score) in enumerate(ranked)
+                            for position, room_id in enumerate(ranked_ids)
                         ],
                         output_field=IntegerField(),
                     )
-                    queryset = queryset.filter(pk__in=[room_id for room_id, _ in ranked]).order_by(
-                        ordering
-                    )
+                    queryset = queryset.filter(pk__in=ranked_ids).order_by(ordering)
                     semantically_ordered = True
+                    if debug_rank:
+                        self.rank_meta = rank_result.get("metadata", {})
             else:
                 queryset = search_rooms(queryset, query_text)
 
@@ -395,14 +417,23 @@ class RoomViewSet(viewsets.ModelViewSet):
         return queryset
 
     def list(self, request, *args, **kwargs):
-        """Attach the smart-search parse result to the list response."""
+        """Attach the smart-search parse result (and debug rank metadata) to
+        the list response."""
         response = super().list(request, *args, **kwargs)
         parsed = getattr(self, "nl_parsed", None)
-        if parsed is not None:
+        rank_meta = getattr(self, "rank_meta", None)
+        if parsed is not None or rank_meta:
             if isinstance(response.data, dict):
-                response.data["nl_parsed"] = parsed
+                if parsed is not None:
+                    response.data["nl_parsed"] = parsed
+                if rank_meta:
+                    response.data["rank_meta"] = rank_meta
             else:
-                response.data = {"results": response.data, "nl_parsed": parsed}
+                response.data = {
+                    "results": response.data,
+                    "nl_parsed": parsed,
+                    "rank_meta": rank_meta,
+                }
         return response
 
     def _apply_personal_boost(self, queryset):

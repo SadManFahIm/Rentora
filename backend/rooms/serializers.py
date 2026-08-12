@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
@@ -132,6 +133,21 @@ class _EffectiveTierMixin(serializers.Serializer):
         return self.get_tier(obj) != "free"
 
 
+# OpenAPI shape for the price-anomaly badge (Phase 11+).
+_PRICE_ANOMALY_SCHEMA = {
+    "type": "object",
+    "nullable": True,
+    "required": ["available", "predicted_price", "difference_percentage", "direction", "badge"],
+    "properties": {
+        "available": {"type": "boolean"},
+        "predicted_price": {"type": "number"},
+        "difference_percentage": {"type": "integer"},
+        "direction": {"type": "string", "enum": ["above_market", "below_market"]},
+        "badge": {"type": "string"},
+    },
+}
+
+
 class RoomListSerializer(_EffectiveTierMixin, RoomProximityMixin, serializers.ModelSerializer):
     """Representation used for room list/browse and anywhere a room summary is
     embedded (wishlist entries, bookings). Includes the fields the frontend
@@ -142,6 +158,11 @@ class RoomListSerializer(_EffectiveTierMixin, RoomProximityMixin, serializers.Mo
     images = RoomImageSerializer(many=True, read_only=True)
     owner = RoomOwnerSerializer(read_only=True)
     amenities = serializers.ListField(child=serializers.CharField(), required=False)
+    price_anomaly = serializers.SerializerMethodField(
+        allow_null=True,
+        help_text="Transparent price-vs-market badge; null when the prediction isn't "
+        "confident enough or the gap is below PRICE_ANOMALY_THRESHOLD.",
+    )
 
     class Meta:
         model = Room
@@ -168,8 +189,33 @@ class RoomListSerializer(_EffectiveTierMixin, RoomProximityMixin, serializers.Mo
             "images",
             "proximity",
             "distance_km",
+            "price_anomaly",
             "created_at",
         ]
+
+    @extend_schema_field(_PRICE_ANOMALY_SCHEMA)
+    def get_price_anomaly(self, obj):
+        """Price-vs-market badge, reusing the pricing prediction engine.
+
+        The Ridge model is trained at most **once per request** (cached on
+        the request object) and shared across every room on the page, so a
+        12-room page never triggers 12 re-fits.
+        """
+        if not getattr(settings, "PRICE_ANOMALY_ENABLED", True):
+            return None
+        from .price_anomaly import get_price_anomaly as anomaly_for
+
+        request = self.context.get("request")
+        trained = None
+        if request is not None:
+            # hasattr (not getattr-vs-None) so a legitimately-trained None
+            # (too few listings) is cached too and we don't re-fit per room.
+            if not hasattr(request, "_rentora_price_model"):
+                from pricing.services.prediction import train_price_model
+
+                request._rentora_price_model = train_price_model()
+            trained = request._rentora_price_model
+        return anomaly_for(obj, trained_model=trained)
 
 
 class RoomDetailSerializer(_EffectiveTierMixin, RoomProximityMixin, serializers.ModelSerializer):
