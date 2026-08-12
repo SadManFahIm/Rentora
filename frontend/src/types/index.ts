@@ -39,6 +39,14 @@ export interface Room {
     nearestUniversity: { key: string; name: string; distanceKm: number } | null;
     nearestMetro: { key: string; name: string; distanceKm: number } | null;
   } | null;
+  /** Transparent price-vs-market badge ("25% above market"); absent when the
+   * backend has no confident prediction or the gap is below threshold. */
+  priceAnomaly?: {
+    predictedPrice: number;
+    differencePercentage: number;
+    direction: "above_market" | "below_market";
+    badge: string;
+  } | null;
 }
 
 /** Public tier catalog from GET /rooms/tier-catalog/. */

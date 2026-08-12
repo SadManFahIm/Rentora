@@ -21,8 +21,8 @@ from __future__ import annotations
 
 import re
 
+from .area_aliases import ALIAS_TO_CANONICAL, find_areas_in_text
 from .models import Room
-from .streets import STREETS
 
 # ---------------------------------------------------------------- numerals
 
@@ -126,16 +126,10 @@ _GENDER_WORDS = {
     "নারী": "female",
 }
 
-# Area names the parser can recognise: Room.Area choices + gazetteer areas.
-_AREA_ALIASES: dict[str, str] = {}
-for value, label in Room.Area.choices:
-    _AREA_ALIASES[value.lower()] = value
-    _AREA_ALIASES[label.lower()] = value
-for street in STREETS:
-    if street.kind == "area":
-        _AREA_ALIASES[street.name.lower()] = street.name
-        for alias in street.aliases:
-            _AREA_ALIASES[alias.lower()] = street.name
+# Area names the parser can recognise: canonical Room.Area values plus the
+# map gazetteer's street-level areas, with every Bangla/English/Banglish
+# alias — sourced from area_aliases.py (the single source of truth).
+_AREA_ALIASES: dict[str, str] = dict(ALIAS_TO_CANONICAL)
 
 
 def normalize_bangla(text: str) -> str:
@@ -239,6 +233,15 @@ def parse_nl_query(text: str) -> dict:
     for word, month in {**_BANGLA_MONTHS, **_ENGLISH_MONTHS}.items():
         if word in lowered and month not in result["months"]:
             result["months"].append(month)
+
+    # Typo tolerance (Phase 11+): when no exact alias matched, resolve
+    # same-script typos against the bounded alias gazetteer — "mirpore" ->
+    # Mirpur, "মিরপূর" -> Mirpur. Only runs when the exact pass found nothing,
+    # so it costs nothing on clean queries.
+    if not result["areas"]:
+        for area in find_areas_in_text(text, fuzzy=True):
+            if area not in result["areas"]:
+                result["areas"].append(area)
 
     # --- human-readable chips ---
     if result["budget_max"]:
