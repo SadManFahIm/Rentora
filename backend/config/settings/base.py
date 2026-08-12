@@ -82,6 +82,7 @@ INSTALLED_APPS = [
     "roommates",
     "fraud",
     "savedsearches",
+    "copilot",
 ]
 
 MIDDLEWARE = [
@@ -211,6 +212,8 @@ REST_FRAMEWORK = {
         # payment sessions an hour, and it's a prime target for abuse/testing
         # stolen cards against the gateway.
         "payment_initiate": "5/hour",
+        # Copilot turns hit the search engine — generous but bounded.
+        "copilot": "60/hour",
         # Gateway callbacks have no user session (AllowAny/no auth), so they
         # can't use the "user" scope; keyed per-IP to absorb legitimate
         # gateway retries while still capping flood/replay attempts.
@@ -319,6 +322,124 @@ BKASH_IS_SANDBOX = os.getenv("BKASH_IS_SANDBOX", "True") == "True"
 # Base URL of the frontend app — used to build the redirect target after a
 # bKash callback resolves (bKash itself only ever hits backend URLs).
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+# ============================================================
+# AI Search & Discovery (Phase 11+) — feature flags & ranking weights
+# ============================================================
+# Neural semantic search. When ON (default), smart search ranks by a hybrid
+# of neural/synonym embeddings + the TF-IDF/LSA lexical index. Set False to
+# fall back to the pre-neural TF-IDF-only ranking.
+SEMANTIC_SEARCH_ENABLED = os.getenv("SEMANTIC_SEARCH_ENABLED", "True") == "True"
+# Optional heavy model for real multilingual embeddings. Only used when the
+# `sentence-transformers` package is installed; otherwise the zero-dependency
+# synonym-hash provider (embedding_service.LiteEmbeddingProvider) runs.
+SEMANTIC_EMBEDDING_MODEL = os.getenv(
+    "SEMANTIC_EMBEDDING_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+)
+# Hybrid ranking blend: final = semantic * SEMANTIC_SEARCH_WEIGHT
+#                        + lexical  * TFIDF_SEARCH_WEIGHT  (weights need not sum to 1).
+SEMANTIC_SEARCH_WEIGHT = float(os.getenv("SEMANTIC_SEARCH_WEIGHT", "0.7"))
+TFIDF_SEARCH_WEIGHT = float(os.getenv("TFIDF_SEARCH_WEIGHT", "0.3"))
+# Typo tolerance (fuzzy area/gazetteer resolution) on smart search.
+FUZZY_SEARCH_ENABLED = os.getenv("FUZZY_SEARCH_ENABLED", "True") == "True"
+# Bangla/English/Banglish area alias expansion (rooms/area_aliases.py).
+AREA_ALIAS_ENABLED = os.getenv("AREA_ALIAS_ENABLED", "True") == "True"
+# Personalized search re-ranking for authenticated users. Hard filters and
+# base relevance always win; this only re-orders within the relevant pool.
+PERSONALIZED_SEARCH_ENABLED = os.getenv("PERSONALIZED_SEARCH_ENABLED", "True") == "True"
+PERSONALIZATION_WEIGHT = float(os.getenv("PERSONALIZATION_WEIGHT", "0.15"))
+# Price-anomaly badge on list cards (reuses the pricing prediction engine).
+PRICE_ANOMALY_ENABLED = os.getenv("PRICE_ANOMALY_ENABLED", "True") == "True"
+# Only badge a listing when |actual - predicted| / predicted >= this (0.20 = 20%).
+PRICE_ANOMALY_THRESHOLD = float(os.getenv("PRICE_ANOMALY_THRESHOLD", "0.20"))
+
+# ============================================================
+# Listing Intelligence (Phase 11+) — voice search, saved-search AI matching,
+# listing quality score, fraud-aware ranking
+# ============================================================
+# Voice search is browser-side (Web Speech API) — this flag mirrors it so the
+# backend docs/config stay the source of truth; the frontend gates the mic
+# button on feature detection + VITE_VOICE_SEARCH_ENABLED.
+VOICE_SEARCH_ENABLED = os.getenv("VOICE_SEARCH_ENABLED", "True") == "True"
+VOICE_SEARCH_LANGUAGE = os.getenv("VOICE_SEARCH_LANGUAGE", "bn-BD")
+
+# AI saved-search matcher: relevance-score every new/updated room against the
+# user's saved searches and notify only above SAVED_SEARCH_MATCH_THRESHOLD.
+SAVED_SEARCH_AI_MATCHING_ENABLED = os.getenv("SAVED_SEARCH_AI_MATCHING_ENABLED", "True") == "True"
+# 0..1 relevance floor: 0.75+ = relevant match, 0.85+ = highly relevant, 0.95+ = excellent.
+SAVED_SEARCH_MATCH_THRESHOLD = float(os.getenv("SAVED_SEARCH_MATCH_THRESHOLD", "0.75"))
+# Component weights of the match score (must roughly sum to 1).
+SAVED_SEARCH_MATCH_WEIGHTS = {
+    "area": 0.25,
+    "price": 0.20,
+    "room_type": 0.15,
+    "semantic": 0.20,
+    "preference": 0.10,
+    "quality": 0.10,
+}
+# Rentora Copilot (Phase 11 — conversational room discovery). Hybrid:
+# deterministic intent parsing + the existing search/ranking pipeline first;
+# an optional LLM is a future fallback only — the core experience never
+# requires an external model and never hallucinates listings (every claim
+# comes from retrieved database rows).
+COPILOT_ENABLED = os.getenv("COPILOT_ENABLED", "True") == "True"
+# Max listings returned per Copilot turn.
+COPILOT_MAX_RESULTS = int(os.getenv("COPILOT_MAX_RESULTS", "5"))
+# Follow-up conversation context lives in the Django cache under a random
+# session_id; this is its TTL.
+COPILOT_SESSION_TTL_SECONDS = int(os.getenv("COPILOT_SESSION_TTL_SECONDS", "3600"))
+
+# A price cut of >= this fraction (0.10 = 10%) since the last check triggers a
+# price-drop notification for matching saved searches.
+PRICE_DROP_NOTIFICATION_THRESHOLD = float(os.getenv("PRICE_DROP_NOTIFICATION_THRESHOLD", "0.10"))
+# Don't re-notify the same user about the same room within this many hours
+# (unless something material — e.g. another significant price drop — happens).
+SAVED_SEARCH_COOLDOWN_HOURS = int(os.getenv("SAVED_SEARCH_COOLDOWN_HOURS", "24"))
+
+# Listing quality score (rooms/listing_quality.py) — transparent 0-100
+# completeness score, exposed on detail + landlord insights.
+LISTING_QUALITY_SCORE_ENABLED = os.getenv("LISTING_QUALITY_SCORE_ENABLED", "True") == "True"
+# Category weights (sum 100) — adapt to the actual Room model fields.
+LISTING_QUALITY_WEIGHTS = {
+    "basic": 20,
+    "description": 20,
+    "photos": 20,
+    "location": 15,
+    "amenities": 15,
+    "pricing": 10,
+}
+# (min_score, level) thresholds, descending.
+LISTING_QUALITY_LEVELS = [
+    (90, "excellent"),
+    (75, "good"),
+    (60, "fair"),
+    (40, "needs_improvement"),
+    (0, "poor"),
+]
+# Quality as a *secondary* search-ranking signal — tiny weight, applied only
+# within the already-relevant pool so it can never override query/area/price.
+LISTING_QUALITY_RANKING_ENABLED = os.getenv("LISTING_QUALITY_RANKING_ENABLED", "True") == "True"
+LISTING_QUALITY_RANKING_WEIGHT = float(os.getenv("LISTING_QUALITY_RANKING_WEIGHT", "0.05"))
+
+# Fraud-aware search ranking: demote risky listings using the EXISTING fraud
+# engine's score (FraudReport.score / 100). Listings are never hidden — only
+# penalised in ranking (moderation policy decides visibility, not ranking).
+FRAUD_AWARE_RANKING_ENABLED = os.getenv("FRAUD_AWARE_RANKING_ENABLED", "True") == "True"
+FRAUD_RANKING_PENALTY_WEIGHT = float(os.getenv("FRAUD_RANKING_PENALTY_WEIGHT", "0.20"))
+
+# Cross-listing duplicate-image fraud detection (fraud/services/detectors.py):
+# reuses the pHash cache from rooms/image_search.py to flag the same (or
+# visually near-identical) photo re-used across *different* listings — the
+# classic scam-listing tell. Images repeated within one listing are fine.
+DUPLICATE_IMAGE_FRAUD_ENABLED = os.getenv("DUPLICATE_IMAGE_FRAUD_ENABLED", "True") == "True"
+# Max Hamming bits that may differ between two photos before they stop
+# counting as the same image (64-bit average hash; 8 tolerates mild
+# compression/resize without over-matching).
+IMAGE_DUPLICATE_THRESHOLD = int(os.getenv("IMAGE_DUPLICATE_THRESHOLD", "8"))
+# A room is only scanned for duplicate images once it has at least this many
+# other listings on the platform — with one or two listings there is nothing
+# to compare against and hashing every image is pure waste.
+IMAGE_DUPLICATE_MIN_LISTINGS = int(os.getenv("IMAGE_DUPLICATE_MIN_LISTINGS", "2"))
 
 # ============================================================
 # Alert email throttling (notifications.email_guard)

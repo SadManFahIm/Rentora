@@ -38,6 +38,10 @@ class Notification(models.Model):
     message = models.TextField()
     is_read = models.BooleanField(default=False)
     action_url = models.CharField(max_length=500, blank=True)
+    # Structured extras (e.g. ``{"room_id": 12, "level": "highly_relevant"}``
+    # for saved-search matches) — powers dedup/cooldown lookups without a
+    # per-type schema.
+    meta = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

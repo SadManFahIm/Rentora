@@ -153,6 +153,27 @@ def _build_room_vector(user, room: Room, prefs: dict) -> tuple[np.ndarray, list[
     return vector, reasons
 
 
+def get_user_preference_scores(user, rooms) -> dict[int, float] | None:
+    """Per-room personalization score [0, 1] for an authenticated user.
+
+    Reuses the exact same profile + feature vector as the recommendation
+    engine (``build_user_preference_vector`` + ``_build_room_vector``) — the
+    smart-search re-ranker calls this, so search and recommendations never
+    drift apart. Returns None for cold-start users (no room-linked activity
+    yet), which callers must treat as "no personalization".
+    """
+    prefs = build_user_preference_vector(user)
+    if not prefs:
+        return None
+    ideal = IDEAL_VECTOR.reshape(1, -1)
+    scores: dict[int, float] = {}
+    for room in rooms:
+        vector, _reasons = _build_room_vector(user, room, prefs)
+        similarity = float(cosine_similarity(vector.reshape(1, -1), ideal)[0][0])
+        scores[room.id] = round(max(similarity, 0.0), 4)
+    return scores
+
+
 def get_content_based_recommendations(user, limit: int = 10) -> list[ScoredRoom]:
     prefs = build_user_preference_vector(user)
     if not prefs:

@@ -179,6 +179,16 @@ class ReviewViewSet(viewsets.ModelViewSet):
             "Aggregated rating stats for one room: average, total, counts "
             "per star and the recent reviews (with any landlord replies)."
         ),
+        responses=inline_serializer(
+            "ReviewSummaryResponse",
+            fields={
+                "room": serializers.IntegerField(),
+                "average_rating": serializers.FloatField(),
+                "total_reviews": serializers.IntegerField(),
+                "counts_per_star": serializers.DictField(child=serializers.IntegerField()),
+                "recent": ReviewSerializer(many=True),
+            },
+        ),
     )
     @action(detail=False, methods=["get"], url_path="summary")
     def summary(self, request):

@@ -12,8 +12,10 @@ import {
   usePaymentSummary,
 } from "../../hooks/usePayments";
 import { wishlistService } from "../../services/wishlistService";
+import roomService from "../../services/roomService";
 import { useApp } from "../../context/AppContext";
 import FraudTab from "../../components/FraudTab/FraudTab";
+import AdminFraudPanel from "../../components/AdminFraudPanel/AdminFraudPanel";
 import LandlordInsights from "../../components/LandlordInsights/LandlordInsights";
 import PushNotificationCard from "../../components/PushNotificationCard/PushNotificationCard";
 import ReferralCard from "../../components/ReferralCard/ReferralCard";
@@ -221,6 +223,20 @@ export default function Dashboard() {
     queryFn: () => wishlistService.getWishlist(),
   });
 
+  // Landlord listing-quality summary (avg of the 0-100 completeness scores).
+  const { data: insights } = useQuery({
+    queryKey: ["room-insights"],
+    queryFn: roomService.getInsights,
+    enabled: isLandlord,
+  });
+  const qualityScores = (insights?.rooms ?? [])
+    .map((r) => r.listingQuality?.score)
+    .filter((s): s is number => s != null);
+  const avgQuality =
+    qualityScores.length > 0
+      ? Math.round(qualityScores.reduce((a, b) => a + b, 0) / qualityScores.length)
+      : null;
+
   const paymentFilters = {
     ...(statusFilter !== "all" ? { status: statusFilter } : {}),
     ...(dateFrom ? { dateFrom } : {}),
@@ -287,6 +303,16 @@ export default function Dashboard() {
             change: "approved bookings",
           },
         ]
+      : null;
+
+  const qualityCard: StatCard | null =
+    avgQuality != null
+      ? {
+          icon: "✨",
+          label: "Avg Listing Quality",
+          value: `${avgQuality} / 100`,
+          change: avgQuality >= 75 ? "Strong listings" : "Improve in Insights",
+        }
       : null;
 
   const handlePayNow = (booking: Booking) => {
@@ -384,6 +410,24 @@ export default function Dashboard() {
                     )}
                   </div>
                 ))}
+                {qualityCard && (
+                  <div
+                    className={cn(
+                      "rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800",
+                      qualityCard.change !== "Strong listings" &&
+                        "border-amber-500/40 dark:border-amber-500/30"
+                    )}
+                  >
+                    <div className="mb-2.5 text-2xl">{qualityCard.icon}</div>
+                    <h3 className="font-display text-2xl font-bold text-foreground">
+                      {qualityCard.value}
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">{qualityCard.label}</p>
+                    <div className="text-sm font-semibold text-emerald-500">
+                      {qualityCard.change}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -603,7 +647,7 @@ export default function Dashboard() {
           </div>
         ))}
 
-      {activeTab === "fraud" && <FraudTab />}
+      {activeTab === "fraud" && (isAdmin ? <AdminFraudPanel /> : <FraudTab />)}
 
       {activeTab === "kyc" && isAdmin && <AdminKycPanel />}
 

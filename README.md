@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-414%20(229%20BE%20%2B%20185%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-570%20(368%20BE%20%2B%20202%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -46,6 +46,21 @@
 | **Solution**        | One verified marketplace: AI-scanned listings, real-time landlord chat, secure gateway payments, roommate matching, and an ML-powered fraud engine that catches bad actors before tenants do. |
 | **Target users**    | Tenants (students & young professionals) and landlords in Bangladesh.                                                                                                                         |
 | **Differentiators** | Fraud-engineered trust layer, AI recommendations & fair-price insight, roommates (a growth hook competitors lack), and a monetized listing-tier system (Free → Featured → Premium).           |
+
+---
+
+## ✨ Product Preview
+
+One platform, four surfaces — **browse smarter**, **trust the listings**, **sell faster**, **run on data**:
+
+| Surface | What you see | Screenshot |
+|---|---|---|
+| 🗺️ **Intelligent Map** | AI map search ("উত্তরায় ১২ হাজারের মধ্যে furnished room"), metro commute scores, value-score pins, area intelligence & affordability | [`map-intel-ai-search.png`](docs/screenshots/map-intel-ai-search.png) |
+| 🔍 **AI Smart Search** | Bangla/Banglish natural-language search with intent chips + semantic ranking | [`phase11-ai-search.png`](docs/screenshots/phase11-ai-search.png) |
+| 🛡️ **Fraud Operations** | Auto-scanned listings, risk scores, admin review queue + duplicate-image detection | [`fraud-admin.png`](docs/screenshots/fraud-admin.png) |
+| 🧑‍🤝‍🧑 **Roommate Matching** | Compatible flatmates by budget, area & lifestyle | [`roommates-matching.png`](docs/screenshots/roommates-matching.png) |
+
+Full gallery (28 screenshots, light + dark, desktop + mobile) in [🖼️ Screenshots](#-screenshots). Live verification notes in [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md).
 
 ---
 
@@ -129,6 +144,20 @@
 - **Shareable map URLs** — the current viewport (center + zoom + radius search) is live-synced to the URL (`/map?center=23.81,90.41&zoom=12&r=23.78,90.40,2.0`), so you can copy the address and share an exact map view; the **Share** button copies the link, and opening a shared link restores the exact view, radius and area chips
 - **Readable in both themes** — dark tiles are the CARTO CDN; if it's unreachable the map auto-falls back to dimmed OSM tiles (street labels stay legible), and the travel overlay + legend are styled for light _and_ dark
 
+**Intelligent Map (Phase 7 v2) — Rental Decision Intelligence**
+
+- **AI Smart Map Search** (🧠 "AI Map" button) — ask the map in Bangla, English or Banglish ("উত্তরায় ১২ হাজারের মধ্যে furnished room", "metro er kache room, Banani under 15k") and it parses the query into **hard filters** (area, budget, room type, amenities, metro proximity), flies to the matched area or metro station, updates the pins, and shows intent chips so you can see exactly what it understood — powered by the existing NL parser + gazetteer (`/rooms/map-intel/search/`), no hallucinated listings
+- **Metro Commute Score** — every relevant listing carries a 0–100 transit-access score (walking time to the nearest MRT station, real curated station data) shown in the value-score chip
+- **Commute mode** (🚇) — set a destination on the map (office / university / any point), and every visible listing gets a walking-time estimate ("🚶 8 min"); filter by max commute (15–60 min) — ETAs are honest straight-line estimates, labelled as such
+- **Best Value Score** (⭐) — a transparent 0–100 server-side blend of price-fit vs the area market, amenities, listing quality, KYC verification, demand and metro access; each marker popup shows the score + transit factor, and the panel lists the top-value visible rooms
+- **Area Intelligence panel** (🏛️ Areas) — tap an area chip for avg/median rent, listing counts, availability, 30-day demand (views/saves/bookings), metro access and price trend — all from real data, `—` where none exists; select up to 3 areas for a side-by-side **comparison table**
+- **Affordability map** (💰 Budget) — drag a budget slider and see the **real % of currently listed rooms** per area that fit (green/amber/red bars) — a listing share, not an estimate
+- **Ideal Area ranking** (⭐ Ideal Area) — budget + optional destination → the top areas ranked with the *why* ("100% of Mirpur listings fit your ৳10,000 budget · ~28 min commute (MRT estimate)")
+- **Destination pin** — click the map to drop a teal destination flag for commute/ideal-area ranking; the pin is persisted in the shareable URL
+- **Everything real** — no fabricated statistics: ETAs are labelled heuristics, transit ETA only exists along the MRT Line-6 corridor, and areas without data say "—"
+
+See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`docs/MAP_API.md`](docs/MAP_API.md) (endpoints) · [`docs/MAP_SCORING.md`](docs/MAP_SCORING.md) (formulas).
+
 **Listing Location Picker (landlord)**
 
 - **List a Room** now opens a proper form with a **map picker** — click the map to pin the exact listing location (or "Use my location")
@@ -151,9 +180,9 @@
 **Engineering**
 
 - **Coverage history per branch** — every PR and main push appends its own `history-<branch>.csv` + SVG chart to the `coverage-history` branch (viewable `index.html` linking all branches)
-- 414 automated tests (229 backend + 185 frontend) · coverage gates (BE ≥50%, FE ≥55%)
+- 528 automated tests (334 backend + 194 frontend) · coverage gates (BE ≥50%, FE ≥55%)
 - Ruff + ESLint + Prettier with husky/lint-staged pre-commit hooks
-- GitHub Actions CI (backend, frontend, **live API contract check**, lint, coverage-summary PR comment, per-branch coverage history)
+- GitHub Actions CI (backend, frontend, **live API contract check**, **frontend schema contract** (TS types vs OpenAPI), **schema-drift PR comment**, lint, coverage-summary PR comment, per-branch coverage history)
 - Route-level code splitting (React.lazy) — smaller bundles
 
 **Search & Discovery (Phase 11) — ✨ AI Smart Search**
@@ -161,11 +190,33 @@
 - **AI Search toggle** — the Rooms page's search bar grows a gradient **✨ AI Search** button; flip it on and the box accepts *natural language*: "১০ হাজার এর মধ্যে uttara student room" is understood as **budget ≤ ৳10,000 in Uttara** (and "জুলাই move-in" as a July move-in date)
 - **Bangla + English natural-language parser** (`rooms/nl_query.py`) — Bangla digits (০-৯), **number words** (দশ/বিশ/ত্রিশ… with হাজার/লাখ/কোটি multipliers — "দশ হাজার" → ৳10,000), ৳/টাকা/tk/taka, **area names in both scripts** (Uttara *and* উত্তরা, Dhanmondi *and* ধানমন্ডি — from the gazetteer's new Bangla aliases), room-type/gender words and month names in both scripts; the parsed budget/area/type/gender become **real filters**, and the list response carries an `nl_parsed` object
 - **"AI understood" chips** — under the search bar the backend's interpretation renders as tappable-looking pills (`Budget ≤ ৳10,000` · `Uttara` · `move-in July`) so tenants see exactly what was understood
-- **Semantic ranking** — a lightweight vector-space model (scikit-learn TF-IDF character n-grams + LSA, no heavy ML deps, works for both scripts) ranks keyword/NL-filtered rooms by cosine similarity; **semantic discovery** surfaces relevant rooms even when the query shares no literal keyword ("student room near campus" finds the student listings)
+- **Hybrid neural semantic ranking** — smart search now blends **two relevance legs** with configurable weights (`SEMANTIC_SEARCH_WEIGHT=0.7` neural + `TFIDF_SEARCH_WEIGHT=0.3` lexical). The neural leg uses **pluggable embeddings** (`rooms/embedding_service.py`): a zero-dependency bilingual synonym-hash provider runs out of the box (no heavy deps — "affordable student room" finds "কম বাজেটের শিক্ষার্থীদের থাকার রুম" in both query directions), and installing the optional `sentence-transformers` package transparently upgrades it to real multilingual neural embeddings. If embeddings are unavailable, ranking degrades to the TF-IDF/LSA leg, then to keyword search — search never breaks
+- **Typo tolerance** — smart search resolves same-script typos against a bounded area gazetteer: `mirpore`/`মিরপূর` still find Mirpur, `Dhanmondhi` finds Dhanmondi, `uttra` finds Uttara (`FUZZY_SEARCH_ENABLED`)
+- **Bangla/English area aliases** — a single alias table (`rooms/area_aliases.py`) resolves every spelling of a place — `ধানমন্ডি`, `ধানমণ্ডি`, `Dhanmondi`, `Dhanmondhi`, `ধানমন্ডি ২৭`, `mirpur 10`, `উত্তরা সেক্টর ১০` — to its canonical area, shared by the NL parser and map gazetteer (`AREA_ALIAS_ENABLED`)
+- **Personalized search re-ranking** — for signed-in tenants, smart-search results are re-ranked within the relevant pool by the user's preference profile (preferred area/type/budget/amenities — reused from the recommendation engine, no duplicated logic); cold-start users get plain relevance ranking and **hard filters (budget/area) always win** (`PERSONALIZED_SEARCH_ENABLED`, `PERSONALIZATION_WEIGHT=0.15`)
+- **Price-anomaly badge** — room cards show a transparent price-vs-market chip (`↑ 25% above market`) computed from the existing fair-price prediction model, trained once per request and only rendered when the prediction is confident and the gap clears `PRICE_ANOMALY_THRESHOLD` (20%)
+- **Debug ranking metadata** — `?debug_rank=1` (or `DEBUG=true`) attaches `rank_meta` (semantic/lexical/personalization/final scores per room) to the list response; never exposed to normal users
 - **Personal ranking boost** — for signed-in tenants the default browse order floats rooms they recently viewed or wishlisted to the top (30-day window), layered under the paid-tier/verified ranking
 - **Look-Alike Rooms (visual search)** — every RoomModal now shows a "Look-Alike Rooms" strip: rooms whose primary photo looks like the current one, via 64-bit **perceptual hashes (pHash)** computed with Pillow and cached in a new `RoomImageHash` table (mtime-keyed, so replaced photos re-hash automatically); `GET /rooms/{id}/similar-images/`
 - **Dhaka coverage expanded** — the listing `Area` choices now span **20 areas** (Uttara, Tejgaon, Badda, Rampura, Banasree, Khilgaon, Motijheel, Old Dhaka, Bashundhara, Lalmatia, Shyamoli, Savar, Keraniganj, Tongi + the original 6) and the map gazetteer gained **40+ new streets/roads** (Panthapath, Bailey Road, Hatirjheel, Badda Link Road, Khilgaon Flyover, Uttara Sectors 10/12/14, Gulshan 1/2 circles, Jashimuddin Avenue …) plus 9 more universities (Jagannath, Dhaka Medical College, AUST, DIU, Stamford, UIU …) — all searchable from the map box and the NL parser
 - **Bug fixes along the way** — the room list now sends the backend's `q` search param correctly (`params.search` → `params.q`), and the API client no longer yanks **anonymous** visitors to `/auth` when a public endpoint 401s (the bounce is now reserved for sessions that actually went stale) — regression-tested
+
+**Core AI & Fraud Intelligence (Phase 11++) — Rentora Copilot, AI pricing v2, duplicate-image fraud**
+
+- **🤖 Rentora Copilot** (`COPILOT_ENABLED`) — a floating conversational assistant (bottom-right, every page): ask in Bangla, English or Banglish ("Uttara-তে ১০ হাজারের মধ্যে furnished student room চাই") and it searches the **live** listings. Hybrid and free: intent parsing (reusing the NL parser + an amenity/property word table) feeds the existing search/ranking pipeline, and the reply is generated over the *retrieved* rows only — **it can never hallucinate a room, price or amenity**, and no LLM is required. Follow-up turns keep context ("শুধু furnished দেখাও" retains Uttara + budget via a session_id), listing cards open the full RoomModal, quick-reply chips are backend-generated (`POST /api/v1/copilot/chat/`, 60/hr throttle). See `docs/RENTORA_COPILOT.md`
+- **🏷️ AI pricing suggestion v2** (`GET /pricing/suggestion/:id/`, owner/admin) — the fair-price model upgraded with **demand**: recommended price + range (rounded to ৳500), a 0–100 demand score from real engagement (views vs area peers, wishlist saves, booking requests, area heat), **estimated time-to-rent** from actual booking history (never fabricated — "Insufficient historical data" when there aren't 5 samples), composite confidence, and explainable reasons ("Similar Mirpur singles average ৳8,500"). Cached per room + market snapshot. Dashboard → **Insights** → **AI Price** expands the suggestion card with a **Use ৳12,500** button — the landlord always decides; nothing changes automatically. See `docs/AI_PRICING_V2.md`
+- **🖼️ Cross-listing duplicate-image fraud detection** (`DUPLICATE_IMAGE_FRAUD_ENABLED`) — the pHash pipeline (already powering look-alike rooms) now feeds a 7th fraud detector: the same photo re-used across listings is flagged with contextual severity (same-owner agency posts → low; different owners → medium; different owner **and** area, or 3+ matches → high). Hex-prefix pre-filtering keeps scans from N×N; same-listing galleries and blank images are never flagged; the signal feeds the existing fraud score → search ranking, and the admin **Fraud Operations** panel shows matched-listing chips + similarity %. See `docs/DUPLICATE_IMAGE_FRAUD.md`
+
+---
+
+**Listing Intelligence (Phase 11+) — voice search, AI saved-search matching, listing quality, fraud-aware ranking**
+
+- **🎤 Bangla voice search** — the search bar grows a microphone button (`VOICE_SEARCH_ENABLED`): the browser's **Web Speech API** transcribes Bangla / Banglish / English naturally ("উত্তরা ১০ হাজারের মধ্যে রুম" → `?q=`), and the transcript flows straight into the existing NL parser + semantic ranking — no new NLP pipeline, **no audio ever stored or uploaded** (only the transcript). Unsupported browsers hide the button; permission-denied shows a friendly hint; text search always works (`useVoiceSearch` hook, states: idle/listening/processing/denied/unsupported/error)
+- **🧠 AI saved-search matcher** (`SAVED_SEARCH_AI_MATCHING_ENABLED`) — saved-search alerts upgraded from "new listing" to **"Highly relevant room found in Uttara"** with *why it matched* reasons (✓ matches your area ✓ within budget ✓ similar to rooms you viewed). Two-stage pipeline: **hard filters always gate first** (area/budget/type/gender — a Dhanmondi room can never match a Uttara search), then a weighted relevance score (`area/price/room-type/semantic/preference/quality`, weights + `SAVED_SEARCH_MATCH_THRESHOLD=0.75` configurable). Alerts fire in-app from a **room create/price-change event task** and the daily digest, deduplicated by a **cooldown** (`SAVED_SEARCH_COOLDOWN_HOURS`); **price-drop alerts** (≥ `PRICE_DROP_NOTIFICATION_THRESHOLD` 10%) ride on the new `RoomPriceHistory` table written by a post-save signal
+- **✨ Listing quality score** (`LISTING_QUALITY_SCORE_ENABLED`) — every listing gets a transparent **0–100 completeness score** (basic info 20 / description 20 / photos 20 / location 15 / amenities 15 / pricing 10 — weights configurable) with **actionable suggestions** ("Add 3 more photos", "Description is too short…", "Add nearby landmark information"). Shown as a quality chip on the room detail page and a **per-listing Quality column in the landlord Insights dashboard** with a tap-for-suggestions popover, plus an **Avg Listing Quality card** on the landlord overview. It's *not* a valuation and *not* a fraud score — every point is explainable
+- **🛡️ Fraud-aware search ranking** (`FRAUD_AWARE_RANKING_ENABLED`) — smart-search results are **demoted by the existing fraud engine's risk score** (one query, no re-scan): high-risk listings sink below clean ones of equal relevance (`FRAUD_RANKING_PENALTY_WEIGHT=0.20`), and critical-risk handling follows the existing moderation flow — ranking **never hides or deletes** a listing. Risk never overrides explicit user intent (hard filters → relevance → personalization → quality → fraud), and internal detector evidence is never exposed to normal users (admin dashboard unchanged)
+- **Search pipeline now**: query → normalization → area-alias expansion → hard filters → lexical + semantic legs → personalization → quality + fraud secondary signals → final ranking → API response
+- **Copilot retrieval reuses the same pipeline** — hard filters (budget/area/type/gender/amenities) gate first, then hybrid ranking — so a Copilot answer and the Rooms page agree by construction
 
 ---
 
@@ -194,6 +245,9 @@
 | **9**     | Reliability & observability — Sentry, JSON logs, Celery + beat, branded emails, audit log, backups, KYC SLA alerts + trend chart                    | ✅ Shipped           |
 | **10**    | Growth & personalization — browser push, search v2 (full-text + saved searches), similar-rooms AI, referral program, wishlist sharing, landlord insights, reviews v2 | ✅ Shipped |
 | **11**    | Search & Discovery v2 — ✨ AI smart search (Bangla+English NL parser, semantic ranking, visual search), Dhaka expansion                              | ✅ Shipped           |
+| **11+**   | Listing Intelligence — 🎤 Bangla voice search, 🧠 AI saved-search matcher + price-drop alerts, ✨ listing quality score, 🛡️ fraud-aware ranking       | ✅ Shipped           |
+| **11++**  | Core AI & Fraud — 🤖 Rentora Copilot, 🏷️ AI pricing suggestion v2 (demand/time-to-rent), 🖼️ cross-listing duplicate-image fraud detection | ✅ Shipped |
+| **7 v2**   | Intelligent Map — 🧠 AI map search, 🚇 metro commute score + commute mode, ⭐ best-value scores, 🏛️ area intelligence + comparison, 💰 affordability map, ideal-area ranking | ✅ Shipped |
 
 ---
 
@@ -279,6 +333,7 @@
 | Sentry (sentry-sdk)           | Error tracking (backend + frontend)     |
 | py_webauthn                   | WebAuthn/FIDO2 server-side (passkeys)   |
 | scikit-learn                  | TF-IDF + LSA semantic search            |
+| sentence-transformers *(optional)* | Real multilingual neural embeddings (upgrades the built-in lite provider) |
 | Pillow (pHash)                | Visual similarity (look-alike rooms)    |
 | pywebpush                     | Browser push notifications (VAPID)      |
 | pytest / unittest             | Backend tests                           |
@@ -305,10 +360,11 @@
 │  └────────────┘ │ roommates, │ │ Fraud engine (6 detectors)│ │
 │  ┌────────────┐ │ fraud, AI, │ └────────────────────────────┘ │
 │  │ Exception  │ │ saved-     │ ┌────────────────────────────┐ │
-│  │ envelope   │ │ searches…  │ │ Semantic search (TF-IDF +  │ │
-│  └────────────┘ └────────────┘ │ LSA) · NL parser · pHash   │ │
-│  ┌────────────┐                 └────────────────────────────┘ │
-│  │ Audit log  │  ┌──────────────────────────────────────────┐ │
+│  │ envelope   │ │ searches…  │ │ Hybrid semantic search      │ │
+│  └────────────┘ └────────────┘ │ (embeddings + TF-IDF/LSA) · │ │
+│  ┌────────────┐                 │ NL parser · aliases · pHash │ │
+│  │ Audit log  │                 └────────────────────────────┘ │
+│  │ (append-   │  ┌──────────────────────────────────────────┐ │
 │  │ (append-   │  │ Celery + Beat (push, alerts, re-scan)    │ │
 │  │ only)      │  └──────────────────────────────────────────┘ │
 │  └────────────┘  Sentry (errors) · JSON logs · email templates│
@@ -420,7 +476,10 @@ If a check fails, the commit is **blocked** — fix and commit again (bypass wit
 | ---------------------- | ----------------------------------------------------------- | --------------- |
 | `ci.yml`               | Backend — Django tests + coverage gate                      | every push / PR |
 | `ci.yml`               | Frontend — Vitest + coverage + `npm run build`              | every push / PR |
-| `ci.yml`               | API contract — boots a server + runs the live endpoint suite vs the docs reference (**status codes + deep JSON schema + request-body contracts + OpenAPI path cross-check**, `docs/tools/api-verify.py`) | every push / PR |
+| `ci.yml`               | API contract — boots a server + runs the live endpoint suite vs the docs reference (**status codes + deep JSON schema + request-body contracts + OpenAPI path cross-check**; response/request contracts are **auto-generated from the live OpenAPI schema** at runtime — `docs/tools/api-verify.py`) | every push / PR |
+| `ci.yml`               | **Frontend contract** — regenerates TS types from the live OpenAPI schema (`openapi-typescript`) and typechecks the hand-written wire types (`services/mappers.ts`) against them via `src/lib/schemaContract.ts` — a backend field rename/removal/type change fails the PR | every push / PR |
+| `ci.yml`               | **Schema drift** — diffs the PR head's OpenAPI schema against the base branch and posts a sticky PR comment listing every endpoint/field contract change (`docs/tools/schema-drift.py`; doc-only changes ignored) | PRs |
+| `security.yml`         | **Security** — `pip-audit` (dependency advisories, hard-fail), Bandit (MEDIUM+ static analysis, hard-fail), Django `check --deploy`, security regression tests (upload validation / admin-only fraud / IDOR / KYC ownership), `npm audit --audit-level=high` (hard-fail) and a **gitleaks** secret scan — all with least-privilege `contents: read` | every push / PR |
 | `ci.yml`               | Lint — ruff + ESLint + Prettier                             | every push / PR |
 | `coverage-summary.yml` | Posts a coverage **PR comment** (badge + file-level detail) | PRs             |
 | `ci.yml` `coverage-history` job | Appends per-branch coverage history (`history-<branch>.csv` + SVG chart) to the `coverage-history` branch | pushes to main **and** PRs (same-repo; fork PRs skip) |
@@ -450,6 +509,12 @@ npm run dev
 
 > 💡 `seed_rooms` also creates the demo users below — sign in with any username + `demo12345`.
 > No `.env` files are required; sensible defaults work out of the box.
+>
+> **Optional — real neural embeddings:** smart search works out of the box with the built-in
+> zero-dependency lite provider. To upgrade to true multilingual transformer embeddings,
+> install the optional package: `pip install sentence-transformers` (a multi-hundred-MB
+> download incl. PyTorch) — the app detects it automatically and uses
+> `SEMANTIC_EMBEDDING_MODEL` (default: `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`).
 
 ### Prerequisites
 
@@ -561,6 +626,12 @@ Frontend runs at `http://localhost:3000`
 | DELETE    | `/api/v1/rooms/:id/`       | Owner  | Delete listing                                    |
 | GET       | `/api/v1/rooms/landmarks/` | Public | List landmarks (for `near_landmark`)              |
 | GET       | `/api/v1/rooms/summary/`   | Public | COUNT/AVG for the current viewport (map badge)    |
+| GET       | `/api/v1/rooms/map-intel/stats/`         | Public | Per-area rent/demand/metro stats (intelligent map)          |
+| GET       | `/api/v1/rooms/map-intel/commute/`       | Public | Walking/driving/MRT-corridor ETA between two points        |
+| GET       | `/api/v1/rooms/map-intel/value/`         | Public | Transparent 0–100 value scores for room ids                |
+| GET       | `/api/v1/rooms/map-intel/affordability/` | Public | % of listed rooms per area within a budget                 |
+| GET       | `/api/v1/rooms/map-intel/ideal-areas/`   | Public | Ranked areas for budget + destination, with reasons        |
+| GET       | `/api/v1/rooms/map-intel/search/`        | Public | Natural-language map search (Bangla/Banglish) → intent + rooms + fly-to target |
 | GET       | `/api/v1/rooms/geocode/?q=` | Public | Geocode a street/area (gazetteer + Nominatim)    |
 | GET       | `/api/v1/rooms/insights/`  | Auth (own listings) | Per-listing engagement + price vs area stats      |
 | POST      | `/api/v1/rooms/bulk/`      | Auth  | Bulk-create listings (JSON array body)            |
@@ -569,7 +640,7 @@ Frontend runs at `http://localhost:3000`
 
 **Text filters:** `?area=Dhanmondi&room_type=studio&price__gte=5000&price__lte=15000&is_available=true&q=cozy&ordering=-price&owner=3`
 
-**Smart search:** `?q=১০ হাজার এর মধ্যে uttara student room&smart=1` — natural-language parsing (budget/area/type/gender become filters), semantic ranking over the filtered pool, and an `nl_parsed` block in the response describing what was understood.
+**Smart search:** `?q=১০ হাজার এর মধ্যে uttara student room&smart=1` — natural-language parsing (budget/area/type/gender become filters), **hybrid ranking** over the filtered pool (neural embeddings + TF-IDF/LSA, with typo-tolerant area aliases and per-user personalization for signed-in tenants), and an `nl_parsed` block describing what was understood. List cards also carry an optional `price_anomaly` object (`{predicted_price, difference_percentage, direction, badge}`) when the listing's price is confidentially ≥20% above/below the predicted market price.
 
 **Geo filters:**
 
@@ -672,7 +743,14 @@ Frontend runs at `http://localhost:3000`
 | ------ | -------------------------------------------------- | ------ | ------------------------------------ |
 | POST   | `/api/v1/pricing/predict/`                         | Auth   | Predict fair price for a new listing |
 | GET    | `/api/v1/pricing/insight/:room_id/`                | Public | Price insight vs market for a room   |
+| GET    | `/api/v1/pricing/suggestion/:room_id/`             | Owner/Admin | AI pricing suggestion v2 — range, demand, time-to-rent, confidence |
 | GET    | `/api/v1/pricing/market-stats/?area=X&room_type=Y` | Public | Raw market stats                     |
+
+### Copilot
+
+| Method | Endpoint                     | Auth   | Description                                                              |
+| ------ | ---------------------------- | ------ | ------------------------------------------------------------------------ |
+| POST   | `/api/v1/copilot/chat/`      | Public | Conversational room discovery — intent + retrieved listings + suggestions |
 
 ### Roommates
 
@@ -722,7 +800,7 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 | `/api/v1/redoc/`  | ReDoc                 |
 | `/api/v1/schema/` | OpenAPI schema (YAML) |
 
-> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook)
+> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook) · [`docs/RENTORA_COPILOT.md`](docs/RENTORA_COPILOT.md) (Copilot architecture, API, config) · [`docs/AI_PRICING_V2.md`](docs/AI_PRICING_V2.md) (pricing suggestion v2) · [`docs/DUPLICATE_IMAGE_FRAUD.md`](docs/DUPLICATE_IMAGE_FRAUD.md) (duplicate-image detector) · [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) + [`docs/MAP_API.md`](docs/MAP_API.md) + [`docs/MAP_SCORING.md`](docs/MAP_SCORING.md) (intelligent map v2) · [`docs/VOICE_SEARCH_PLAYBOOK.md`](docs/VOICE_SEARCH_PLAYBOOK.md) (voice search) · [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md) (verified feature matrix)
 
 ---
 
@@ -744,6 +822,7 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 - **2FA enable is email-verified** — password + emailed code are both required before `otp_enabled` flips, and **recovery codes** (10, hashed, single-use) are minted at that moment; disabling deletes them
 - **Passkeys** — public-key only storage, sign-counter replay protection, conditional UI on login
 - **KYC document privacy** — identity documents are served through an **auth-gated endpoint** (owner/admin only); the public media URL can never expose a document, and non-owners get a 404 so even file existence is hidden
+- **Automated security CI** (`.github/workflows/security.yml`) — `pip-audit` dependency advisories (hard-fail), Bandit MEDIUM+ static analysis (hard-fail), Django `check --deploy`, security regression tests (upload validation / admin-only fraud / IDOR / KYC ownership), `npm audit --audit-level=high` (hard-fail) and a **gitleaks** secret scan — running on every push/PR with least-privilege permissions
 
 ## 🔑 Passkeys / WebAuthn — Shipped
 
@@ -801,6 +880,18 @@ Passwordless sign-in is live — the phishing-resistant successor to passwords +
 
 <img width="1440" alt="Interactive Map Dark" src="docs/screenshots/map-view-dark.png" />
 
+**Intelligent Map — AI Smart Search (Phase 7 v2)** — ask the map in Bangla/Banglish ("উত্তরায় ১২ হাজারের মধ্যে furnished room"): the parsed intent chips (area · budget · amenities), live matching rooms and the map flying to the result:
+
+<img width="1440" alt="Intelligent Map AI Search" src="docs/screenshots/map-intel-ai-search.png" />
+
+**Intelligent Map — Area Intelligence** — tap an area for avg/median rent, availability, 30-day demand, metro access and price trend (real data only; select up to 3 to compare):
+
+<img width="1440" alt="Intelligent Map Areas" src="docs/screenshots/map-intel-areas.png" />
+
+**Intelligent Map — Affordability** — drag your budget and see the real % of currently listed rooms per area that fit (green/amber/red bars):
+
+<img width="1440" alt="Intelligent Map Affordability" src="docs/screenshots/map-intel-affordability.png" />
+
 **Roommate Matching** — find compatible flatmates by budget, area, lifestyle & gender preference:
 
 <img width="1440" alt="Roommate Matching" src="docs/screenshots/roommates-matching.png" />
@@ -846,6 +937,20 @@ Passwordless sign-in is live — the phishing-resistant successor to passwords +
 **Phase 11 — AI Smart Search** — the ✨ AI Search toggle turns the search box into a natural-language query box: "দশ হাজার এর মধ্যে উত্তরা" (Bangla number *words* + Bangla area names) is understood as **budget ≤ ৳10,000 in Uttara** (see the "AI understood" chips under the bar) and ranked semantically — no keyword matching needed:
 
 <img width="1440" alt="Phase 11 AI Smart Search" src="docs/screenshots/phase11-ai-search.png" />
+
+**Phase 11++ — Rentora Copilot** — the floating conversational assistant: ask in Bangla, English or Banglish ("Uttara-তে ১০ হাজারের মধ্যে room") and it searches **live** listings — intent chips show what it understood, every listed room is a real retrieved row (no hallucination), and follow-ups keep context:
+
+<img width="1440" alt="Rentora Copilot" src="docs/screenshots/copilot.png" />
+
+**Phase 11++ — AI pricing suggestion v2** — landlord Insights row expanded: recommended price + range, demand score, confidence, time-to-rent and the explicit **Use price** action (nothing changes automatically):
+
+<img width="1440" alt="AI Pricing Suggestion" src="docs/screenshots/pricing-suggestion.png" />
+
+**Phase 7 v2 — Intelligent Map** — AI map search ("উত্তরায় ১২ হাজারের মধ্যে furnished room" → intent chips + real rooms + map flies to Uttara), metro commute scores, value-score pins, area intelligence with comparison, and the affordability budget view (screenshots in [🖼️ Screenshots](#-screenshots); architecture in [docs/INTELLIGENT_MAP.md](docs/INTELLIGENT_MAP.md)):
+
+**Phase 11++ — Cross-listing duplicate-image fraud** — admin Fraud Operations filtered to the duplicate-image detector, showing the HIGH-severity match with matched-listing chips:
+
+<img width="1440" alt="Duplicate Image Fraud" src="docs/screenshots/duplicate-image-fraud.png" />
 
 **Verified badge — dark theme** (the ✓ Verified pill stays legible in dark mode):
 

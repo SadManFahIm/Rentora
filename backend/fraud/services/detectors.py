@@ -202,6 +202,12 @@ def _rapid_listing(room: Room) -> Signal | None:
     return None
 
 
+# The duplicate-image detector lives in its own module (it reuses the pHash
+# pipeline from rooms/image_search.py) and is imported here — at module level
+# it is a one-way dependency (duplicate_image only imports back lazily inside
+# its function), so there is no circular import.
+from .duplicate_image import duplicate_image_signal
+
 DETECTORS: list[Callable[[Room], Signal | None]] = [
     _duplicate_listing,
     _description_similarity,
@@ -209,6 +215,7 @@ DETECTORS: list[Callable[[Room], Signal | None]] = [
     _missing_images,
     _unverified_owner,
     _rapid_listing,
+    duplicate_image_signal,
 ]
 
 

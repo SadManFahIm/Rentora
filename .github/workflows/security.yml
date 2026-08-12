@@ -1,0 +1,105 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Least privilege: only checkout + read artifacts are needed by this workflow.
+# The one exception is the gitleaks action, which fetches the full history for
+# diff scanning and needs no write scope either.
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Backend security (audit + static + tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install security tooling
+        # CI-only tools — deliberately NOT added to requirements.txt so the
+        # runtime image stays lean. Versions are pinned for reproducible runs.
+        run: |
+          pip install pip-audit==2.10.1 bandit==1.9.4
+
+      - name: Dependency vulnerability audit (pip-audit)
+        # Audits the lockfile-equivalent requirements.txt against the PyPI
+        # advisory database. Hard-fails on any known vulnerability (the
+        # cryptography/pyOpenSSL pins here were fixed after a previous audit).
+        run: pip-audit -r requirements.txt
+
+      - name: Static analysis (Bandit)
+        # Fail on MEDIUM+ severity/confidence. venv/migrations are excluded
+        # (site-packages + generated code are out of scope). Known FP pattern:
+        # MD5 in rooms/embedding_service.py is feature hashing, marked nosec.
+        run: bandit -r . -x ./venv,./migrations,./__pycache__ -ll
+
+      - name: Django deployment checks (check --deploy)
+        # Runs Django's security checks with production focus. Exit code stays
+        # 0 for dev-settings warnings (DEBUG/SECURE_COOKIE etc. are enforced
+        # by config/settings/prod.py); the log line count is printed so a jump
+        # in warnings is visible in CI without failing the check.
+        run: |
+          python manage.py check --deploy 2>&1 | tee /tmp/deploy-check.log
+          echo "Warnings: $(grep -c 'security\.' /tmp/deploy-check.log || true)"
+
+      - name: Security regression tests
+        # The automated half of docs/SECURITY_CHECKLIST.md: upload validation,
+        # admin-only fraud gating, IDOR checks, KYC document ownership.
+        run: |
+          python manage.py test rooms.tests_security --verbosity 1
+
+  frontend:
+    name: Frontend security (npm audit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Dependency vulnerability audit (npm audit)
+        # Hard-fails on HIGH+ severity. Moderate advisories (react-router v6
+        # open-redirect — fixed only in the v7 major) are tracked but do not
+        # block; the Vite dev-server advisories were resolved by the
+        # v5 -> v6.4.3 upgrade.
+        run: npm audit --audit-level=high
+
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}

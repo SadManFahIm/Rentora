@@ -88,6 +88,7 @@ urlpatterns = [
     path("api/v1/roommates/", include("roommates.urls")),
     path("api/v1/fraud/", include("fraud.urls")),
     path("api/v1/saved-searches/", include("savedsearches.urls")),
+    path("api/v1/copilot/", include("copilot.urls")),
 ]
 
 if settings.DEBUG:
