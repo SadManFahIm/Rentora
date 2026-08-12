@@ -321,6 +321,36 @@ BKASH_IS_SANDBOX = os.getenv("BKASH_IS_SANDBOX", "True") == "True"
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 # ============================================================
+# AI Search & Discovery (Phase 11+) — feature flags & ranking weights
+# ============================================================
+# Neural semantic search. When ON (default), smart search ranks by a hybrid
+# of neural/synonym embeddings + the TF-IDF/LSA lexical index. Set False to
+# fall back to the pre-neural TF-IDF-only ranking.
+SEMANTIC_SEARCH_ENABLED = os.getenv("SEMANTIC_SEARCH_ENABLED", "True") == "True"
+# Optional heavy model for real multilingual embeddings. Only used when the
+# `sentence-transformers` package is installed; otherwise the zero-dependency
+# synonym-hash provider (embedding_service.LiteEmbeddingProvider) runs.
+SEMANTIC_EMBEDDING_MODEL = os.getenv(
+    "SEMANTIC_EMBEDDING_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+)
+# Hybrid ranking blend: final = semantic * SEMANTIC_SEARCH_WEIGHT
+#                        + lexical  * TFIDF_SEARCH_WEIGHT  (weights need not sum to 1).
+SEMANTIC_SEARCH_WEIGHT = float(os.getenv("SEMANTIC_SEARCH_WEIGHT", "0.7"))
+TFIDF_SEARCH_WEIGHT = float(os.getenv("TFIDF_SEARCH_WEIGHT", "0.3"))
+# Typo tolerance (fuzzy area/gazetteer resolution) on smart search.
+FUZZY_SEARCH_ENABLED = os.getenv("FUZZY_SEARCH_ENABLED", "True") == "True"
+# Bangla/English/Banglish area alias expansion (rooms/area_aliases.py).
+AREA_ALIAS_ENABLED = os.getenv("AREA_ALIAS_ENABLED", "True") == "True"
+# Personalized search re-ranking for authenticated users. Hard filters and
+# base relevance always win; this only re-orders within the relevant pool.
+PERSONALIZED_SEARCH_ENABLED = os.getenv("PERSONALIZED_SEARCH_ENABLED", "True") == "True"
+PERSONALIZATION_WEIGHT = float(os.getenv("PERSONALIZATION_WEIGHT", "0.15"))
+# Price-anomaly badge on list cards (reuses the pricing prediction engine).
+PRICE_ANOMALY_ENABLED = os.getenv("PRICE_ANOMALY_ENABLED", "True") == "True"
+# Only badge a listing when |actual - predicted| / predicted >= this (0.20 = 20%).
+PRICE_ANOMALY_THRESHOLD = float(os.getenv("PRICE_ANOMALY_THRESHOLD", "0.20"))
+
+# ============================================================
 # Alert email throttling (notifications.email_guard)
 # ============================================================
 # Scheduled alert blasts (KYC SLA breaches, fraud flags, …) are rate-limited

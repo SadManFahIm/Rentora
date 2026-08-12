@@ -114,17 +114,13 @@ def train_price_model() -> TrainedModel | None:
     return TrainedModel(model=model, residual_std=residual_std, n_samples=len(rooms))
 
 
-def predict_fair_price(features: dict[str, Any]) -> dict[str, Any]:
-    """Predict a fair price range for a *new* listing described by
-    `features` (area, room_type, size_sqft, amenities, gender_preference).
+def predict_price_from_model(trained: TrainedModel, features: dict[str, Any]) -> dict[str, Any]:
+    """Predict from an **already-trained** model — the caller may train once
+    (``train_price_model``) and score many listings without re-fitting, which
+    is what the price-anomaly badge does on the room list endpoint.
 
-    Always returns a usable range. Falls back to the overall market average
-    (flagged `model_confidence="low"`) when there isn't enough data on the
-    platform to train a model at all, or when the requested area specifically
-    has fewer than MIN_ROOMS listings — the model may exist, but it has too
-    little area-specific signal to trust its area coefficient for that area.
-    `model_confidence="none"` only happens on a still-empty platform, where
-    not even a market average can be computed.
+    Returns the same shape as ``predict_fair_price``; ``model_confidence`` is
+    ``"high"`` when the model exists and the requested area has enough data.
     """
     area = features["area"]
     room_type = features["room_type"]
@@ -132,9 +128,7 @@ def predict_fair_price(features: dict[str, Any]) -> dict[str, Any]:
     amenities = features.get("amenities") or []
     gender_preference = features.get("gender_preference") or Room.GenderPreference.ANY
 
-    trained = train_price_model()
     area_room_count = Room.objects.filter(is_available=True, area=area).count()
-
     if trained is None or area_room_count < MIN_ROOMS:
         avg_price = Room.objects.filter(is_available=True).aggregate(avg=Avg("price"))["avg"]
         if avg_price is None:
@@ -186,3 +180,19 @@ def predict_fair_price(features: dict[str, Any]) -> dict[str, Any]:
         "model_confidence": "high",
         "explanation": "; ".join(explanation_bits) + ".",
     }
+
+
+def predict_fair_price(features: dict[str, Any]) -> dict[str, Any]:
+    """Predict a fair price range for a *new* listing described by
+    `features` (area, room_type, size_sqft, amenities, gender_preference).
+
+    Always returns a usable range. Falls back to the overall market average
+    (flagged `model_confidence="low"`) when there isn't enough data on the
+    platform to train a model at all, or when the requested area specifically
+    has fewer than MIN_ROOMS listings — the model may exist, but it has too
+    little area-specific signal to trust its area coefficient for that area.
+    `model_confidence="none"` only happens on a still-empty platform, where
+    not even a market average can be computed.
+    """
+    trained = train_price_model()
+    return predict_price_from_model(trained, features)

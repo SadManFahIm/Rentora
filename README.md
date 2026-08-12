@@ -161,7 +161,12 @@
 - **AI Search toggle** — the Rooms page's search bar grows a gradient **✨ AI Search** button; flip it on and the box accepts *natural language*: "১০ হাজার এর মধ্যে uttara student room" is understood as **budget ≤ ৳10,000 in Uttara** (and "জুলাই move-in" as a July move-in date)
 - **Bangla + English natural-language parser** (`rooms/nl_query.py`) — Bangla digits (০-৯), **number words** (দশ/বিশ/ত্রিশ… with হাজার/লাখ/কোটি multipliers — "দশ হাজার" → ৳10,000), ৳/টাকা/tk/taka, **area names in both scripts** (Uttara *and* উত্তরা, Dhanmondi *and* ধানমন্ডি — from the gazetteer's new Bangla aliases), room-type/gender words and month names in both scripts; the parsed budget/area/type/gender become **real filters**, and the list response carries an `nl_parsed` object
 - **"AI understood" chips** — under the search bar the backend's interpretation renders as tappable-looking pills (`Budget ≤ ৳10,000` · `Uttara` · `move-in July`) so tenants see exactly what was understood
-- **Semantic ranking** — a lightweight vector-space model (scikit-learn TF-IDF character n-grams + LSA, no heavy ML deps, works for both scripts) ranks keyword/NL-filtered rooms by cosine similarity; **semantic discovery** surfaces relevant rooms even when the query shares no literal keyword ("student room near campus" finds the student listings)
+- **Hybrid neural semantic ranking** — smart search now blends **two relevance legs** with configurable weights (`SEMANTIC_SEARCH_WEIGHT=0.7` neural + `TFIDF_SEARCH_WEIGHT=0.3` lexical). The neural leg uses **pluggable embeddings** (`rooms/embedding_service.py`): a zero-dependency bilingual synonym-hash provider runs out of the box (no heavy deps — "affordable student room" finds "কম বাজেটের শিক্ষার্থীদের থাকার রুম" in both query directions), and installing the optional `sentence-transformers` package transparently upgrades it to real multilingual neural embeddings. If embeddings are unavailable, ranking degrades to the TF-IDF/LSA leg, then to keyword search — search never breaks
+- **Typo tolerance** — smart search resolves same-script typos against a bounded area gazetteer: `mirpore`/`মিরপূর` still find Mirpur, `Dhanmondhi` finds Dhanmondi, `uttra` finds Uttara (`FUZZY_SEARCH_ENABLED`)
+- **Bangla/English area aliases** — a single alias table (`rooms/area_aliases.py`) resolves every spelling of a place — `ধানমন্ডি`, `ধানমণ্ডি`, `Dhanmondi`, `Dhanmondhi`, `ধানমন্ডি ২৭`, `mirpur 10`, `উত্তরা সেক্টর ১০` — to its canonical area, shared by the NL parser and map gazetteer (`AREA_ALIAS_ENABLED`)
+- **Personalized search re-ranking** — for signed-in tenants, smart-search results are re-ranked within the relevant pool by the user's preference profile (preferred area/type/budget/amenities — reused from the recommendation engine, no duplicated logic); cold-start users get plain relevance ranking and **hard filters (budget/area) always win** (`PERSONALIZED_SEARCH_ENABLED`, `PERSONALIZATION_WEIGHT=0.15`)
+- **Price-anomaly badge** — room cards show a transparent price-vs-market chip (`↑ 25% above market`) computed from the existing fair-price prediction model, trained once per request and only rendered when the prediction is confident and the gap clears `PRICE_ANOMALY_THRESHOLD` (20%)
+- **Debug ranking metadata** — `?debug_rank=1` (or `DEBUG=true`) attaches `rank_meta` (semantic/lexical/personalization/final scores per room) to the list response; never exposed to normal users
 - **Personal ranking boost** — for signed-in tenants the default browse order floats rooms they recently viewed or wishlisted to the top (30-day window), layered under the paid-tier/verified ranking
 - **Look-Alike Rooms (visual search)** — every RoomModal now shows a "Look-Alike Rooms" strip: rooms whose primary photo looks like the current one, via 64-bit **perceptual hashes (pHash)** computed with Pillow and cached in a new `RoomImageHash` table (mtime-keyed, so replaced photos re-hash automatically); `GET /rooms/{id}/similar-images/`
 - **Dhaka coverage expanded** — the listing `Area` choices now span **20 areas** (Uttara, Tejgaon, Badda, Rampura, Banasree, Khilgaon, Motijheel, Old Dhaka, Bashundhara, Lalmatia, Shyamoli, Savar, Keraniganj, Tongi + the original 6) and the map gazetteer gained **40+ new streets/roads** (Panthapath, Bailey Road, Hatirjheel, Badda Link Road, Khilgaon Flyover, Uttara Sectors 10/12/14, Gulshan 1/2 circles, Jashimuddin Avenue …) plus 9 more universities (Jagannath, Dhaka Medical College, AUST, DIU, Stamford, UIU …) — all searchable from the map box and the NL parser
@@ -279,6 +284,7 @@
 | Sentry (sentry-sdk)           | Error tracking (backend + frontend)     |
 | py_webauthn                   | WebAuthn/FIDO2 server-side (passkeys)   |
 | scikit-learn                  | TF-IDF + LSA semantic search            |
+| sentence-transformers *(optional)* | Real multilingual neural embeddings (upgrades the built-in lite provider) |
 | Pillow (pHash)                | Visual similarity (look-alike rooms)    |
 | pywebpush                     | Browser push notifications (VAPID)      |
 | pytest / unittest             | Backend tests                           |
@@ -305,10 +311,11 @@
 │  └────────────┘ │ roommates, │ │ Fraud engine (6 detectors)│ │
 │  ┌────────────┐ │ fraud, AI, │ └────────────────────────────┘ │
 │  │ Exception  │ │ saved-     │ ┌────────────────────────────┐ │
-│  │ envelope   │ │ searches…  │ │ Semantic search (TF-IDF +  │ │
-│  └────────────┘ └────────────┘ │ LSA) · NL parser · pHash   │ │
-│  ┌────────────┐                 └────────────────────────────┘ │
-│  │ Audit log  │  ┌──────────────────────────────────────────┐ │
+│  │ envelope   │ │ searches…  │ │ Hybrid semantic search      │ │
+│  └────────────┘ └────────────┘ │ (embeddings + TF-IDF/LSA) · │ │
+│  ┌────────────┐                 │ NL parser · aliases · pHash │ │
+│  │ Audit log  │                 └────────────────────────────┘ │
+│  │ (append-   │  ┌──────────────────────────────────────────┐ │
 │  │ (append-   │  │ Celery + Beat (push, alerts, re-scan)    │ │
 │  │ only)      │  └──────────────────────────────────────────┘ │
 │  └────────────┘  Sentry (errors) · JSON logs · email templates│
@@ -452,6 +459,12 @@ npm run dev
 
 > 💡 `seed_rooms` also creates the demo users below — sign in with any username + `demo12345`.
 > No `.env` files are required; sensible defaults work out of the box.
+>
+> **Optional — real neural embeddings:** smart search works out of the box with the built-in
+> zero-dependency lite provider. To upgrade to true multilingual transformer embeddings,
+> install the optional package: `pip install sentence-transformers` (a multi-hundred-MB
+> download incl. PyTorch) — the app detects it automatically and uses
+> `SEMANTIC_EMBEDDING_MODEL` (default: `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`).
 
 ### Prerequisites
 
@@ -571,7 +584,7 @@ Frontend runs at `http://localhost:3000`
 
 **Text filters:** `?area=Dhanmondi&room_type=studio&price__gte=5000&price__lte=15000&is_available=true&q=cozy&ordering=-price&owner=3`
 
-**Smart search:** `?q=১০ হাজার এর মধ্যে uttara student room&smart=1` — natural-language parsing (budget/area/type/gender become filters), semantic ranking over the filtered pool, and an `nl_parsed` block in the response describing what was understood.
+**Smart search:** `?q=১০ হাজার এর মধ্যে uttara student room&smart=1` — natural-language parsing (budget/area/type/gender become filters), **hybrid ranking** over the filtered pool (neural embeddings + TF-IDF/LSA, with typo-tolerant area aliases and per-user personalization for signed-in tenants), and an `nl_parsed` block describing what was understood. List cards also carry an optional `price_anomaly` object (`{predicted_price, difference_percentage, direction, badge}`) when the listing's price is confidentially ≥20% above/below the predicted market price.
 
 **Geo filters:**
 
