@@ -15,6 +15,7 @@ import { wishlistService } from "../../services/wishlistService";
 import roomService from "../../services/roomService";
 import { useApp } from "../../context/AppContext";
 import FraudTab from "../../components/FraudTab/FraudTab";
+import AdminFraudPanel from "../../components/AdminFraudPanel/AdminFraudPanel";
 import LandlordInsights from "../../components/LandlordInsights/LandlordInsights";
 import PushNotificationCard from "../../components/PushNotificationCard/PushNotificationCard";
 import ReferralCard from "../../components/ReferralCard/ReferralCard";
@@ -646,7 +647,7 @@ export default function Dashboard() {
           </div>
         ))}
 
-      {activeTab === "fraud" && <FraudTab />}
+      {activeTab === "fraud" && (isAdmin ? <AdminFraudPanel /> : <FraudTab />)}
 
       {activeTab === "kyc" && isAdmin && <AdminKycPanel />}
 

@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import Navbar from "../Navbar/Navbar";
 import Footer from "../Footer/Footer";
+import CopilotWidget from "../CopilotWidget/CopilotWidget";
 import { useUiStore } from "../../stores/uiStore";
 
 export default function Layout() {
@@ -20,6 +21,7 @@ export default function Layout() {
         <Outlet />
       </main>
       {!isAuthRoute && <Footer />}
+      {!isAuthRoute && <CopilotWidget />}
     </div>
   );
 }

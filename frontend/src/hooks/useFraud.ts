@@ -22,14 +22,41 @@ export function useRoomFraudStatus(roomId: number | null) {
   });
 }
 
-/** Fraud reports for my listings (admin sees all). */
-export function useFraudReports(params: { status?: string; severity?: string } = {}) {
+/** Fraud reports for my listings (admin sees all), with optional filters. */
+export function useFraudReports(
+  params: {
+    status?: string;
+    severity?: string;
+    area?: string;
+    detector?: string;
+    q?: string;
+    ordering?: string;
+  } = {}
+) {
   const { data, ...rest } = useQuery({
     queryKey: fraudKeys.reports(params),
     queryFn: () => fraudService.getReports(params),
     retry: false,
   });
   return { data: data ?? [], ...rest };
+}
+
+/** Admin-only fraud dashboard summary. */
+export function useFraudSummary() {
+  return useQuery({
+    queryKey: [...fraudKeys.all, "summary"] as const,
+    queryFn: () => fraudService.getSummary(),
+    retry: false,
+  });
+}
+
+/** Admin-only append-only fraud audit trail. */
+export function useFraudAuditLog() {
+  return useQuery({
+    queryKey: [...fraudKeys.all, "audit"] as const,
+    queryFn: () => fraudService.getAuditLog(),
+    retry: false,
+  });
 }
 
 /** Re-scan a room (owner/admin). */

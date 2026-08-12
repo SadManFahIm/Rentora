@@ -356,6 +356,78 @@ class FraudViewPermissionTests(APITestCase):
         self.assertEqual(report.status, FraudReport.Status.REVIEWED)
 
 
+class FraudOperationsAdminTests(APITestCase):
+    """Admin ops panel: summary stats, richer filters, audit trail."""
+
+    def setUp(self):
+        self.owner = make_user("ops_owner")
+        self.admin = User.objects.create_user(
+            username="ops_admin", email="ops_admin@example.com", password="x", is_staff=True
+        )
+        self.room = make_room(self.owner, title="Ops Flat, Mirpur")
+        self.report = run_scan(self.room)
+
+    def _as_admin(self):
+        self.client.force_authenticate(user=self.admin)
+
+    def test_summary_requires_admin(self):
+        self.client.force_authenticate(user=self.owner)
+        res = self.client.get("/api/v1/fraud/summary/")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_summary_counts(self):
+        self._as_admin()
+        res = self.client.get("/api/v1/fraud/summary/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["total"], FraudReport.objects.count())
+        self.assertIn("flagged", res.data)
+        self.assertIn("open", res.data)
+        self.assertIn("by_detector", res.data)
+
+    def test_list_filters_by_area_and_q(self):
+        other = make_room(self.owner, title="Ops Flat, Dhanmondi", area="Dhanmondi")
+        run_scan(other)
+        self._as_admin()
+        res = self.client.get("/api/v1/fraud/reports/", {"area": "Mirpur"})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        ids = {r["room"]["id"] for r in res.data}
+        self.assertIn(self.room.pk, ids)
+        self.assertNotIn(other.pk, ids)
+
+        res = self.client.get("/api/v1/fraud/reports/", {"q": "Dhanmondi"})
+        ids = {r["room"]["id"] for r in res.data}
+        self.assertIn(other.pk, ids)
+        self.assertNotIn(self.room.pk, ids)
+
+    def test_list_sorts_by_score(self):
+        high = make_room(self.owner, title="High Risk Flat")
+        _, _created = FraudReport.objects.get_or_create(
+            room=high, defaults={"score": 90, "severity": FraudReport.Severity.HIGH}
+        )
+        if _created is False:
+            FraudReport.objects.filter(room=high).update(
+                score=90, severity=FraudReport.Severity.HIGH
+            )
+        self._as_admin()
+        res = self.client.get("/api/v1/fraud/reports/", {"ordering": "-score"})
+        scores = [r["score"] for r in res.data]
+        self.assertEqual(scores, sorted(scores, reverse=True))
+        self.assertEqual(res.data[0]["room"]["id"], high.pk)
+
+    def test_audit_trail_admin_only_and_fraud_scoped(self):
+        self.client.force_authenticate(user=self.owner)
+        res = self.client.get("/api/v1/fraud/audit/")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+        self._as_admin()
+        # Review once so an audit entry exists.
+        self.client.post(f"/api/v1/fraud/reports/{self.report.pk}/review/", {"action": "reviewed"})
+        res = self.client.get("/api/v1/fraud/audit/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(any(e["action"] == "fraud.report.reviewed" for e in res.data))
+        self.assertTrue(all(e["action"].startswith("fraud.") for e in res.data))
+
+
 class DetectorRegistrationTests(TestCase):
     def test_all_detectors_registered(self):
         from fraud.services.detectors import DETECTORS
@@ -370,6 +442,7 @@ class DetectorRegistrationTests(TestCase):
                 "_missing_images",
                 "_unverified_owner",
                 "_rapid_listing",
+                "duplicate_image_signal",
             },
         )
 
