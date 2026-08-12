@@ -151,7 +151,7 @@
 **Engineering**
 
 - **Coverage history per branch** — every PR and main push appends its own `history-<branch>.csv` + SVG chart to the `coverage-history` branch (viewable `index.html` linking all branches)
-- 414 automated tests (229 backend + 185 frontend) · coverage gates (BE ≥50%, FE ≥55%)
+- 528 automated tests (334 backend + 194 frontend) · coverage gates (BE ≥50%, FE ≥55%)
 - Ruff + ESLint + Prettier with husky/lint-staged pre-commit hooks
 - GitHub Actions CI (backend, frontend, **live API contract check**, **frontend schema contract** (TS types vs OpenAPI), **schema-drift PR comment**, lint, coverage-summary PR comment, per-branch coverage history)
 - Route-level code splitting (React.lazy) — smaller bundles
@@ -172,6 +172,14 @@
 - **Dhaka coverage expanded** — the listing `Area` choices now span **20 areas** (Uttara, Tejgaon, Badda, Rampura, Banasree, Khilgaon, Motijheel, Old Dhaka, Bashundhara, Lalmatia, Shyamoli, Savar, Keraniganj, Tongi + the original 6) and the map gazetteer gained **40+ new streets/roads** (Panthapath, Bailey Road, Hatirjheel, Badda Link Road, Khilgaon Flyover, Uttara Sectors 10/12/14, Gulshan 1/2 circles, Jashimuddin Avenue …) plus 9 more universities (Jagannath, Dhaka Medical College, AUST, DIU, Stamford, UIU …) — all searchable from the map box and the NL parser
 - **Bug fixes along the way** — the room list now sends the backend's `q` search param correctly (`params.search` → `params.q`), and the API client no longer yanks **anonymous** visitors to `/auth` when a public endpoint 401s (the bounce is now reserved for sessions that actually went stale) — regression-tested
 
+**Core AI & Fraud Intelligence (Phase 11++) — Rentora Copilot, AI pricing v2, duplicate-image fraud**
+
+- **🤖 Rentora Copilot** (`COPILOT_ENABLED`) — a floating conversational assistant (bottom-right, every page): ask in Bangla, English or Banglish ("Uttara-তে ১০ হাজারের মধ্যে furnished student room চাই") and it searches the **live** listings. Hybrid and free: intent parsing (reusing the NL parser + an amenity/property word table) feeds the existing search/ranking pipeline, and the reply is generated over the *retrieved* rows only — **it can never hallucinate a room, price or amenity**, and no LLM is required. Follow-up turns keep context ("শুধু furnished দেখাও" retains Uttara + budget via a session_id), listing cards open the full RoomModal, quick-reply chips are backend-generated (`POST /api/v1/copilot/chat/`, 60/hr throttle). See `docs/RENTORA_COPILOT.md`
+- **🏷️ AI pricing suggestion v2** (`GET /pricing/suggestion/:id/`, owner/admin) — the fair-price model upgraded with **demand**: recommended price + range (rounded to ৳500), a 0–100 demand score from real engagement (views vs area peers, wishlist saves, booking requests, area heat), **estimated time-to-rent** from actual booking history (never fabricated — "Insufficient historical data" when there aren't 5 samples), composite confidence, and explainable reasons ("Similar Mirpur singles average ৳8,500"). Cached per room + market snapshot. Dashboard → **Insights** → **AI Price** expands the suggestion card with a **Use ৳12,500** button — the landlord always decides; nothing changes automatically. See `docs/AI_PRICING_V2.md`
+- **🖼️ Cross-listing duplicate-image fraud detection** (`DUPLICATE_IMAGE_FRAUD_ENABLED`) — the pHash pipeline (already powering look-alike rooms) now feeds a 7th fraud detector: the same photo re-used across listings is flagged with contextual severity (same-owner agency posts → low; different owners → medium; different owner **and** area, or 3+ matches → high). Hex-prefix pre-filtering keeps scans from N×N; same-listing galleries and blank images are never flagged; the signal feeds the existing fraud score → search ranking, and the admin **Fraud Operations** panel shows matched-listing chips + similarity %. See `docs/DUPLICATE_IMAGE_FRAUD.md`
+
+---
+
 **Listing Intelligence (Phase 11+) — voice search, AI saved-search matching, listing quality, fraud-aware ranking**
 
 - **🎤 Bangla voice search** — the search bar grows a microphone button (`VOICE_SEARCH_ENABLED`): the browser's **Web Speech API** transcribes Bangla / Banglish / English naturally ("উত্তরা ১০ হাজারের মধ্যে রুম" → `?q=`), and the transcript flows straight into the existing NL parser + semantic ranking — no new NLP pipeline, **no audio ever stored or uploaded** (only the transcript). Unsupported browsers hide the button; permission-denied shows a friendly hint; text search always works (`useVoiceSearch` hook, states: idle/listening/processing/denied/unsupported/error)
@@ -179,6 +187,7 @@
 - **✨ Listing quality score** (`LISTING_QUALITY_SCORE_ENABLED`) — every listing gets a transparent **0–100 completeness score** (basic info 20 / description 20 / photos 20 / location 15 / amenities 15 / pricing 10 — weights configurable) with **actionable suggestions** ("Add 3 more photos", "Description is too short…", "Add nearby landmark information"). Shown as a quality chip on the room detail page and a **per-listing Quality column in the landlord Insights dashboard** with a tap-for-suggestions popover, plus an **Avg Listing Quality card** on the landlord overview. It's *not* a valuation and *not* a fraud score — every point is explainable
 - **🛡️ Fraud-aware search ranking** (`FRAUD_AWARE_RANKING_ENABLED`) — smart-search results are **demoted by the existing fraud engine's risk score** (one query, no re-scan): high-risk listings sink below clean ones of equal relevance (`FRAUD_RANKING_PENALTY_WEIGHT=0.20`), and critical-risk handling follows the existing moderation flow — ranking **never hides or deletes** a listing. Risk never overrides explicit user intent (hard filters → relevance → personalization → quality → fraud), and internal detector evidence is never exposed to normal users (admin dashboard unchanged)
 - **Search pipeline now**: query → normalization → area-alias expansion → hard filters → lexical + semantic legs → personalization → quality + fraud secondary signals → final ranking → API response
+- **Copilot retrieval reuses the same pipeline** — hard filters (budget/area/type/gender/amenities) gate first, then hybrid ranking — so a Copilot answer and the Rooms page agree by construction
 
 ---
 
@@ -208,6 +217,7 @@
 | **10**    | Growth & personalization — browser push, search v2 (full-text + saved searches), similar-rooms AI, referral program, wishlist sharing, landlord insights, reviews v2 | ✅ Shipped |
 | **11**    | Search & Discovery v2 — ✨ AI smart search (Bangla+English NL parser, semantic ranking, visual search), Dhaka expansion                              | ✅ Shipped           |
 | **11+**   | Listing Intelligence — 🎤 Bangla voice search, 🧠 AI saved-search matcher + price-drop alerts, ✨ listing quality score, 🛡️ fraud-aware ranking       | ✅ Shipped           |
+| **11++**  | Core AI & Fraud — 🤖 Rentora Copilot, 🏷️ AI pricing suggestion v2 (demand/time-to-rent), 🖼️ cross-listing duplicate-image fraud detection | ✅ Shipped |
 
 ---
 
@@ -696,7 +706,14 @@ Frontend runs at `http://localhost:3000`
 | ------ | -------------------------------------------------- | ------ | ------------------------------------ |
 | POST   | `/api/v1/pricing/predict/`                         | Auth   | Predict fair price for a new listing |
 | GET    | `/api/v1/pricing/insight/:room_id/`                | Public | Price insight vs market for a room   |
+| GET    | `/api/v1/pricing/suggestion/:room_id/`             | Owner/Admin | AI pricing suggestion v2 — range, demand, time-to-rent, confidence |
 | GET    | `/api/v1/pricing/market-stats/?area=X&room_type=Y` | Public | Raw market stats                     |
+
+### Copilot
+
+| Method | Endpoint                     | Auth   | Description                                                              |
+| ------ | ---------------------------- | ------ | ------------------------------------------------------------------------ |
+| POST   | `/api/v1/copilot/chat/`      | Public | Conversational room discovery — intent + retrieved listings + suggestions |
 
 ### Roommates
 
@@ -746,7 +763,7 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 | `/api/v1/redoc/`  | ReDoc                 |
 | `/api/v1/schema/` | OpenAPI schema (YAML) |
 
-> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook)
+> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook) · [`docs/RENTORA_COPILOT.md`](docs/RENTORA_COPILOT.md) (Copilot architecture, API, config) · [`docs/AI_PRICING_V2.md`](docs/AI_PRICING_V2.md) (pricing suggestion v2) · [`docs/DUPLICATE_IMAGE_FRAUD.md`](docs/DUPLICATE_IMAGE_FRAUD.md) (duplicate-image detector)
 
 ---
 
@@ -870,6 +887,18 @@ Passwordless sign-in is live — the phishing-resistant successor to passwords +
 **Phase 11 — AI Smart Search** — the ✨ AI Search toggle turns the search box into a natural-language query box: "দশ হাজার এর মধ্যে উত্তরা" (Bangla number *words* + Bangla area names) is understood as **budget ≤ ৳10,000 in Uttara** (see the "AI understood" chips under the bar) and ranked semantically — no keyword matching needed:
 
 <img width="1440" alt="Phase 11 AI Smart Search" src="docs/screenshots/phase11-ai-search.png" />
+
+**Phase 11++ — Rentora Copilot** — the floating conversational assistant: ask in Bangla, English or Banglish ("Uttara-তে ১০ হাজারের মধ্যে room") and it searches **live** listings — intent chips show what it understood, every listed room is a real retrieved row (no hallucination), and follow-ups keep context:
+
+<img width="1440" alt="Rentora Copilot" src="docs/screenshots/copilot.png" />
+
+**Phase 11++ — AI pricing suggestion v2** — landlord Insights row expanded: recommended price + range, demand score, confidence, time-to-rent and the explicit **Use price** action (nothing changes automatically):
+
+<img width="1440" alt="AI Pricing Suggestion" src="docs/screenshots/pricing-suggestion.png" />
+
+**Phase 11++ — Cross-listing duplicate-image fraud** — admin Fraud Operations filtered to the duplicate-image detector, showing the HIGH-severity match with matched-listing chips:
+
+<img width="1440" alt="Duplicate Image Fraud" src="docs/screenshots/duplicate-image-fraud.png" />
 
 **Verified badge — dark theme** (the ✓ Verified pill stays legible in dark mode):
 

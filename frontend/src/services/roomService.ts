@@ -136,6 +136,12 @@ export const roomService = {
     return mapRoom(data);
   },
 
+  /** PATCH /rooms/:id/ — used to apply an AI pricing suggestion. */
+  async updateRoom(id: number, patch: Partial<Pick<ApiRoom, "price">>): Promise<Room> {
+    const { data } = await api.patch<ApiRoom>(`/rooms/${id}/`, patch);
+    return mapRoom(data);
+  },
+
   /**
    * GET /rooms/?smart=1 — AI smart search: semantic ranking + natural-
    * language parsing (budget/area/date). Returns the rooms plus `nlParsed`,

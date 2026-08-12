@@ -4,6 +4,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from config.sanitizers import sanitize_text
+from config.uploads import validate_image_upload
 
 from .geo import haversine_km, landmarks_within, nearest_landmark
 from .landmarks import ALL_LANDMARKS, METRO_STATIONS, UNIVERSITIES, Landmark
@@ -330,7 +331,9 @@ class RoomCreateUpdateSerializer(serializers.ModelSerializer):
     not accepted from the client. Accepts a list of image files on write."""
 
     uploaded_images = serializers.ListField(
-        child=serializers.ImageField(), write_only=True, required=False
+        child=serializers.ImageField(validators=[validate_image_upload]),
+        write_only=True,
+        required=False,
     )
     images = RoomImageSerializer(many=True, read_only=True)
     amenities = serializers.ListField(child=serializers.CharField(), required=False)

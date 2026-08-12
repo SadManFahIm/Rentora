@@ -82,6 +82,7 @@ INSTALLED_APPS = [
     "roommates",
     "fraud",
     "savedsearches",
+    "copilot",
 ]
 
 MIDDLEWARE = [
@@ -211,6 +212,8 @@ REST_FRAMEWORK = {
         # payment sessions an hour, and it's a prime target for abuse/testing
         # stolen cards against the gateway.
         "payment_initiate": "5/hour",
+        # Copilot turns hit the search engine — generous but bounded.
+        "copilot": "60/hour",
         # Gateway callbacks have no user session (AllowAny/no auth), so they
         # can't use the "user" scope; keyed per-IP to absorb legitimate
         # gateway retries while still capping flood/replay attempts.
@@ -374,6 +377,18 @@ SAVED_SEARCH_MATCH_WEIGHTS = {
     "preference": 0.10,
     "quality": 0.10,
 }
+# Rentora Copilot (Phase 11 — conversational room discovery). Hybrid:
+# deterministic intent parsing + the existing search/ranking pipeline first;
+# an optional LLM is a future fallback only — the core experience never
+# requires an external model and never hallucinates listings (every claim
+# comes from retrieved database rows).
+COPILOT_ENABLED = os.getenv("COPILOT_ENABLED", "True") == "True"
+# Max listings returned per Copilot turn.
+COPILOT_MAX_RESULTS = int(os.getenv("COPILOT_MAX_RESULTS", "5"))
+# Follow-up conversation context lives in the Django cache under a random
+# session_id; this is its TTL.
+COPILOT_SESSION_TTL_SECONDS = int(os.getenv("COPILOT_SESSION_TTL_SECONDS", "3600"))
+
 # A price cut of >= this fraction (0.10 = 10%) since the last check triggers a
 # price-drop notification for matching saved searches.
 PRICE_DROP_NOTIFICATION_THRESHOLD = float(os.getenv("PRICE_DROP_NOTIFICATION_THRESHOLD", "0.10"))
@@ -411,6 +426,20 @@ LISTING_QUALITY_RANKING_WEIGHT = float(os.getenv("LISTING_QUALITY_RANKING_WEIGHT
 # penalised in ranking (moderation policy decides visibility, not ranking).
 FRAUD_AWARE_RANKING_ENABLED = os.getenv("FRAUD_AWARE_RANKING_ENABLED", "True") == "True"
 FRAUD_RANKING_PENALTY_WEIGHT = float(os.getenv("FRAUD_RANKING_PENALTY_WEIGHT", "0.20"))
+
+# Cross-listing duplicate-image fraud detection (fraud/services/detectors.py):
+# reuses the pHash cache from rooms/image_search.py to flag the same (or
+# visually near-identical) photo re-used across *different* listings — the
+# classic scam-listing tell. Images repeated within one listing are fine.
+DUPLICATE_IMAGE_FRAUD_ENABLED = os.getenv("DUPLICATE_IMAGE_FRAUD_ENABLED", "True") == "True"
+# Max Hamming bits that may differ between two photos before they stop
+# counting as the same image (64-bit average hash; 8 tolerates mild
+# compression/resize without over-matching).
+IMAGE_DUPLICATE_THRESHOLD = int(os.getenv("IMAGE_DUPLICATE_THRESHOLD", "8"))
+# A room is only scanned for duplicate images once it has at least this many
+# other listings on the platform — with one or two listings there is nothing
+# to compare against and hashing every image is pure waste.
+IMAGE_DUPLICATE_MIN_LISTINGS = int(os.getenv("IMAGE_DUPLICATE_MIN_LISTINGS", "2"))
 
 # ============================================================
 # Alert email throttling (notifications.email_guard)
