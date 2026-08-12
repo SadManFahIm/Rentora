@@ -158,6 +158,34 @@
 :is(.dark, [data-theme="dark"]) .map-popup__metro {
   color: #a78bfa;
 }
+.map-popup__value {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #b45309;
+}
+:is(.dark, [data-theme="dark"]) .map-popup__value {
+  color: #fbbf24;
+}
+.map-destination-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9999px;
+  background: rgba(13, 148, 136, 0.92);
+  border: 2px solid #fff;
+  box-shadow: 0 2px 10px rgba(13, 148, 136, 0.45);
+  font-size: 16px;
+  cursor: default;
+}
+:is(.dark, [data-theme="dark"]) .map-destination-pin {
+  border-color: #134e4a;
+}
 .map-popup__dirs {
   display: flex;
   gap: 4px;

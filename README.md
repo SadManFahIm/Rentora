@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-414%20(229%20BE%20%2B%20185%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-570%20(368%20BE%20%2B%20202%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -46,6 +46,21 @@
 | **Solution**        | One verified marketplace: AI-scanned listings, real-time landlord chat, secure gateway payments, roommate matching, and an ML-powered fraud engine that catches bad actors before tenants do. |
 | **Target users**    | Tenants (students & young professionals) and landlords in Bangladesh.                                                                                                                         |
 | **Differentiators** | Fraud-engineered trust layer, AI recommendations & fair-price insight, roommates (a growth hook competitors lack), and a monetized listing-tier system (Free → Featured → Premium).           |
+
+---
+
+## ✨ Product Preview
+
+One platform, four surfaces — **browse smarter**, **trust the listings**, **sell faster**, **run on data**:
+
+| Surface | What you see | Screenshot |
+|---|---|---|
+| 🗺️ **Intelligent Map** | AI map search ("উত্তরায় ১২ হাজারের মধ্যে furnished room"), metro commute scores, value-score pins, area intelligence & affordability | [`map-intel-ai-search.png`](docs/screenshots/map-intel-ai-search.png) |
+| 🔍 **AI Smart Search** | Bangla/Banglish natural-language search with intent chips + semantic ranking | [`phase11-ai-search.png`](docs/screenshots/phase11-ai-search.png) |
+| 🛡️ **Fraud Operations** | Auto-scanned listings, risk scores, admin review queue + duplicate-image detection | [`fraud-admin.png`](docs/screenshots/fraud-admin.png) |
+| 🧑‍🤝‍🧑 **Roommate Matching** | Compatible flatmates by budget, area & lifestyle | [`roommates-matching.png`](docs/screenshots/roommates-matching.png) |
+
+Full gallery (28 screenshots, light + dark, desktop + mobile) in [🖼️ Screenshots](#-screenshots). Live verification notes in [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md).
 
 ---
 
@@ -128,6 +143,20 @@
 - Tapping a pin opens the room popup → full **RoomModal** (booking, chat, fraud badge, AI price insight)
 - **Shareable map URLs** — the current viewport (center + zoom + radius search) is live-synced to the URL (`/map?center=23.81,90.41&zoom=12&r=23.78,90.40,2.0`), so you can copy the address and share an exact map view; the **Share** button copies the link, and opening a shared link restores the exact view, radius and area chips
 - **Readable in both themes** — dark tiles are the CARTO CDN; if it's unreachable the map auto-falls back to dimmed OSM tiles (street labels stay legible), and the travel overlay + legend are styled for light _and_ dark
+
+**Intelligent Map (Phase 7 v2) — Rental Decision Intelligence**
+
+- **AI Smart Map Search** (🧠 "AI Map" button) — ask the map in Bangla, English or Banglish ("উত্তরায় ১২ হাজারের মধ্যে furnished room", "metro er kache room, Banani under 15k") and it parses the query into **hard filters** (area, budget, room type, amenities, metro proximity), flies to the matched area or metro station, updates the pins, and shows intent chips so you can see exactly what it understood — powered by the existing NL parser + gazetteer (`/rooms/map-intel/search/`), no hallucinated listings
+- **Metro Commute Score** — every relevant listing carries a 0–100 transit-access score (walking time to the nearest MRT station, real curated station data) shown in the value-score chip
+- **Commute mode** (🚇) — set a destination on the map (office / university / any point), and every visible listing gets a walking-time estimate ("🚶 8 min"); filter by max commute (15–60 min) — ETAs are honest straight-line estimates, labelled as such
+- **Best Value Score** (⭐) — a transparent 0–100 server-side blend of price-fit vs the area market, amenities, listing quality, KYC verification, demand and metro access; each marker popup shows the score + transit factor, and the panel lists the top-value visible rooms
+- **Area Intelligence panel** (🏛️ Areas) — tap an area chip for avg/median rent, listing counts, availability, 30-day demand (views/saves/bookings), metro access and price trend — all from real data, `—` where none exists; select up to 3 areas for a side-by-side **comparison table**
+- **Affordability map** (💰 Budget) — drag a budget slider and see the **real % of currently listed rooms** per area that fit (green/amber/red bars) — a listing share, not an estimate
+- **Ideal Area ranking** (⭐ Ideal Area) — budget + optional destination → the top areas ranked with the *why* ("100% of Mirpur listings fit your ৳10,000 budget · ~28 min commute (MRT estimate)")
+- **Destination pin** — click the map to drop a teal destination flag for commute/ideal-area ranking; the pin is persisted in the shareable URL
+- **Everything real** — no fabricated statistics: ETAs are labelled heuristics, transit ETA only exists along the MRT Line-6 corridor, and areas without data say "—"
+
+See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`docs/MAP_API.md`](docs/MAP_API.md) (endpoints) · [`docs/MAP_SCORING.md`](docs/MAP_SCORING.md) (formulas).
 
 **Listing Location Picker (landlord)**
 
@@ -218,6 +247,7 @@
 | **11**    | Search & Discovery v2 — ✨ AI smart search (Bangla+English NL parser, semantic ranking, visual search), Dhaka expansion                              | ✅ Shipped           |
 | **11+**   | Listing Intelligence — 🎤 Bangla voice search, 🧠 AI saved-search matcher + price-drop alerts, ✨ listing quality score, 🛡️ fraud-aware ranking       | ✅ Shipped           |
 | **11++**  | Core AI & Fraud — 🤖 Rentora Copilot, 🏷️ AI pricing suggestion v2 (demand/time-to-rent), 🖼️ cross-listing duplicate-image fraud detection | ✅ Shipped |
+| **7 v2**   | Intelligent Map — 🧠 AI map search, 🚇 metro commute score + commute mode, ⭐ best-value scores, 🏛️ area intelligence + comparison, 💰 affordability map, ideal-area ranking | ✅ Shipped |
 
 ---
 
@@ -449,6 +479,7 @@ If a check fails, the commit is **blocked** — fix and commit again (bypass wit
 | `ci.yml`               | API contract — boots a server + runs the live endpoint suite vs the docs reference (**status codes + deep JSON schema + request-body contracts + OpenAPI path cross-check**; response/request contracts are **auto-generated from the live OpenAPI schema** at runtime — `docs/tools/api-verify.py`) | every push / PR |
 | `ci.yml`               | **Frontend contract** — regenerates TS types from the live OpenAPI schema (`openapi-typescript`) and typechecks the hand-written wire types (`services/mappers.ts`) against them via `src/lib/schemaContract.ts` — a backend field rename/removal/type change fails the PR | every push / PR |
 | `ci.yml`               | **Schema drift** — diffs the PR head's OpenAPI schema against the base branch and posts a sticky PR comment listing every endpoint/field contract change (`docs/tools/schema-drift.py`; doc-only changes ignored) | PRs |
+| `security.yml`         | **Security** — `pip-audit` (dependency advisories, hard-fail), Bandit (MEDIUM+ static analysis, hard-fail), Django `check --deploy`, security regression tests (upload validation / admin-only fraud / IDOR / KYC ownership), `npm audit --audit-level=high` (hard-fail) and a **gitleaks** secret scan — all with least-privilege `contents: read` | every push / PR |
 | `ci.yml`               | Lint — ruff + ESLint + Prettier                             | every push / PR |
 | `coverage-summary.yml` | Posts a coverage **PR comment** (badge + file-level detail) | PRs             |
 | `ci.yml` `coverage-history` job | Appends per-branch coverage history (`history-<branch>.csv` + SVG chart) to the `coverage-history` branch | pushes to main **and** PRs (same-repo; fork PRs skip) |
@@ -595,6 +626,12 @@ Frontend runs at `http://localhost:3000`
 | DELETE    | `/api/v1/rooms/:id/`       | Owner  | Delete listing                                    |
 | GET       | `/api/v1/rooms/landmarks/` | Public | List landmarks (for `near_landmark`)              |
 | GET       | `/api/v1/rooms/summary/`   | Public | COUNT/AVG for the current viewport (map badge)    |
+| GET       | `/api/v1/rooms/map-intel/stats/`         | Public | Per-area rent/demand/metro stats (intelligent map)          |
+| GET       | `/api/v1/rooms/map-intel/commute/`       | Public | Walking/driving/MRT-corridor ETA between two points        |
+| GET       | `/api/v1/rooms/map-intel/value/`         | Public | Transparent 0–100 value scores for room ids                |
+| GET       | `/api/v1/rooms/map-intel/affordability/` | Public | % of listed rooms per area within a budget                 |
+| GET       | `/api/v1/rooms/map-intel/ideal-areas/`   | Public | Ranked areas for budget + destination, with reasons        |
+| GET       | `/api/v1/rooms/map-intel/search/`        | Public | Natural-language map search (Bangla/Banglish) → intent + rooms + fly-to target |
 | GET       | `/api/v1/rooms/geocode/?q=` | Public | Geocode a street/area (gazetteer + Nominatim)    |
 | GET       | `/api/v1/rooms/insights/`  | Auth (own listings) | Per-listing engagement + price vs area stats      |
 | POST      | `/api/v1/rooms/bulk/`      | Auth  | Bulk-create listings (JSON array body)            |
@@ -763,7 +800,7 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 | `/api/v1/redoc/`  | ReDoc                 |
 | `/api/v1/schema/` | OpenAPI schema (YAML) |
 
-> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook) · [`docs/RENTORA_COPILOT.md`](docs/RENTORA_COPILOT.md) (Copilot architecture, API, config) · [`docs/AI_PRICING_V2.md`](docs/AI_PRICING_V2.md) (pricing suggestion v2) · [`docs/DUPLICATE_IMAGE_FRAUD.md`](docs/DUPLICATE_IMAGE_FRAUD.md) (duplicate-image detector)
+> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook) · [`docs/RENTORA_COPILOT.md`](docs/RENTORA_COPILOT.md) (Copilot architecture, API, config) · [`docs/AI_PRICING_V2.md`](docs/AI_PRICING_V2.md) (pricing suggestion v2) · [`docs/DUPLICATE_IMAGE_FRAUD.md`](docs/DUPLICATE_IMAGE_FRAUD.md) (duplicate-image detector) · [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) + [`docs/MAP_API.md`](docs/MAP_API.md) + [`docs/MAP_SCORING.md`](docs/MAP_SCORING.md) (intelligent map v2) · [`docs/VOICE_SEARCH_PLAYBOOK.md`](docs/VOICE_SEARCH_PLAYBOOK.md) (voice search) · [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md) (verified feature matrix)
 
 ---
 
@@ -785,6 +822,7 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 - **2FA enable is email-verified** — password + emailed code are both required before `otp_enabled` flips, and **recovery codes** (10, hashed, single-use) are minted at that moment; disabling deletes them
 - **Passkeys** — public-key only storage, sign-counter replay protection, conditional UI on login
 - **KYC document privacy** — identity documents are served through an **auth-gated endpoint** (owner/admin only); the public media URL can never expose a document, and non-owners get a 404 so even file existence is hidden
+- **Automated security CI** (`.github/workflows/security.yml`) — `pip-audit` dependency advisories (hard-fail), Bandit MEDIUM+ static analysis (hard-fail), Django `check --deploy`, security regression tests (upload validation / admin-only fraud / IDOR / KYC ownership), `npm audit --audit-level=high` (hard-fail) and a **gitleaks** secret scan — running on every push/PR with least-privilege permissions
 
 ## 🔑 Passkeys / WebAuthn — Shipped
 
@@ -842,6 +880,18 @@ Passwordless sign-in is live — the phishing-resistant successor to passwords +
 
 <img width="1440" alt="Interactive Map Dark" src="docs/screenshots/map-view-dark.png" />
 
+**Intelligent Map — AI Smart Search (Phase 7 v2)** — ask the map in Bangla/Banglish ("উত্তরায় ১২ হাজারের মধ্যে furnished room"): the parsed intent chips (area · budget · amenities), live matching rooms and the map flying to the result:
+
+<img width="1440" alt="Intelligent Map AI Search" src="docs/screenshots/map-intel-ai-search.png" />
+
+**Intelligent Map — Area Intelligence** — tap an area for avg/median rent, availability, 30-day demand, metro access and price trend (real data only; select up to 3 to compare):
+
+<img width="1440" alt="Intelligent Map Areas" src="docs/screenshots/map-intel-areas.png" />
+
+**Intelligent Map — Affordability** — drag your budget and see the real % of currently listed rooms per area that fit (green/amber/red bars):
+
+<img width="1440" alt="Intelligent Map Affordability" src="docs/screenshots/map-intel-affordability.png" />
+
 **Roommate Matching** — find compatible flatmates by budget, area, lifestyle & gender preference:
 
 <img width="1440" alt="Roommate Matching" src="docs/screenshots/roommates-matching.png" />
@@ -895,6 +945,8 @@ Passwordless sign-in is live — the phishing-resistant successor to passwords +
 **Phase 11++ — AI pricing suggestion v2** — landlord Insights row expanded: recommended price + range, demand score, confidence, time-to-rent and the explicit **Use price** action (nothing changes automatically):
 
 <img width="1440" alt="AI Pricing Suggestion" src="docs/screenshots/pricing-suggestion.png" />
+
+**Phase 7 v2 — Intelligent Map** — AI map search ("উত্তরায় ১২ হাজারের মধ্যে furnished room" → intent chips + real rooms + map flies to Uttara), metro commute scores, value-score pins, area intelligence with comparison, and the affordability budget view (screenshots in [🖼️ Screenshots](#-screenshots); architecture in [docs/INTELLIGENT_MAP.md](docs/INTELLIGENT_MAP.md)):
 
 **Phase 11++ — Cross-listing duplicate-image fraud** — admin Fraud Operations filtered to the duplicate-image detector, showing the HIGH-severity match with matched-listing chips:
 
