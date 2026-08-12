@@ -80,9 +80,30 @@ export const fraudService = {
   },
 
   /** GET /fraud/reports/ — my rooms' reports (admin: all). */
-  async getReports(params: { status?: string; severity?: string } = {}): Promise<FraudReport[]> {
+  async getReports(
+    params: {
+      status?: string;
+      severity?: string;
+      area?: string;
+      detector?: string;
+      q?: string;
+      ordering?: string;
+    } = {}
+  ): Promise<FraudReport[]> {
     const { data } = await api.get<ApiReport[]>("/fraud/reports/", { params });
     return data.map(mapReport);
+  },
+
+  /** GET /fraud/summary/ — admin-only aggregate stats. */
+  async getSummary(): Promise<FraudSummary> {
+    const { data } = await api.get<FraudSummary>("/fraud/summary/");
+    return data;
+  },
+
+  /** GET /fraud/audit/ — admin-only append-only fraud audit trail. */
+  async getAuditLog(): Promise<FraudAuditEntry[]> {
+    const { data } = await api.get<FraudAuditEntry[]>("/fraud/audit/");
+    return data;
   },
 
   /** POST /fraud/rooms/{roomId}/scan/ — re-run the detector (owner/admin). */
@@ -97,5 +118,27 @@ export const fraudService = {
     return mapReport(data);
   },
 };
+
+export interface FraudSummary {
+  total: number;
+  flagged: number;
+  high_risk: number;
+  medium_risk: number;
+  low_risk: number;
+  open: number;
+  reviewed: number;
+  dismissed: number;
+  clean: number;
+  by_detector: Record<string, number>;
+}
+
+export interface FraudAuditEntry {
+  id: number;
+  action: string;
+  actor: string | null;
+  room_id: number | null;
+  target_id: string;
+  created_at: string;
+}
 
 export default fraudService;

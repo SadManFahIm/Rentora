@@ -26,6 +26,12 @@ const insights = {
       bookingApproved: 1,
       areaAvgPrice: 15000,
       priceDeltaPct: -20,
+      listingQuality: {
+        score: 82,
+        level: "good",
+        categoryScores: { photos: 0.75, description: 1 },
+        suggestions: ["Add 2 more photos."],
+      },
     },
   ],
   summary: { listingCount: 1, totalViews30d: 18, totalWishlists: 3 },
@@ -51,5 +57,12 @@ describe("LandlordInsights", () => {
     expect(screen.getByText("1 approved")).toBeInTheDocument();
     // Price is 20% below the ৳15,000 area average → "−20% vs ৳15,000"
     expect(screen.getByText(/-20% vs ৳15,000/)).toBeInTheDocument();
+  });
+
+  it("shows the listing quality chip", async () => {
+    vi.mocked(roomService.getInsights).mockResolvedValue(insights);
+    renderInsights();
+
+    expect(await screen.findByText(/82 \/ 100/)).toBeInTheDocument();
   });
 });

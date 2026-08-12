@@ -225,6 +225,83 @@ const CAPTURES = [
     })()`,
     afterLoadMs: 2500,
   },
+  // Phase 11+ — voice search: the microphone button sits inside the search
+  // input. Headless Chrome exposes webkitSpeechRecognition, so the mic
+  // renders in its idle (ready-to-listen) state.
+  {
+    user: "rahim.hossain",
+    route: "/rooms?q=studio",
+    out: "voice-search.png",
+    waitMs: 4500,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+    afterLoad: `(() => {
+      const mic = document.querySelector('button[aria-label="Search by voice"]');
+      return mic ? 'mic-visible' : 'no-mic';
+    })()`,
+    afterLoadMs: 400,
+  },
+  // Phase 11+ — price intelligence: the seeded Premium Studio (Mirpur) is
+  // listed at ৳22,000 while the market model predicts ~৳15.6k, so its card
+  // carries the "41% above market" badge (high-confidence prediction only).
+  {
+    user: "rahim.hossain",
+    route: "/rooms?area=Mirpur",
+    out: "price-anomaly.png",
+    waitMs: 5500,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+  },
+  // Phase 11+ — listing quality: the landlord Insights table now carries the
+  // 0-100 quality score column with level + suggestions popover on tap.
+  {
+    user: "rahim.hossain",
+    route: "/dashboard?tab=insights",
+    out: "listing-quality.png",
+    waitMs: 5000,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+  },
+  // Phase 12+ — admin fraud operations: summary cards, risk filters,
+  // sortable table, expandable evidence, and audited review actions.
+  {
+    user: "admin",
+    route: "/dashboard",
+    click: "fraud",
+    out: "fraud-admin.png",
+    waitMs: 4500,
+    afterClickMs: 3000,
+  },
+  // Phase 11+ — AI saved-search matching: a new listing triggered a
+  // "Highly relevant room found" notification; open the bell dropdown to
+  // show the match reason (area/budget/similar-to-views chips).
+  {
+    user: "rahim.hossain",
+    route: "/rooms?q=studio",
+    out: "saved-search-match.png",
+    waitMs: 4500,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+    afterLoad: `(() => {
+      const bell = [...document.querySelectorAll('button')]
+        .find(b => b.querySelector('.lucide-bell'));
+      if (bell) { bell.click(); return 'opened'; }
+      return 'no-bell';
+    })()`,
+    afterLoadMs: 1000,
+  },
   // Email-OTP 2FA step: enable 2FA, sign in through the REAL login form
   // (token injection would bypass the challenge), screenshot the code step,
   // then disable 2FA again so the demo accounts stay in their default state.
@@ -232,6 +309,164 @@ const CAPTURES = [
     otpLogin: { username: "rahim.hossain", password: DEMO_PASSWORD },
     out: "otp-verification.png",
     waitMs: 4500,
+  },
+  // Phase 11+ — Rentora Copilot: open the floating widget and fire the
+  // Bangla example query so the assistant reply (intent chips + retrieved
+  // listing cards) is on screen.
+  {
+    user: "rahim.hossain",
+    route: "/rooms",
+    out: "copilot.png",
+    waitMs: 4500,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+    afterLoad: `(async () => {
+      const open = [...document.querySelectorAll('button')]
+        .find(b => b.getAttribute('aria-label') === 'Open Rentora Copilot');
+      if (!open) return 'no-open-btn';
+      open.click();
+      await new Promise(r => setTimeout(r, 600));
+      const chip = [...document.querySelectorAll('button')]
+        .find(b => b.textContent.includes('Uttara'));
+      if (!chip) return 'no-chip';
+      chip.click();
+      return 'queried';
+    })()`,
+    afterLoadMs: 4500,
+  },
+  // Phase 11+ — AI pricing suggestion v2: expand a room's "Suggestion" row
+  // on the landlord Insights tab to show range, demand, confidence,
+  // time-to-rent and the explicit "Use price" action.
+  {
+    user: "rahim.hossain",
+    route: "/dashboard?tab=insights",
+    out: "pricing-suggestion.png",
+    waitMs: 5000,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+    afterLoad: `(() => {
+      const btn = [...document.querySelectorAll('button')]
+        .find(b => b.textContent.trim() === 'Suggestion');
+      if (btn) { btn.click(); return 'expanded'; }
+      return 'no-suggestion-btn';
+    })()`,
+    afterLoadMs: 2500,
+  },
+  // Phase 7 v2 — intelligent map: AI Smart Search. Open the AI Map panel
+  // and fire the Bangla example chip so the parsed intent chips + real
+  // matched rooms render next to the map (which flies to Uttara).
+  {
+    user: "rahim.hossain",
+    route: "/map",
+    out: "map-intel-ai-search.png",
+    waitMs: 8000,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+    afterLoad: `(async () => {
+      const open = [...document.querySelectorAll('button')]
+        .find(b => b.textContent.includes('AI Map'));
+      if (!open) return 'no-ai-map-btn';
+      open.click();
+      await new Promise(r => setTimeout(r, 800));
+      const chip = [...document.querySelectorAll('button')]
+        .find(b => b.textContent.includes('উত্তরায়'));
+      if (!chip) return 'no-chip';
+      chip.click();
+      return 'queried';
+    })()`,
+    afterLoadMs: 4500,
+  },
+  // Phase 7 v2 — area intelligence: Areas tab with an area selected so the
+  // stats card (rent, demand, metro access, trend) + compare chips render.
+  {
+    user: "rahim.hossain",
+    route: "/map",
+    out: "map-intel-areas.png",
+    waitMs: 8000,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+    afterLoad: `(async () => {
+      const open = [...document.querySelectorAll('button')]
+        .find(b => b.textContent.includes('AI Map'));
+      if (!open) return 'no-ai-map-btn';
+      open.click();
+      await new Promise(r => setTimeout(r, 800));
+      const areas = [...document.querySelectorAll('button')]
+        .find(b => b.textContent.trim() === 'Areas');
+      if (!areas) return 'no-areas-tab';
+      areas.click();
+      await new Promise(r => setTimeout(r, 1200));
+      const chip = [...document.querySelectorAll('button')]
+        .find(b => /Uttara|Mirpur|Dhanmondi/.test(b.textContent) && b.textContent.includes('·'));
+      if (!chip) return 'no-area-chip';
+      chip.click();
+      return 'area-selected';
+    })()`,
+    afterLoadMs: 2500,
+  },
+  // Phase 7 v2 — affordability: Budget tab with the slider set to ৳10,000
+  // so the per-area % bars render.
+  {
+    user: "rahim.hossain",
+    route: "/map",
+    out: "map-intel-affordability.png",
+    waitMs: 8000,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+    afterLoad: `(async () => {
+      const open = [...document.querySelectorAll('button')]
+        .find(b => b.textContent.includes('AI Map'));
+      if (!open) return 'no-ai-map-btn';
+      open.click();
+      await new Promise(r => setTimeout(r, 800));
+      const budgetTab = [...document.querySelectorAll('button')]
+        .find(b => b.textContent.trim() === 'Budget');
+      if (!budgetTab) return 'no-budget-tab';
+      budgetTab.click();
+      await new Promise(r => setTimeout(r, 1200));
+      const slider = document.querySelector('#aff-budget');
+      if (!slider) return 'no-slider';
+      const proto = Object.getPrototypeOf(slider);
+      Object.getOwnPropertyDescriptor(proto, 'value').set.call(slider, '10000');
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      slider.dispatchEvent(new Event('change', { bubbles: true }));
+      return 'budget-set';
+    })()`,
+    afterLoadMs: 2500,
+  },
+  // Phase 11+ — duplicate-image fraud admin: filter the Fraud Operations
+  // panel by the duplicate_image detector to show the matched-listing chips.
+  // Demo data: two listings share one photo (seeded via the scan demo).
+  {
+    user: "admin",
+    route: "/dashboard",
+    click: "fraud",
+    out: "duplicate-image-fraud.png",
+    waitMs: 4500,
+    afterClickMs: 3000,
+    afterClick: `(() => {
+      const sel = [...document.querySelectorAll('select')]
+        .find(s => [...s.options].some(o => o.value === 'duplicate_image'));
+      if (!sel) return 'no-filter';
+      sel.value = 'duplicate_image';
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      return 'filtered';
+    })()`,
   },
 ];
 
@@ -486,6 +721,11 @@ async function main() {
         console.log(`   clicked "${label}" tab`);
       }
       await sleep(cap.afterClickMs ?? 2500);
+    }
+
+    if (cap.afterClick) {
+      await evaluate(cap.afterClick);
+      await sleep(cap.afterClickMs ?? 1200);
     }
 
     await shot(cap.out);

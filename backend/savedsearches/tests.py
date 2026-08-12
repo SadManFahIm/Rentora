@@ -102,19 +102,43 @@ class SavedSearchDigestTaskTests(APITestCase):
             filters={"area": "Mirpur", "price_max": 12000},
             last_checked_at=timezone.now() - timedelta(days=1),
         )
-        Room.objects.create(
+        room = Room.objects.create(
             owner=landlord,
             title="New Mirpur Flat",
-            description="Fresh listing.",
+            description=(
+                "A complete 2-bedroom flat in Mirpur 10. Fully furnished with "
+                "a study desk, wardrobe and bed. Attached bathroom, kitchen "
+                "with gas and electricity, and high-speed wifi. 5 minutes walk "
+                "from Mirpur 10 bus stand and the metro station. Suitable for "
+                "students and young professionals. Monthly rent includes "
+                "maintenance. Available for immediate move-in."
+            ),
             room_type="single",
             price=10000,
             area="Mirpur",
-            address="x",
-            lat=23.8,
-            lng=90.4,
-            amenities=["wifi"],
+            address="House 27, Road 5, Mirpur 10, Dhaka 1216",
+            lat=23.806,
+            lng=90.368,
+            amenities=["wifi", "attached bathroom", "kitchen", "furnished", "gas", "electricity"],
             size_sqft=220,
         )
+        # A complete listing (4 photos incl. primary) so the AI matcher's
+        # relevance score clears the notification threshold.
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+
+        from rooms.models import RoomImage
+
+        for i in range(4):
+            buffer = BytesIO()
+            Image.new("RGB", (64, 64), (128, 128, 128)).save(buffer, format="PNG")
+            RoomImage.objects.create(
+                room=room,
+                is_primary=(i == 0),
+                image=SimpleUploadedFile(f"mirpur_{i}.png", buffer.getvalue(), "image/png"),
+            )
 
         from savedsearches.tasks import check_saved_searches
 

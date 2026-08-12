@@ -69,3 +69,31 @@ class PricePredictionSerializer(serializers.Serializer):
     explanation = serializers.CharField(
         help_text="Plain-English reason for the estimate, for a non-technical landlord."
     )
+
+
+class PricingSuggestionSerializer(serializers.Serializer):
+    """Landlord-facing AI pricing suggestion v2 — wraps the computed result
+    of `pricing.services.suggestion.get_pricing_suggestion` (an existing
+    room only; new listings use PricePredictionSerializer via /pricing/predict/).
+
+    Everything here is a calculated estimate with an explicit confidence:
+    the landlord always decides whether to apply it (via the normal room
+    update endpoint)."""
+
+    room_id = serializers.IntegerField()
+    title = serializers.CharField()
+    current_price = serializers.FloatField()
+    min_price = serializers.IntegerField(allow_null=True)
+    recommended_price = serializers.IntegerField(allow_null=True)
+    max_price = serializers.IntegerField(allow_null=True)
+    confidence = serializers.FloatField(help_text="0..1 composite confidence.")
+    model_confidence = serializers.ChoiceField(choices=["high", "low", "none"])
+    demand_score = serializers.FloatField(help_text="0..100 normalised demand.")
+    demand_label = serializers.ChoiceField(choices=["Low", "Moderate", "High", "Very High"])
+    time_to_rent = serializers.DictField(
+        help_text="Estimated days-to-rent range, or `{available: false}` when "
+        "there isn't enough historical data (never fabricated)."
+    )
+    reasons = serializers.ListField(child=serializers.CharField())
+    signals = serializers.DictField(help_text="Raw engagement counts used for the demand score.")
+    market_avg_price = serializers.FloatField(allow_null=True)

@@ -83,6 +83,20 @@ export default function RoomCard({ room, onClick }: RoomCardProps) {
               ৳{room.price.toLocaleString()}
               <sub className="text-xs font-medium text-gray-500">/mo</sub>
             </div>
+            {room.priceAnomaly && (
+              <span
+                className={cn(
+                  "mt-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[0.65rem] font-semibold leading-none",
+                  room.priceAnomaly.direction === "above_market"
+                    ? "bg-amber-500/10 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"
+                    : "bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"
+                )}
+                title="Compared with the estimated market price for similar listings."
+              >
+                {room.priceAnomaly.direction === "above_market" ? "↑" : "↓"}{" "}
+                {room.priceAnomaly.badge}
+              </span>
+            )}
             <Badge className="mt-1 border-transparent bg-orange-600 text-white">{room.type}</Badge>
           </div>
         </div>

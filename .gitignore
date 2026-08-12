@@ -33,5 +33,8 @@ CLAUDE.md
 # Skills install lockfile (local tooling)
 skills-lock.json
 
+# CI-generated OpenAPI types (frontend contract check)
+frontend/src/generated/
+
 # Vite cache
 frontend/.vite/

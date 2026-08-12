@@ -25,6 +25,46 @@ from .serializers import (
 from .services.detectors import run_scan
 
 
+class FraudAuditLogView(APIView):
+    """Admin-only view of the append-only fraud audit trail.
+
+    Reads the same ``AuditLogEntry`` rows the review/scan actions write — no
+    separate log store. Only ``fraud.*`` actions are returned.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Fraud"],
+        summary="Fraud audit trail",
+        description="Admin-only append-only audit log of fraud review/scan actions.",
+    )
+    def get(self, request):
+        if not (request.user.is_staff or request.user.role == "admin"):
+            return Response(
+                {"detail": "Admin access required."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        from audit.models import AuditLogEntry
+
+        entries = AuditLogEntry.objects.filter(action__startswith="fraud.").select_related("actor")[
+            :100
+        ]
+        return Response(
+            [
+                {
+                    "id": e.id,
+                    "action": e.action,
+                    "actor": e.actor.username if e.actor else None,
+                    "room_id": (e.detail or {}).get("room_id"),
+                    "target_id": e.target_id,
+                    "created_at": e.created_at.isoformat(),
+                }
+                for e in entries
+            ]
+        )
+
+
 class RoomFraudStatusView(APIView):
     """Public fraud status for one room — drives the 'under review' badge."""
 
@@ -62,7 +102,11 @@ class RoomFraudStatusView(APIView):
 class FraudReportListView(APIView):
     """List fraud reports. Landlords see only their own rooms; admins see all.
 
-    Filter with ``?status=open|reviewed|dismissed`` and ``?severity=high|...``.
+    Filters (all optional): ``status`` (open/reviewed/dismissed), ``severity``
+    (clean/low/medium/high), ``area`` (case-insensitive listing area match),
+    ``detector`` (signal detector key), ``q`` (title/owner search) and
+    ``ordering`` (``-score`` default, or ``score`` / ``-created_at`` /
+    ``created_at`` / ``-price``).
     """
 
     permission_classes = [permissions.IsAuthenticated]
@@ -71,10 +115,12 @@ class FraudReportListView(APIView):
         tags=["Fraud"],
         summary="List fraud reports",
         description="Owners see reports for their own listings; admins see every report. "
-        "Filter by `status` (open/reviewed/dismissed) or `severity`.",
+        "Filter by status/severity/area/detector/text and sort by score/date/price.",
         responses=FraudReportSerializer(many=True),
     )
     def get(self, request):
+        from django.db.models import Q
+
         if request.user.is_staff or request.user.role == "admin":
             queryset = FraudReport.objects.all()
         else:
@@ -88,12 +134,99 @@ class FraudReportListView(APIView):
         if severity_filter:
             queryset = queryset.filter(severity=severity_filter)
 
+        area_filter = request.query_params.get("area")
+        if area_filter:
+            queryset = queryset.filter(room__area__iexact=area_filter)
+
+        detector_filter = request.query_params.get("detector")
+        if detector_filter:
+            queryset = queryset.filter(signals__detector=detector_filter).distinct()
+
+        text_filter = (request.query_params.get("q") or "").strip()
+        if text_filter:
+            queryset = queryset.filter(
+                Q(room__title__icontains=text_filter)
+                | Q(room__owner__username__icontains=text_filter)
+                | Q(room__owner__email__icontains=text_filter)
+            )
+
+        ordering = request.query_params.get("ordering", "-score")
+        allowed = {
+            "-score": "-score",
+            "score": "score",
+            "-created_at": "-created_at",
+            "created_at": "created_at",
+            "-price": "-room__price",
+            "price": "room__price",
+        }
+        queryset = queryset.order_by(allowed.get(ordering, "-score"))
+
         queryset = queryset.select_related("room__owner").prefetch_related(
             "signals", "room__images"
         )
         return Response(
             FraudReportSerializer(queryset, many=True, context={"request": request}).data
         )
+
+
+class FraudSummaryView(APIView):
+    """Admin-only aggregate stats for the fraud operations dashboard.
+
+    Counts are computed from the existing fraud engine's persisted reports —
+    no second detection pass, just aggregation of what the detectors already
+    wrote.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Fraud"],
+        summary="Fraud dashboard summary",
+        description="Admin-only totals: flagged/high/critical/open/reviewed/dismissed/clean "
+        "plus counts per severity and per detector.",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "total": {"type": "integer"},
+                    "flagged": {"type": "integer"},
+                    "high_risk": {"type": "integer"},
+                    "medium_risk": {"type": "integer"},
+                    "low_risk": {"type": "integer"},
+                    "open": {"type": "integer"},
+                    "reviewed": {"type": "integer"},
+                    "dismissed": {"type": "integer"},
+                    "clean": {"type": "integer"},
+                    "by_detector": {"type": "object", "additionalProperties": {"type": "integer"}},
+                },
+            }
+        },
+    )
+    def get(self, request):
+        from django.db.models import Count
+
+        if not (request.user.is_staff or request.user.role == "admin"):
+            return Response(
+                {"detail": "Admin access required."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        from django.db.models import Q
+
+        from .models import FraudSignal
+
+        agg = FraudReport.objects.aggregate(
+            total=Count("id"),
+            flagged=Count("id", filter=Q(severity__in=["low", "medium", "high"])),
+            high_risk=Count("id", filter=Q(severity="high")),
+            medium_risk=Count("id", filter=Q(severity="medium")),
+            low_risk=Count("id", filter=Q(severity="low")),
+            open=Count("id", filter=Q(status="open")),
+            reviewed=Count("id", filter=Q(status="reviewed")),
+            dismissed=Count("id", filter=Q(status="dismissed")),
+            clean=Count("id", filter=Q(severity="clean")),
+        )
+        by_detector = dict(FraudSignal.objects.values_list("detector").annotate(c=Count("id")))
+        return Response({**agg, "by_detector": by_detector})
 
 
 class FraudRoomScanView(APIView):

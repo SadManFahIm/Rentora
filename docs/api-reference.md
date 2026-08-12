@@ -3,7 +3,11 @@
 > Base URL: `http://localhost:8000/api/v1` (dev) · Interactive docs: `/api/v1/docs/` (Swagger), `/api/v1/redoc/` (ReDoc), schema at `/api/v1/schema/`.
 > Auth: `Authorization: Bearer <access_token>` for authenticated endpoints.
 > This reference is hand-maintained alongside the README; the OpenAPI schema at `/api/v1/schema/` is always the source of truth.
-> **Live-verified:** every endpoint below is checked against a running server on four layers — status code, **deep JSON schema** (required fields + wire types), **request-body contracts** (payloads validated against documented field names/types, plus malformed-payload probes asserting the right field error) and **OpenAPI cross-check** (every tested path must exist in `/api/v1/schema/`). Re-run anytime with `python docs/tools/api-verify.py`.
+> **Live-verified:** every endpoint below is checked against a running server on four layers — status code, **deep JSON schema** (required fields + wire types), **request-body contracts** (payloads validated against documented field names/types, plus malformed-payload probes asserting the right field error) and **OpenAPI cross-check** (every tested path must exist in `/api/v1/schema/`). Response and request contracts are **auto-generated from the live OpenAPI schema at runtime** — no hand-maintained tables to drift; a small override table handles only genuinely ambiguous shapes (e.g. `allOf` inheritance, `SerializerMethodField` types). Re-run anytime with `python docs/tools/api-verify.py`.
+>
+> Auto-generation also caught and fixed **real backend schema bugs**: `SerializerMethodField`-backed fields (`is_featured`, `passkeys`) mis-declared as `string`, action endpoints (`summary`, `tier-catalog`, `insights`, `bulk`, reviews `summary`) declaring the wrong 200 response schema, and nullable fields not honoring `null` in wire responses.
+>
+> **Frontend contract check:** the frontend's hand-written wire types (`frontend/src/services/mappers.ts`) are typechecked against these schemas in CI (`openapi-typescript` generates `frontend/src/generated/openapi.d.ts` from the live schema, then `tsc -p frontend/tsconfig.contract.json` asserts each generated component satisfies the corresponding wire type via `frontend/src/lib/schemaContract.ts`). A field rename/removal or incompatible type change fails the PR. **Schema-drift PR comment:** every PR's head schema is diffed against base by `docs/tools/schema-drift.py` and a sticky comment lists any endpoint/component changes (doc-only changes are ignored).
 
 ---
 
@@ -88,7 +92,7 @@
 | GET | `/rooms/landmarks/` | Public | universities 🎓 / metro 🚇 for map layers |
 | GET | `/rooms/summary/` | Public | `COUNT/AVG` for the current viewport — powers the "N of M in view" badge |
 | GET | `/rooms/geocode/?q=` | Public | gazetteer + Nominatim fallback |
-| GET | `/rooms/insights/` | Auth (own listings) | per-listing views 7d/30d, wishlists, bookings, price vs area |
+| GET | `/rooms/insights/` | Auth (own listings) | per-listing views 7d/30d, wishlists, bookings, price vs area, listing quality score |
 | POST | `/rooms/bulk/` | Auth | bulk listing creation (JSON array body, per-row errors) |
 | GET | `/rooms/tier-catalog/` | Public | tier pricing + benefits (Promote UI) |
 | GET | `/rooms/:id/similar-images/` | Public | look-alike rooms via pHash |
@@ -96,7 +100,13 @@
 ### Room list filters
 
 **Text:** `?q=` (full-text + typo tolerance; Postgres `pg_trgm` / SQLite `icontains` fallback)
-**Smart search:** `?q=১০ হাজার এর মধ্যে uttara student room&smart=1` — NL parsing (budget/area/type/gender become filters) + semantic ranking; response carries `nl_parsed` for the "AI understood" chips.
+**Smart search:** `?q=১০ হাজার এর মধ্যে uttara student room&smart=1` — NL parsing (budget/area/type/gender become filters) + **hybrid ranking**: neural embeddings (optional `sentence-transformers`, or the built-in bilingual lite provider) blended with TF-IDF/LSA at `SEMANTIC_SEARCH_WEIGHT`/`TFIDF_SEARCH_WEIGHT`; typo-tolerant **area aliases** (`mirpore` → Mirpur, `ধানমণ্ডি ২৭` → Dhanmondi); per-user **personalization** for signed-in tenants (relevance + `PERSONALIZATION_WEIGHT` blend, hard filters always win). Response carries `nl_parsed` for the "AI understood" chips; `?debug_rank=1` (debug builds only) adds `rank_meta` with per-room semantic/lexical/personalization/final scores.
+
+**List card field — `price_anomaly`** (optional, nullable): `{available, predicted_price, difference_percentage, direction: above_market|below_market, badge}` — rendered only when the fair-price model is confident and `|actual − predicted| / predicted ≥ PRICE_ANOMALY_THRESHOLD`. Disable with `PRICE_ANOMALY_ENABLED=false`.
+
+**Detail field — `listing_quality`** (always present): `{score: 0-100|null, level: excellent|good|fair|needs_improvement|poor|null, category_scores, suggestions: string[]}` — a transparent completeness score (never a valuation or fraud score). Disable with `LISTING_QUALITY_SCORE_ENABLED=false`.
+
+**Smart ranking — quality + fraud secondary signals** (`?q=...&smart=1`): within the already-relevant pool, listing quality lifts (`LISTING_QUALITY_RANKING_WEIGHT=0.05`) and the existing fraud engine's risk score demotes (`FRAUD_AWARE_RANKING_ENABLED`, `FRAUD_RANKING_PENALTY_WEIGHT=0.20`). `?debug_rank=1` shows `quality_score` and `fraud_risk` per room in `rank_meta`.
 **Geo:**
 ```
 ?bbox=min_lng,min_lat,max_lng,max_lat     map viewport
@@ -166,6 +176,8 @@ Every in-app notification is fanned out to email (branded template) + browser pu
 | POST | `/saved-searches/:id/check/` | Auth | manual "check now" for new matches |
 
 A daily Celery beat task notifies you when a **new** matching listing appears (never re-alerts the same rooms).
+
+**AI matching (Phase 11+)** — since `SAVED_SEARCH_AI_MATCHING_ENABLED=true` (default), alerts are relevance-gated: hard filters always gate first (area/budget/type/gender), then a weighted score (`SAVED_SEARCH_MATCH_WEIGHTS`) must clear `SAVED_SEARCH_MATCH_THRESHOLD` (0.75) to notify, with plain-language reasons (`✓ Matches your preferred area`). A room **create/price-change** event task (`match_room_event`) alerts immediately; a ≥ `PRICE_DROP_NOTIFICATION_THRESHOLD` (10%) price cut (tracked via `RoomPriceHistory`) triggers a price-drop alert for matching searches; the per-user/room **cooldown** (`SAVED_SEARCH_COOLDOWN_HOURS` = 24) dedupes repeats. Notifications carry `meta: {room_id, saved_search_id, level, match_score}`.
 
 ---
 
@@ -281,9 +293,11 @@ curl -s -X POST $BASE/auth/register/ -H "Content-Type: application/json" \
 TOKEN=$(curl -s -X POST $BASE/auth/login/ -H "Content-Type: application/json" \
   -d '{"username":"tester.one","password":"Sup3rS3cret!"}' | python -c "import sys,json;print(json.load(sys.stdin)['access'])")
 
-# 3. smart search (Bangla NL → budget + area chips)
+# 3. smart search (Bangla NL → budget + area chips; hybrid semantic ranking)
 curl -s "$BASE/rooms/?smart=1&q=%E0%A6%A6%E0%A6%B6%20%E0%A6%B9%E0%A6%BE%E0%A6%9C%E0%A6%BE%E0%A6%B0%20%E0%A6%8F%E0%A6%B0%20%E0%A6%AE%E0%A6%A7%E0%A7%8D%E0%A6%AF%E0%A7%87%20%E0%A6%89%E0%A6%A4%E0%A7%8D%E0%A6%A4%E0%A6%B0%E0%A6%BE" \
   | python -m json.tool | head -30   # → nl_parsed: Budget ≤ ৳10,000 + Uttara
+# typo-tolerant: mirpore → Mirpur area chip
+curl -s "$BASE/rooms/?smart=1&q=mirpore" | python -m json.tool | head -20
 
 # 4. request a booking
 curl -s -X POST $BASE/bookings/ -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \

@@ -1,3 +1,5 @@
+from typing import Any
+
 import django_filters
 from django.conf import settings
 from django.db import models
@@ -7,8 +9,9 @@ from drf_spectacular.utils import (
     OpenApiParameter,
     extend_schema,
     extend_schema_view,
+    inline_serializer,
 )
-from rest_framework import permissions, status, viewsets
+from rest_framework import permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.filters import OrderingFilter
@@ -25,9 +28,20 @@ from .geo import (
 from .geocoder import nominatim_search
 from .image_search import similar_rooms
 from .landmarks import ALL_LANDMARKS, get_landmark
+from .map_intel import (
+    affordability_stats,
+    area_statistics,
+    commute_eta,
+    ideal_areas,
+    map_search_rooms,
+    nearest_metro_km,
+    parse_map_query,
+    value_score,
+)
 from .models import Room, RoomView
 from .nl_query import parse_nl_query
 from .permissions import IsOwnerOrReadOnly
+from .ranking import hybrid_rank
 from .semantic import semantic_candidates
 from .serializers import (
     LandmarkSerializer,
@@ -196,6 +210,12 @@ class RoomViewSet(viewsets.ModelViewSet):
             "geocode",
             "summary",
             "similar_images",
+            "map_intel",
+            "map_commute",
+            "map_value",
+            "map_affordability",
+            "map_ideal_areas",
+            "map_search",
         ):
             return [permissions.AllowAny()]
         if self.action == "create":
@@ -360,19 +380,40 @@ class RoomViewSet(viewsets.ModelViewSet):
                     queryset = queryset.filter(gender_preference__in=[parsed["gender"], "any"])
 
                 pool_ids = list(queryset.values_list("id", flat=True))
-                ranked = semantic_candidates(query_text, pool_ids)
-                if ranked:
+                # Debug-only ranking transparency (settings.DEBUG or an
+                # explicit ?debug_rank=1) — never exposed to normal users.
+                debug_rank = bool(
+                    settings.DEBUG or self.request.query_params.get("debug_rank") == "1"
+                )
+                if getattr(settings, "SEMANTIC_SEARCH_ENABLED", True):
+                    rank_result = hybrid_rank(
+                        query_text,
+                        pool_ids,
+                        user=self.request.user,
+                        include_metadata=debug_rank,
+                    )
+                else:
+                    # Legacy TF-IDF/LSA-only ranking when neural search is
+                    # disabled via the SEMANTIC_SEARCH_ENABLED flag.
+                    legacy = semantic_candidates(query_text, pool_ids)
+                    rank_result = (
+                        {"ids": [room_id for room_id, _score in legacy], "metadata": {}}
+                        if legacy is not None
+                        else None
+                    )
+                if rank_result:
+                    ranked_ids = rank_result["ids"]
                     ordering = Case(
                         *[
                             When(pk=room_id, then=Value(position))
-                            for position, (room_id, _score) in enumerate(ranked)
+                            for position, room_id in enumerate(ranked_ids)
                         ],
                         output_field=IntegerField(),
                     )
-                    queryset = queryset.filter(pk__in=[room_id for room_id, _ in ranked]).order_by(
-                        ordering
-                    )
+                    queryset = queryset.filter(pk__in=ranked_ids).order_by(ordering)
                     semantically_ordered = True
+                    if debug_rank:
+                        self.rank_meta = rank_result.get("metadata", {})
             else:
                 queryset = search_rooms(queryset, query_text)
 
@@ -394,14 +435,23 @@ class RoomViewSet(viewsets.ModelViewSet):
         return queryset
 
     def list(self, request, *args, **kwargs):
-        """Attach the smart-search parse result to the list response."""
+        """Attach the smart-search parse result (and debug rank metadata) to
+        the list response."""
         response = super().list(request, *args, **kwargs)
         parsed = getattr(self, "nl_parsed", None)
-        if parsed is not None:
+        rank_meta = getattr(self, "rank_meta", None)
+        if parsed is not None or rank_meta:
             if isinstance(response.data, dict):
-                response.data["nl_parsed"] = parsed
+                if parsed is not None:
+                    response.data["nl_parsed"] = parsed
+                if rank_meta:
+                    response.data["rank_meta"] = rank_meta
             else:
-                response.data = {"results": response.data, "nl_parsed": parsed}
+                response.data = {
+                    "results": response.data,
+                    "nl_parsed": parsed,
+                    "rank_meta": rank_meta,
+                }
         return response
 
     def _apply_personal_boost(self, queryset):
@@ -578,6 +628,36 @@ class RoomViewSet(viewsets.ModelViewSet):
             OpenApiParameter("area", str, description="Filter to a single area (e.g. `Mirpur`)."),
         ],
     )
+    @extend_schema(
+        tags=["Rooms"],
+        summary="Rooms summary (map chips + stats)",
+        description=(
+            "Aggregate counts and price stats for the room search — with the same "
+            "bbox/radius/area filters as the list endpoint, so the map's area "
+            "chips and the stats bar always match the visible listings."
+        ),
+        responses=inline_serializer(
+            "RoomsSummaryResponse",
+            fields={
+                "total": serializers.IntegerField(),
+                "available": serializers.IntegerField(),
+                "avg_price": serializers.FloatField(allow_null=True),
+                "min_price": serializers.FloatField(allow_null=True),
+                "max_price": serializers.FloatField(allow_null=True),
+                "by_area": serializers.ListField(
+                    child=inline_serializer(
+                        "RoomsSummaryAreaCount",
+                        fields={
+                            "area": serializers.CharField(),
+                            "count": serializers.IntegerField(),
+                            "lat": serializers.FloatField(required=False),
+                            "lng": serializers.FloatField(required=False),
+                        },
+                    )
+                ),
+            },
+        ),
+    )
     @action(detail=False, methods=["get"])
     def summary(self, request):
         queryset = Room.objects.all()
@@ -660,12 +740,231 @@ class RoomViewSet(viewsets.ModelViewSet):
             item["phash_distance"] = distance
         return Response(data)
 
+    # ----- Intelligent Rental Decision Map (Phase 7 v2) --------------------
+
+    @extend_schema(
+        tags=["Map Intelligence"],
+        summary="Area intelligence stats",
+        description=(
+            "Per-area aggregates for the map's Area Intelligence panel: average/median "
+            "rent, listing counts, average size, demand (views/saves/bookings vs supply), "
+            "metro access and price trend. Optional `area` filter for one area. "
+            "Everything is calculated from live platform data; areas without data "
+            "report nulls, never invented numbers."
+        ),
+        parameters=[
+            OpenApiParameter(
+                "area", str, required=False, description="Single area name (e.g. `Uttara`)."
+            )
+        ],
+    )
+    @action(detail=False, methods=["get"], url_path="map-intel/stats")
+    def map_intel(self, request):
+        area = request.query_params.get("area")
+        return Response(area_statistics(area))
+
+    @extend_schema(
+        tags=["Map Intelligence"],
+        summary="Commute ETA between two points",
+        description=(
+            "Travel-time estimate between two coordinates for walking/driving "
+            "(straight-line heuristics) or transit (MRT Line-6 interpolation when "
+            "both ends are within 1.2 km of a station). Estimates are labelled "
+            "`estimate: true`; transit returns `minutes: null` with an honest "
+            "explanation when routing isn't available."
+        ),
+        parameters=[
+            OpenApiParameter("from_lat", float),
+            OpenApiParameter("from_lng", float),
+            OpenApiParameter("to_lat", float),
+            OpenApiParameter("to_lng", float),
+            OpenApiParameter(
+                "mode", str, required=False, description="walking | driving | transit"
+            ),
+        ],
+    )
+    @action(detail=False, methods=["get"], url_path="map-intel/commute")
+    def map_commute(self, request):
+        try:
+            from_lat = float(request.query_params["from_lat"])
+            from_lng = float(request.query_params["from_lng"])
+            to_lat = float(request.query_params["to_lat"])
+            to_lng = float(request.query_params["to_lng"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValidationError(
+                {"detail": "from_lat/from_lng/to_lat/to_lng must all be numbers."}
+            ) from exc
+        mode = request.query_params.get("mode", "walking")
+        if mode not in ("walking", "driving", "transit"):
+            raise ValidationError({"mode": "mode must be walking, driving or transit."})
+        eta = commute_eta(from_lat, from_lng, to_lat, to_lng, mode)
+        return Response(
+            {
+                "mode": eta.mode,
+                "minutes": eta.minutes,
+                "distance_km": eta.distance_km,
+                "estimate": eta.estimate,
+                "detail": eta.detail,
+            }
+        )
+
+    @extend_schema(
+        tags=["Map Intelligence"],
+        summary="Listing value scores",
+        description=(
+            "Transparent 0-100 value scores for a comma-separated list of room ids "
+            "(`ids=1,2,3`). Blend of price fit vs the area market, amenities, "
+            "listing quality, verification, demand and metro access — weights in "
+            "settings. Never exposes internal fraud scores."
+        ),
+        parameters=[OpenApiParameter("ids", str, description="Comma-separated room ids.")],
+    )
+    @action(detail=False, methods=["get"], url_path="map-intel/value")
+    def map_value(self, request):
+        raw = request.query_params.get("ids", "")
+        ids = [int(i) for i in raw.split(",") if i.strip().isdigit()]
+        rooms = Room.objects.filter(pk__in=ids).only(
+            "id", "price", "area", "room_type", "amenities", "verified", "lat", "lng", "updated_at"
+        )
+        return Response({r.id: value_score(r) for r in rooms})
+
+    @extend_schema(
+        tags=["Map Intelligence"],
+        summary="Affordability by area",
+        description=(
+            "Percentage of currently listed rooms per area that fit a budget "
+            "(`budget=12000`). Used by the map's affordability layer — real "
+            "listing shares, not an arbitrary score."
+        ),
+        parameters=[OpenApiParameter("budget", float)],
+    )
+    @action(detail=False, methods=["get"], url_path="map-intel/affordability")
+    def map_affordability(self, request):
+        try:
+            budget = float(request.query_params.get("budget", 0))
+        except ValueError as exc:
+            raise ValidationError({"budget": "budget must be a number."}) from exc
+        if budget <= 0:
+            raise ValidationError({"budget": "budget must be positive."})
+        return Response(affordability_stats(budget))
+
+    @extend_schema(
+        tags=["Map Intelligence"],
+        summary="Ideal areas for a user profile",
+        description=(
+            "Ranked area recommendations from budget fit + commute (optional work "
+            "point + max minutes) + availability + metro access, each with "
+            "explainable reasons built from the same calculated facts."
+        ),
+        parameters=[
+            OpenApiParameter("budget", float),
+            OpenApiParameter("work_lat", float, required=False),
+            OpenApiParameter("work_lng", float, required=False),
+            OpenApiParameter("max_commute", int, required=False, description="Default 45 min"),
+            OpenApiParameter("room_type", str, required=False),
+        ],
+    )
+    @action(detail=False, methods=["get"], url_path="map-intel/ideal-areas")
+    def map_ideal_areas(self, request):
+        try:
+            budget = float(request.query_params.get("budget", 0))
+        except ValueError as exc:
+            raise ValidationError({"budget": "budget must be a number."}) from exc
+        if budget <= 0:
+            raise ValidationError({"budget": "budget must be positive."})
+        work_lat = request.query_params.get("work_lat")
+        work_lng = request.query_params.get("work_lng")
+        try:
+            lat = float(work_lat) if work_lat else None
+            lng = float(work_lng) if work_lng else None
+        except ValueError as exc:
+            raise ValidationError({"work_lat": "work_lat/work_lng must be numbers."}) from exc
+        max_commute = int(request.query_params.get("max_commute", 45) or 45)
+        room_type = request.query_params.get("room_type") or None
+        return Response(ideal_areas(budget, lat, lng, max_commute, room_type))
+
+    @extend_schema(
+        tags=["Map Intelligence"],
+        summary="Natural-language map search",
+        description=(
+            "Turn a Bangla/English/Banglish query into a structured, map-actionable "
+            "intent: filters (area/budget/type/amenities/metro-walk) + the matching "
+            "rooms + a fly-to target (area centre or nearest metro) so the map can "
+            "zoom, filter and render in one call. Example: 'উত্তরায় ১২ হাজারের মধ্যে "
+            "metro station থেকে ১০ মিনিট walking distance-এর মধ্যে furnished room'."
+        ),
+        parameters=[OpenApiParameter("q", str, description="Free-text query.")],
+    )
+    @action(detail=False, methods=["get"], url_path="map-intel/search")
+    def map_search(self, request):
+        q = (request.query_params.get("q") or "").strip()
+        if not q:
+            return Response({"intent": parse_map_query(""), "rooms": [], "count": 0})
+        intent = parse_map_query(q)
+        rooms = map_search_rooms(intent)
+        serializer = RoomListSerializer(
+            rooms[:20], many=True, context=self.get_serializer_context()
+        )
+        # Fly-to target: area centre, or nearest metro when metro_walk asked.
+        target: dict[str, Any] | None = None
+        if intent["areas"]:
+            centre = area_center(intent["areas"][0])
+            if centre:
+                target = {
+                    "lat": centre[0],
+                    "lng": centre[1],
+                    "kind": "area",
+                    "name": intent["areas"][0],
+                }
+        if intent.get("metro_walk") and rooms:
+            best = min(
+                (r for r in rooms if r.lat is not None and r.lng is not None),
+                key=lambda r: nearest_metro_km(r) or 999,
+                default=None,
+            )
+            if best is not None:
+                station, _dist = nearest_metro_km(best, return_station=True)
+                if station is not None:
+                    target = {
+                        "lat": station.lat,
+                        "lng": station.lng,
+                        "kind": "metro",
+                        "name": station.name,
+                    }
+        return Response(
+            {
+                "query": q,
+                "intent": intent,
+                "count": len(rooms),
+                "rooms": serializer.data,
+                "target": target,
+            }
+        )
+
     @extend_schema(
         tags=["Rooms"],
         summary="Listing tier catalog",
         description="Public price/benefit catalog for paid listing tiers (Free / Featured / "
         "Premium) and their duration, so the frontend can render the promotion "
         "UI without hardcoding prices.",
+        responses=inline_serializer(
+            "TierCatalogResponse",
+            fields={
+                "tiers": serializers.ListField(
+                    child=inline_serializer(
+                        "TierCatalogEntry",
+                        fields={
+                            "tier": serializers.CharField(),
+                            "label": serializers.CharField(),
+                            "price": serializers.FloatField(),
+                            "benefits": serializers.ListField(child=serializers.CharField()),
+                        },
+                    )
+                ),
+                "duration_days": serializers.IntegerField(),
+                "currency": serializers.CharField(),
+            },
+        ),
     )
     @action(detail=False, methods=["get"], url_path="tier-catalog")
     def tier_catalog(self, request):
@@ -717,6 +1016,41 @@ class RoomViewSet(viewsets.ModelViewSet):
             "wishlist saves, booking requests and approvals, and how each room's "
             "price compares to its area/type market average. Admin sees all rooms."
         ),
+        responses=inline_serializer(
+            "RoomsInsightsResponse",
+            fields={
+                "rooms": serializers.ListField(
+                    child=inline_serializer(
+                        "RoomsInsightRow",
+                        fields={
+                            "id": serializers.IntegerField(),
+                            "title": serializers.CharField(),
+                            "price": serializers.FloatField(),
+                            "area": serializers.CharField(),
+                            "room_type": serializers.CharField(),
+                            "tier": serializers.CharField(),
+                            "verified": serializers.BooleanField(),
+                            "views_7d": serializers.IntegerField(),
+                            "views_30d": serializers.IntegerField(),
+                            "views_total": serializers.IntegerField(),
+                            "wishlist_count": serializers.IntegerField(),
+                            "booking_requests": serializers.IntegerField(),
+                            "booking_approved": serializers.IntegerField(),
+                            "area_avg_price": serializers.FloatField(allow_null=True),
+                            "price_delta_pct": serializers.FloatField(allow_null=True),
+                        },
+                    )
+                ),
+                "summary": inline_serializer(
+                    "RoomsInsightsSummary",
+                    fields={
+                        "listing_count": serializers.IntegerField(),
+                        "total_views_30d": serializers.IntegerField(),
+                        "total_wishlists": serializers.IntegerField(),
+                    },
+                ),
+            },
+        ),
     )
     @action(detail=False, methods=["get"], url_path="insights")
     def insights(self, request):
@@ -728,6 +1062,7 @@ class RoomViewSet(viewsets.ModelViewSet):
 
         from bookings.models import Booking
         from pricing.models import MarketStat
+        from rooms.listing_quality import get_listing_quality
 
         rooms_qs = self.get_queryset()
         if not (request.user.is_staff or request.user.role == request.user.Role.ADMIN):
@@ -737,7 +1072,9 @@ class RoomViewSet(viewsets.ModelViewSet):
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=30)
 
-        market = {(m.area, m.room_type): float(m.avg_price) for m in MarketStat.objects.all()}
+        market_stats = list(MarketStat.objects.all())
+        market = {(m.area, m.room_type): float(m.avg_price) for m in market_stats}
+        market_objects = {(m.area, m.room_type): m for m in market_stats}
         rooms = rooms_qs.annotate(
             views_7d=Count("views", filter=Q(views__viewed_at__gte=week_ago), distinct=True),
             views_30d=Count("views", filter=Q(views__viewed_at__gte=month_ago), distinct=True),
@@ -772,6 +1109,7 @@ class RoomViewSet(viewsets.ModelViewSet):
                     "price_delta_pct": (
                         round((price - area_avg) / area_avg * 100, 1) if area_avg else None
                     ),
+                    "listing_quality": get_listing_quality(room, market_objects),
                 }
             )
         rows.sort(key=lambda r: r["views_30d"], reverse=True)
@@ -794,6 +1132,23 @@ class RoomViewSet(viewsets.ModelViewSet):
         description="Create several rooms in one request (landlord only). Body is a "
         "JSON array of the same room payloads accepted by POST /rooms/. "
         "Partially succeeds: valid rows are created, per-row errors are reported.",
+        request=RoomCreateUpdateSerializer(many=True),
+        responses=inline_serializer(
+            "RoomsBulkCreateResponse",
+            fields={
+                "created": serializers.ListField(child=serializers.IntegerField()),
+                "created_count": serializers.IntegerField(),
+                "errors": serializers.ListField(
+                    child=inline_serializer(
+                        "RoomsBulkCreateError",
+                        fields={
+                            "index": serializers.IntegerField(),
+                            "errors": serializers.DictField(child=serializers.CharField()),
+                        },
+                    )
+                ),
+            },
+        ),
     )
     @action(
         detail=False,

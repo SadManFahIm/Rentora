@@ -1,7 +1,10 @@
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from config.sanitizers import sanitize_text
+from config.uploads import validate_image_upload
 
 from .geo import haversine_km, landmarks_within, nearest_landmark
 from .landmarks import ALL_LANDMARKS, METRO_STATIONS, UNIVERSITIES, Landmark
@@ -37,6 +40,40 @@ def _nearby_payload(pair: tuple[Landmark, float] | None) -> dict | None:
     }
 
 
+_NEAREST_LANDMARK_SCHEMA = {
+    "type": "object",
+    "nullable": True,
+    "required": ["key", "name", "kind", "distance_km"],
+    "properties": {
+        "key": {"type": "string"},
+        "name": {"type": "string"},
+        "kind": {"type": "string"},
+        "distance_km": {"type": "number"},
+    },
+}
+
+_LISTING_QUALITY_SCHEMA = {
+    "type": "object",
+    "required": ["score", "level", "category_scores", "suggestions"],
+    "properties": {
+        "score": {"type": "number", "nullable": True},
+        "level": {"type": "string", "nullable": True},
+        "category_scores": {
+            "type": "object",
+            "properties": {
+                "basic": {"type": "number"},
+                "description": {"type": "number"},
+                "photos": {"type": "number"},
+                "location": {"type": "number"},
+                "amenities": {"type": "number"},
+                "pricing": {"type": "number"},
+            },
+        },
+        "suggestions": {"type": "array", "items": {"type": "string"}},
+    },
+}
+
+
 class RoomProximityMixin(serializers.Serializer):
     """Adds map/proximity fields shared by the list and detail representations.
 
@@ -57,6 +94,16 @@ class RoomProximityMixin(serializers.Serializer):
         "request supplied near_lat/near_lng or near_landmark."
     )
 
+    @extend_schema_field(
+        {
+            "type": "object",
+            "required": ["nearest_university", "nearest_metro"],
+            "properties": {
+                "nearest_university": _NEAREST_LANDMARK_SCHEMA,
+                "nearest_metro": _NEAREST_LANDMARK_SCHEMA,
+            },
+        }
+    )
     def get_proximity(self, obj: Room) -> dict:
         lat, lng = float(obj.lat), float(obj.lng)
         return {
@@ -103,8 +150,24 @@ class _EffectiveTierMixin(serializers.Serializer):
         effective = getattr(obj, "effective_tier", None)
         return effective or obj.tier
 
+    @extend_schema_field(serializers.BooleanField())
     def get_is_featured(self, obj):
         return self.get_tier(obj) != "free"
+
+
+# OpenAPI shape for the price-anomaly badge (Phase 11+).
+_PRICE_ANOMALY_SCHEMA = {
+    "type": "object",
+    "nullable": True,
+    "required": ["available", "predicted_price", "difference_percentage", "direction", "badge"],
+    "properties": {
+        "available": {"type": "boolean"},
+        "predicted_price": {"type": "number"},
+        "difference_percentage": {"type": "integer"},
+        "direction": {"type": "string", "enum": ["above_market", "below_market"]},
+        "badge": {"type": "string"},
+    },
+}
 
 
 class RoomListSerializer(_EffectiveTierMixin, RoomProximityMixin, serializers.ModelSerializer):
@@ -116,6 +179,12 @@ class RoomListSerializer(_EffectiveTierMixin, RoomProximityMixin, serializers.Mo
 
     images = RoomImageSerializer(many=True, read_only=True)
     owner = RoomOwnerSerializer(read_only=True)
+    amenities = serializers.ListField(child=serializers.CharField(), required=False)
+    price_anomaly = serializers.SerializerMethodField(
+        allow_null=True,
+        help_text="Transparent price-vs-market badge; null when the prediction isn't "
+        "confident enough or the gap is below PRICE_ANOMALY_THRESHOLD.",
+    )
 
     class Meta:
         model = Room
@@ -142,8 +211,33 @@ class RoomListSerializer(_EffectiveTierMixin, RoomProximityMixin, serializers.Mo
             "images",
             "proximity",
             "distance_km",
+            "price_anomaly",
             "created_at",
         ]
+
+    @extend_schema_field(_PRICE_ANOMALY_SCHEMA)
+    def get_price_anomaly(self, obj):
+        """Price-vs-market badge, reusing the pricing prediction engine.
+
+        The Ridge model is trained at most **once per request** (cached on
+        the request object) and shared across every room on the page, so a
+        12-room page never triggers 12 re-fits.
+        """
+        if not getattr(settings, "PRICE_ANOMALY_ENABLED", True):
+            return None
+        from .price_anomaly import get_price_anomaly as anomaly_for
+
+        request = self.context.get("request")
+        trained = None
+        if request is not None:
+            # hasattr (not getattr-vs-None) so a legitimately-trained None
+            # (too few listings) is cached too and we don't re-fit per room.
+            if not hasattr(request, "_rentora_price_model"):
+                from pricing.services.prediction import train_price_model
+
+                request._rentora_price_model = train_price_model()
+            trained = request._rentora_price_model
+        return anomaly_for(obj, trained_model=trained)
 
 
 class RoomDetailSerializer(_EffectiveTierMixin, RoomProximityMixin, serializers.ModelSerializer):
@@ -151,9 +245,14 @@ class RoomDetailSerializer(_EffectiveTierMixin, RoomProximityMixin, serializers.
 
     images = RoomImageSerializer(many=True, read_only=True)
     owner = RoomOwnerSerializer(read_only=True)
+    amenities = serializers.ListField(child=serializers.CharField(), required=False)
     price_insight = serializers.SerializerMethodField(
         help_text="How this room's price compares to its market segment; null if there "
         "isn't yet a big-enough market sample for its (area, room_type) to compare against."
+    )
+    listing_quality = serializers.SerializerMethodField(
+        help_text="Transparent 0-100 listing completeness score with actionable "
+        "suggestions; empty payload when the feature is disabled."
     )
     nearby_landmarks = serializers.SerializerMethodField(
         help_text="All universities and metro stations within NEARBY_RADIUS_KM of the room, nearest first."
@@ -188,6 +287,7 @@ class RoomDetailSerializer(_EffectiveTierMixin, RoomProximityMixin, serializers.
             "verified",
             "images",
             "price_insight",
+            "listing_quality",
             "proximity",
             "nearby_landmarks",
             "distance_km",
@@ -195,6 +295,18 @@ class RoomDetailSerializer(_EffectiveTierMixin, RoomProximityMixin, serializers.
             "updated_at",
         ]
 
+    @extend_schema_field(_LISTING_QUALITY_SCHEMA)
+    def get_listing_quality(self, obj: Room) -> dict:
+        """Transparent 0-100 completeness score + actionable suggestions.
+
+        Never null: when the feature is disabled the payload is
+        ``{score: null, level: null, category_scores: {}, suggestions: []}``.
+        """
+        from .listing_quality import get_listing_quality as quality_for
+
+        return quality_for(obj)
+
+    @extend_schema_field({"type": "object", "nullable": True})
     def get_price_insight(self, obj):
         # Imported lazily so `rooms` never has to import `pricing` at module
         # load time — keeps `pricing` an optional, bolt-on concern rather
@@ -219,9 +331,12 @@ class RoomCreateUpdateSerializer(serializers.ModelSerializer):
     not accepted from the client. Accepts a list of image files on write."""
 
     uploaded_images = serializers.ListField(
-        child=serializers.ImageField(), write_only=True, required=False
+        child=serializers.ImageField(validators=[validate_image_upload]),
+        write_only=True,
+        required=False,
     )
     images = RoomImageSerializer(many=True, read_only=True)
+    amenities = serializers.ListField(child=serializers.CharField(), required=False)
 
     class Meta:
         model = Room

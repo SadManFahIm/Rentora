@@ -29,5 +29,11 @@
     }
   },
   "include": ["src", "vite-env.d.ts"],
+  "exclude": [
+    // CI-generated OpenAPI types + the contract-check file that imports them
+    // (checked via tsconfig.contract.json after generation).
+    "src/generated",
+    "src/lib/schemaContract.ts"
+  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
