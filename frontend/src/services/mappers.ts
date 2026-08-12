@@ -78,6 +78,15 @@ export interface ApiRoom {
     nearest_university: { key: string; name: string; distance_km: number } | null;
     nearest_metro: { key: string; name: string; distance_km: number } | null;
   } | null;
+  /** Optional in the schema — only present when a confident prediction
+   * exists and the gap clears PRICE_ANOMALY_THRESHOLD. */
+  price_anomaly?: {
+    available: boolean;
+    predicted_price: number;
+    difference_percentage: number;
+    direction: "above_market" | "below_market";
+    badge: string;
+  } | null;
 }
 
 export interface ApiBooking {
@@ -267,6 +276,14 @@ export function mapRoom(api: ApiRoom): Room {
                 distanceKm: Number(api.proximity.nearest_metro.distance_km),
               }
             : null,
+        }
+      : null,
+    priceAnomaly: api.price_anomaly
+      ? {
+          predictedPrice: Number(api.price_anomaly.predicted_price),
+          differencePercentage: api.price_anomaly.difference_percentage,
+          direction: api.price_anomaly.direction,
+          badge: api.price_anomaly.badge,
         }
       : null,
   };

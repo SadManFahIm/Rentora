@@ -117,15 +117,24 @@ Room.flagged=true ──► "under review" badge ──► auto-scan on listing 
 ```
 ?q=<text>&smart=1
    │
-   ├─ rooms/nl_query.py   ──► budget / area / type / gender / months (Bangla+English)
-   │                          digits (১০) + number words (দশ) + gazetteer aliases (উত্তরা)
-   │                          → real filters + `nl_parsed` chips for the UI
-   └─ rooms/semantic.py   ──► TF-IDF (char n-grams) → LSA → cosine rank
-                              (semantic discovery — no keyword overlap needed)
+   ├─ rooms/nl_query.py     ──► budget / area / type / gender / months (Bangla+English)
+   │                            digits (১০) + number words (দশ) + area aliases
+   │                            (ধানমণ্ডি ২৭ → Dhanmondi, typo-tolerant: mirpore → Mirpur)
+   │                            → real filters + `nl_parsed` chips for the UI
+   ├─ rooms/area_aliases.py ──► canonical Bangla/English/Banglish area map (single source)
+   ├─ rooms/ranking.py      ──► hybrid rank: neural embeddings × SEMANTIC_SEARCH_WEIGHT
+   │                            + TF-IDF/LSA × TFIDF_SEARCH_WEIGHT, then per-user
+   │                            personalization blend (reuses the recommendation profile)
+   │                            — hard filters always win; cold start → plain relevance
+   ├─ rooms/embedding_service.py ─► provider chain: sentence-transformers (optional)
+   │                                → lite bilingual synonym-hash (zero deps) → TF-IDF → keyword
+   ├─ rooms/semantic.py     ──► TF-IDF (char n-grams) → LSA → cosine rank (lexical leg)
    + rooms/image_search.py ──► pHash of primary photo → look-alike rooms
+   + rooms/price_anomaly.py ──► price vs predicted market badge (reuses pricing model,
+                                trained once per request)
 ```
 
-The vector space is built **in-process on the filtered pool** (no external model, no index to maintain) — correct for the catalog size today, and `semantic.py` is the single swap point if a transformer model becomes worthwhile.
+The vector spaces are built **in-process and cached by fingerprint** (no external model, no index to maintain) — correct for the catalog size today, and each signal is independently disable-able (`SEMANTIC_SEARCH_ENABLED`, `FUZZY_SEARCH_ENABLED`, `AREA_ALIAS_ENABLED`, `PERSONALIZED_SEARCH_ENABLED`, `PRICE_ANOMALY_ENABLED`) with graceful fallback to the next leg.
 
 ---
 

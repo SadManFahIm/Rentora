@@ -100,7 +100,9 @@
 ### Room list filters
 
 **Text:** `?q=` (full-text + typo tolerance; Postgres `pg_trgm` / SQLite `icontains` fallback)
-**Smart search:** `?q=১০ হাজার এর মধ্যে uttara student room&smart=1` — NL parsing (budget/area/type/gender become filters) + semantic ranking; response carries `nl_parsed` for the "AI understood" chips.
+**Smart search:** `?q=১০ হাজার এর মধ্যে uttara student room&smart=1` — NL parsing (budget/area/type/gender become filters) + **hybrid ranking**: neural embeddings (optional `sentence-transformers`, or the built-in bilingual lite provider) blended with TF-IDF/LSA at `SEMANTIC_SEARCH_WEIGHT`/`TFIDF_SEARCH_WEIGHT`; typo-tolerant **area aliases** (`mirpore` → Mirpur, `ধানমণ্ডি ২৭` → Dhanmondi); per-user **personalization** for signed-in tenants (relevance + `PERSONALIZATION_WEIGHT` blend, hard filters always win). Response carries `nl_parsed` for the "AI understood" chips; `?debug_rank=1` (debug builds only) adds `rank_meta` with per-room semantic/lexical/personalization/final scores.
+
+**List card field — `price_anomaly`** (optional, nullable): `{available, predicted_price, difference_percentage, direction: above_market|below_market, badge}` — rendered only when the fair-price model is confident and `|actual − predicted| / predicted ≥ PRICE_ANOMALY_THRESHOLD`. Disable with `PRICE_ANOMALY_ENABLED=false`.
 **Geo:**
 ```
 ?bbox=min_lng,min_lat,max_lng,max_lat     map viewport
@@ -285,9 +287,11 @@ curl -s -X POST $BASE/auth/register/ -H "Content-Type: application/json" \
 TOKEN=$(curl -s -X POST $BASE/auth/login/ -H "Content-Type: application/json" \
   -d '{"username":"tester.one","password":"Sup3rS3cret!"}' | python -c "import sys,json;print(json.load(sys.stdin)['access'])")
 
-# 3. smart search (Bangla NL → budget + area chips)
+# 3. smart search (Bangla NL → budget + area chips; hybrid semantic ranking)
 curl -s "$BASE/rooms/?smart=1&q=%E0%A6%A6%E0%A6%B6%20%E0%A6%B9%E0%A6%BE%E0%A6%9C%E0%A6%BE%E0%A6%B0%20%E0%A6%8F%E0%A6%B0%20%E0%A6%AE%E0%A6%A7%E0%A7%8D%E0%A6%AF%E0%A7%87%20%E0%A6%89%E0%A6%A4%E0%A7%8D%E0%A6%A4%E0%A6%B0%E0%A6%BE" \
   | python -m json.tool | head -30   # → nl_parsed: Budget ≤ ৳10,000 + Uttara
+# typo-tolerant: mirpore → Mirpur area chip
+curl -s "$BASE/rooms/?smart=1&q=mirpore" | python -m json.tool | head -20
 
 # 4. request a booking
 curl -s -X POST $BASE/bookings/ -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
