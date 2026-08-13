@@ -33,7 +33,13 @@ import {
   Users as UsersIcon,
   X,
 } from "lucide-react";
-import { useGeocode, useLandmarks, useMapSummary, useRooms } from "../../hooks/useRooms";
+import {
+  useAreaBoundaries,
+  useGeocode,
+  useLandmarks,
+  useMapSummary,
+  useRooms,
+} from "../../hooks/useRooms";
 import RoomModal from "../../components/RoomModal/RoomModal";
 import MapIntelPanel, { type MapIntelMode } from "../../components/MapIntelPanel/MapIntelPanel";
 import { useValueScores } from "../../hooks/useMapIntel";
@@ -269,6 +275,7 @@ export default function Map() {
 
   const { data: rooms = [], isLoading } = useRooms(filters);
   const { data: landmarks = [] } = useLandmarks();
+  const { data: boundaries } = useAreaBoundaries();
   // Authoritative room counts for the badge (COUNT/AVG server-side — the
   // paginated list caps at one page, so client-side counting undercounts).
   const { data: summary } = useMapSummary(filters);
@@ -449,6 +456,118 @@ export default function Map() {
       "circle-opacity": 0.9,
     });
   }, [landmarks, mapReady]);
+
+  // ---- area boundary polygons (Phase 7 v3) -------------------------------
+  // Approximate boundary bubbles from /rooms/area-boundaries/ — main areas
+  // strong, sub-areas medium, neighbourhoods subtle — with zoom-based
+  // visibility so the map never drowns in rings: main areas appear from
+  // z≈10, sub-areas from z≈12, neighbourhoods from z≈13.5. Clicking a bubble
+  // opens the area's real listing stats.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    if (!boundaries) return;
+    const SOURCE = "area-boundaries";
+    try {
+      if (!map.getSource(SOURCE)) {
+        map.addSource(SOURCE, { type: "geojson", data: boundaries as GeoJSON.FeatureCollection });
+        const spec: {
+          id: string;
+          kind: "main_area" | "sub_area" | "neighborhood";
+          type: "fill" | "line";
+          minzoom: number;
+          paint: Record<string, unknown>;
+        }[] = [
+          {
+            id: "area-boundary-fill-main",
+            kind: "main_area",
+            type: "fill",
+            minzoom: 9.5,
+            paint: { "fill-color": "#f97316", "fill-opacity": 0.06 },
+          },
+          {
+            id: "area-boundary-line-main",
+            kind: "main_area",
+            type: "line",
+            minzoom: 9.5,
+            paint: { "line-color": "#ea580c", "line-width": 2.5, "line-opacity": 0.75 },
+          },
+          {
+            id: "area-boundary-fill-sub",
+            kind: "sub_area",
+            type: "fill",
+            minzoom: 11.5,
+            paint: { "fill-color": "#3b82f6", "fill-opacity": 0.05 },
+          },
+          {
+            id: "area-boundary-line-sub",
+            kind: "sub_area",
+            type: "line",
+            minzoom: 11.5,
+            paint: { "line-color": "#3b82f6", "line-width": 1.5, "line-opacity": 0.6 },
+          },
+          {
+            id: "area-boundary-fill-nbhd",
+            kind: "neighborhood",
+            type: "fill",
+            minzoom: 13.5,
+            paint: { "fill-color": "#7c3aed", "fill-opacity": 0.04 },
+          },
+          {
+            id: "area-boundary-line-nbhd",
+            kind: "neighborhood",
+            type: "line",
+            minzoom: 13.5,
+            paint: { "line-color": "#7c3aed", "line-width": 1, "line-opacity": 0.5 },
+          },
+        ];
+        spec.forEach(({ id, kind, type, minzoom, paint }) => {
+          // Spread `type` first so TS narrows the union per iteration.
+          map.addLayer(
+            {
+              ...{ type },
+              id,
+              source: SOURCE,
+              filter: ["==", ["get", "kind"], kind],
+              minzoom,
+              paint,
+            } as maplibregl.LayerSpecification,
+            // Below the room markers so pins stay clickable on top.
+            map.getLayer("rooms-clusters-layer") ? "rooms-clusters-layer" : undefined
+          );
+        });
+      }
+
+      // Click a boundary bubble → the area's real listing stats.
+      const pointer = (on: boolean) => () => {
+        map.getCanvas().style.cursor = on ? "pointer" : "";
+      };
+      (
+        ["area-boundary-line-main", "area-boundary-line-sub", "area-boundary-line-nbhd"] as const
+      ).forEach((id) => {
+        map.on("click", id, (e) => {
+          const f = e.features?.[0];
+          if (!f) return;
+          const p = (f.properties ?? {}) as Record<string, string>;
+          const area = String(p.name ?? "");
+          const stats = areaStats(roomsRef.current, area);
+          new maplibregl.Popup({ closeButton: false, closeOnClick: true, maxWidth: "240px" })
+            .setLngLat(e.lngLat)
+            .setHTML(
+              heatmapPopupHtml(area, stats) +
+                (p.approx_radius_km
+                  ? `<div class="map-popup__meta" style="margin-top:4px">~${p.approx_radius_km} km approximate boundary</div>`
+                  : "")
+            )
+            .addTo(map);
+        });
+        map.on("mouseenter", id, pointer(true));
+        map.on("mouseleave", id, pointer(false));
+      });
+    } catch {
+      // Rapid toggle during layer juggling — safe to ignore.
+    }
+  }, [boundaries, mapReady, rooms]);
 
   // Layer visibility follows the toggles.
   useEffect(() => {

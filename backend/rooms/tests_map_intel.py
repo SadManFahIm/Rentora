@@ -450,3 +450,44 @@ class DhakaHierarchyTests(APITestCase):
         keys = [s["key"] for s in res.data]
         self.assertEqual(len(keys), len(set(keys)))
         self.assertIn("dhanmondi", keys)
+
+
+class AreaBoundaryTests(APITestCase):
+    """Phase 7 v3 — approximate area boundary polygons."""
+
+    def test_boundaries_returns_geojson_with_hierarchy_kinds(self):
+        res = self.client.get("/api/v1/rooms/area-boundaries/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["type"], "FeatureCollection")
+        features = res.data["features"]
+        self.assertGreater(len(features), 50)
+
+        kinds = {f["properties"]["kind"] for f in features}
+        self.assertEqual(kinds, {"main_area", "sub_area", "neighborhood"})
+
+    def test_polygon_is_closed_and_centered_on_place(self):
+        res = self.client.get("/api/v1/rooms/area-boundaries/")
+        uttara = next(f for f in res.data["features"] if f["properties"]["key"] == "uttara")
+        ring = uttara["geometry"]["coordinates"][0]
+        # Closed ring: first == last point.
+        self.assertEqual(ring[0], ring[-1])
+        # ~2.8 km bubble around Uttara centre (~23.876, 90.380).
+        lats = [p[1] for p in ring]
+        lngs = [p[0] for p in ring]
+        self.assertAlmostEqual((max(lats) + min(lats)) / 2, 23.8759, places=2)
+        self.assertAlmostEqual((max(lngs) + min(lngs)) / 2, 90.3795, places=2)
+        self.assertAlmostEqual((max(lats) - min(lats)) / 2, 2.8 / 111.32, places=3)
+        self.assertEqual(uttara["properties"]["approx_radius_km"], 2.8)
+
+    def test_sub_area_has_smaller_bubble_and_parent(self):
+        res = self.client.get("/api/v1/rooms/area-boundaries/")
+        mirpur10 = next(f for f in res.data["features"] if f["properties"]["key"] == "mirpur_10")
+        self.assertEqual(mirpur10["properties"]["kind"], "sub_area")
+        self.assertEqual(mirpur10["properties"]["parent_name"], "Mirpur")
+        self.assertEqual(mirpur10["properties"]["approx_radius_km"], 1.4)
+
+    def test_neighborhood_has_smallest_bubble(self):
+        res = self.client.get("/api/v1/rooms/area-boundaries/")
+        shahbagh = next(f for f in res.data["features"] if f["properties"]["key"] == "shahbagh")
+        self.assertEqual(shahbagh["properties"]["kind"], "neighborhood")
+        self.assertEqual(shahbagh["properties"]["approx_radius_km"], 0.7)

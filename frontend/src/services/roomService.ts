@@ -24,6 +24,7 @@ import type {
   RoomInsights,
   SimilarImageResult,
   SimilarRoomResult,
+  AreaBoundaryCollection,
 } from "../types";
 
 interface ApiRoomInsights {
@@ -167,6 +168,15 @@ export const roomService = {
       lat: l.lat,
       lng: l.lng,
     }));
+  },
+
+  /**
+   * GET /rooms/area-boundaries/ — approximate Dhaka area boundary bubbles
+   * (GeoJSON FeatureCollection) for the map's zoom-based area overlay.
+   */
+  async getAreaBoundaries(): Promise<AreaBoundaryCollection> {
+    const { data } = await api.get<AreaBoundaryCollection>("/rooms/area-boundaries/");
+    return data;
   },
 
   /** GET /rooms/:id/ — offline-aware like getRooms (public detail, 7d TTL). */

@@ -221,6 +221,30 @@ export interface Landmark {
   lng: number;
 }
 
+/** Hierarchy level of a Dhaka area (drives boundary zoom visibility). */
+export type AreaKind = "main_area" | "sub_area" | "neighborhood";
+
+/** An approximate area boundary bubble from GET /rooms/area-boundaries/. */
+export interface AreaBoundary {
+  key: string;
+  name: string;
+  kind: AreaKind;
+  parent: string | null;
+  parent_name: string | null;
+  /** Transparency: the bubble radius, since these are circles, not borders. */
+  approx_radius_km: number;
+}
+
+/** GeoJSON wrapper the map consumes directly as a MapLibre source. */
+export interface AreaBoundaryCollection {
+  type: "FeatureCollection";
+  features: {
+    type: "Feature";
+    geometry: { type: "Polygon"; coordinates: number[][][] };
+    properties: AreaBoundary;
+  }[];
+}
+
 /** A place suggestion from the map's street-search autocomplete. */
 export interface GeocodeSuggestion {
   key: string;

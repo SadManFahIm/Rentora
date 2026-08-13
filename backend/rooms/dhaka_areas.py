@@ -257,3 +257,91 @@ def hierarchy_payload() -> dict:
             for main in MAIN_AREAS
         ]
     }
+
+
+# ============================================================
+# APPROXIMATE BOUNDARY POLYGONS
+# ============================================================
+# Real administrative boundary geometry for all of Dhaka isn't something we
+# have licensed or can fabricate — so the map renders *approximate* circular
+# polygons around each area's real centre, sized by hierarchy level. They are
+# explicitly labelled as approximations ("~radius around the centre") and are
+# good for orientation: "which district is this pin in / what is nearby" —
+# not for precise cadastral claims. If authoritative GeoJSON boundaries are
+# ever licensed, swap the generated circles for that data behind the same
+# `boundary_feature_collection` interface — nothing downstream changes.
+
+import math
+
+# Approximate radius (km) per hierarchy level — main areas are the biggest
+# footprint, sub-areas smaller, neighbourhoods smallest.
+_BOUNDARY_RADIUS_KM: dict[str, float] = {
+    "main_area": 2.8,
+    "sub_area": 1.4,
+    "neighborhood": 0.7,
+}
+
+# How many points make up each circle. 32 keeps the ring smooth at city zoom
+# without bloating the payload (20 main areas + 36 sub-areas x 32 points).
+_POLYGON_POINTS = 32
+
+
+def boundary_radius_km(place: DhakaPlace) -> float:
+    """Approximate polygon radius for a place, by hierarchy level."""
+    return _BOUNDARY_RADIUS_KM.get(place.kind, 1.0)
+
+
+def _circle_coordinates(place: DhakaPlace, radius_km: float) -> list[list[float]]:
+    """[lng, lat] ring approximating a circle around the place centre.
+
+    Uses the equirectangular approximation (degree of latitude ≈ 111.32 km;
+    degree of longitude scaled by cos(lat)) — plenty for a coarse boundary
+    bubble, and matches the haversine used elsewhere in the geo layer.
+    """
+    lat_r = math.radians(place.lat)
+    d_lat = radius_km / 111.32
+    d_lng = radius_km / (111.32 * max(math.cos(lat_r), 0.01))
+    ring: list[list[float]] = []
+    for i in range(_POLYGON_POINTS):
+        theta = 2 * math.pi * i / _POLYGON_POINTS
+        ring.append([place.lng + d_lng * math.cos(theta), place.lat + d_lat * math.sin(theta)])
+    ring.append(ring[0])  # close the ring
+    return ring
+
+
+def place_boundary_feature(place: DhakaPlace) -> dict:
+    """GeoJSON Feature (Polygon) for a place, with its hierarchy props."""
+    radius = boundary_radius_km(place)
+    parent_name = None
+    if place.parent:
+        parent = _BY_KEY.get(place.parent)
+        parent_name = parent.name if parent else place.parent
+    return {
+        "type": "Feature",
+        "geometry": {
+            "type": "Polygon",
+            "coordinates": [_circle_coordinates(place, radius)],
+        },
+        "properties": {
+            "key": place.key,
+            "name": place.name,
+            "kind": place.kind,
+            "parent": place.parent,
+            "parent_name": parent_name,
+            # Transparency: these are approximate bubbles, not real borders.
+            "approx_radius_km": round(radius, 1),
+        },
+    }
+
+
+def boundary_feature_collection() -> dict:
+    """GeoJSON FeatureCollection of all area boundary bubbles.
+
+    Main areas, sub-areas and neighbourhoods are all included; the frontend
+    decides zoom-based visibility per kind (main areas at low zoom, then
+    sub-areas, then neighbourhoods at the highest zoom).
+    """
+    return {
+        "type": "FeatureCollection",
+        "features": [place_boundary_feature(p) for p in ALL_PLACES],
+    }

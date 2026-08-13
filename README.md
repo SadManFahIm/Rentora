@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-616%20(368%20BE%20%2B%20248%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-626%20(378%20BE%20%2B%20248%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -98,6 +98,7 @@ Full gallery (28 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 - **Map ↔ list sync** — list click flies + highlights the pin; map pin click scrolls the list item into view
 - **Room deep links** — `?room=123` in a shared map URL reopens the listing on load
 - **Structured Dhaka hierarchy** — new `GET /api/v1/rooms/area-hierarchy/` (20 main areas → 30+ sub-areas/neighbourhoods, parent links, Bangla + English aliases); sub-area search ("Mirpur 10", "Uttara Sector 7", "ধানমন্ডি ২৭") resolves with its parent district shown
+- **Area boundary polygons** — `GET /api/v1/rooms/area-boundaries/`: approximate boundary bubbles (honest circles, `approx_radius_km`, not fake borders) — main areas strong orange rings (z≈9.5+), sub-areas blue (z≈11.5+), neighbourhoods violet (z≈13.5+), click → real area stats; dark-mode paints included
 
 **Phase 9 — Operate It (Reliability & Observability)**
 
@@ -281,7 +282,7 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 | **11+**   | Listing Intelligence — 🎤 Bangla voice search, 🧠 AI saved-search matcher + price-drop alerts, ✨ listing quality score, 🛡️ fraud-aware ranking       | ✅ Shipped           |
 | **11++**  | Core AI & Fraud — 🤖 Rentora Copilot, 🏷️ AI pricing suggestion v2 (demand/time-to-rent), 🖼️ cross-listing duplicate-image fraud detection | ✅ Shipped |
 | **7 v2**   | Intelligent Map — 🧠 AI map search, 🚇 metro commute score + commute mode, ⭐ best-value scores, 🏛️ area intelligence + comparison, 💰 affordability map, ideal-area ranking | ✅ Shipped |
-| **7 v3**   | Map Intelligence v3 — 🌙 dark-map fix + 🌑 layer contrast QA, 👆 interactive university/metro/heatmap/isochrone clicks, 🔗 map↔list sync, 🔗 room deep links, 🏙️ structured Dhaka hierarchy (area-hierarchy API) | ✅ Shipped |
+| **7 v3**   | Map Intelligence v3 — 🌙 dark-map fix + 🌑 layer contrast QA, 👆 interactive university/metro/heatmap/isochrone clicks, 🔗 map↔list sync, 🔗 room deep links, 🏙️ structured Dhaka hierarchy + area boundary polygons | ✅ Shipped |
 | **12 P0**  | Progressive Web App — 📱 installable manifest + maskable icons, native install CTA, standalone mode, safe SW caching, update + offline UX, shortcuts | ✅ Shipped |
 | **12 P1**  | Offline & polish — 🔌 offline search over cached public listings, background sync (offline action replay), periodic refresh, splash screens, dark icon, iOS install hint, Lighthouse audit | ✅ Shipped |
 
