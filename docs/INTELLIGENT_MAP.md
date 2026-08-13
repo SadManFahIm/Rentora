@@ -27,6 +27,7 @@ of Rentora's existing search, pricing, fraud, listing and location systems.
 | **Room deep links** | `?room=123` in a shareable map URL reopens that listing's popup/modal on load |
 | **Structured Dhaka hierarchy** | `GET /api/v1/rooms/area-hierarchy/` returns main areas (Uttara, Mirpur, Dhanmondi…) with sub-areas/neighbourhoods (sectors, blocks, roads), each with parent link + approximate centre + Bangla/English aliases |
 | **Sub-area search** | "Mirpur 10", "Uttara Sector 7", "ধানমন্ডি ২৭" resolve via the hierarchy with their parent district shown under the label |
+| **Area boundary polygons** | `GET /api/v1/rooms/area-boundaries/` — approximate boundary bubbles (GeoJSON circles around real centres, explicitly labelled `approx_radius_km`, not fabricated borders): main areas strong (orange ring, z≈9.5+), sub-areas medium (blue, z≈11.5+), neighbourhoods subtle (violet, z≈13.5+); clicking a bubble opens the area's real listing stats |
 
 ---
 

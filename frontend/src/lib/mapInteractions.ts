@@ -196,6 +196,23 @@ export const THEME_PAINTS: Record<string, ThemePaintPatch[]> = {
     { prop: "circle-color", dark: "#2dd4bf", light: "#0d9488" },
     { prop: "circle-stroke-color", dark: "#134e4a", light: "#ffffff" },
   ],
+  // Area boundary bubbles — brighter strokes on dark so the rings read
+  // against the near-black basemap; fills stay whisper-light either way.
+  "area-boundary-line-main": [
+    { prop: "line-color", dark: "#fb923c", light: "#ea580c" },
+    { prop: "line-opacity", dark: 0.85, light: 0.75 },
+  ],
+  "area-boundary-fill-main": [{ prop: "fill-opacity", dark: 0.08, light: 0.06 }],
+  "area-boundary-line-sub": [
+    { prop: "line-color", dark: "#60a5fa", light: "#3b82f6" },
+    { prop: "line-opacity", dark: 0.75, light: 0.6 },
+  ],
+  "area-boundary-fill-sub": [{ prop: "fill-opacity", dark: 0.07, light: 0.05 }],
+  "area-boundary-line-nbhd": [
+    { prop: "line-color", dark: "#a78bfa", light: "#7c3aed" },
+    { prop: "line-opacity", dark: 0.65, light: 0.5 },
+  ],
+  "area-boundary-fill-nbhd": [{ prop: "fill-opacity", dark: 0.06, light: 0.04 }],
 };
 
 /** Travel-band layers get stronger fills on dark (0.1 is invisible there). */

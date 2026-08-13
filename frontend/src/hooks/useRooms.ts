@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { roomService } from "../services/roomService";
 import type {
+  AreaBoundaryCollection,
   CreateRoomPayload,
   GeocodeSuggestion,
   Landmark,
@@ -73,6 +74,15 @@ export function useLandmarks() {
   return useQuery<Landmark[]>({
     queryKey: [...roomKeys.all, "landmarks"] as const,
     queryFn: () => roomService.getLandmarks(),
+    staleTime: 24 * 60 * 60 * 1000, // static data — cache for a day
+  });
+}
+
+/** Fetch approximate Dhaka area boundary bubbles for the map overlay. */
+export function useAreaBoundaries() {
+  return useQuery<AreaBoundaryCollection>({
+    queryKey: [...roomKeys.all, "area-boundaries"] as const,
+    queryFn: () => roomService.getAreaBoundaries(),
     staleTime: 24 * 60 * 60 * 1000, // static data — cache for a day
   });
 }

@@ -19,6 +19,17 @@ area focus chips, sub-area search and area cards.
      "parent": "uttara", "parent_name": "Uttara", "lat": 23.867, "lng": 90.376}]}]}
 ```
 
+## `GET /api/v1/rooms/area-boundaries/`
+
+Approximate boundary **bubbles** (GeoJSON `FeatureCollection`) for every
+Dhaka area — 20 main areas, 16 sub-areas, 15 neighbourhoods. Each feature is
+a closed Polygon ring (32 points) around the area's real centre, sized by
+hierarchy level (`approx_radius_km`: main 2.8, sub 1.4, neighbourhood 0.7).
+These are circles around real centres, **not cadastral borders** — the
+property name says so. The map renders them with zoom-based visibility
+(main areas from z≈9.5, sub-areas z≈11.5, neighbourhoods z≈13.5) and opens
+the area's real listing stats on click.
+
 ## `GET /api/v1/rooms/geocode/`
 
 Street / area / landmark autocomplete for the map search box. Now merges the

@@ -149,6 +149,15 @@ describe("dark-theme paint map (Phase 7 v3 contrast QA)", () => {
     expect(TRAVEL_BAND_DARK_OPACITY).toBe(0.22);
   });
 
+  it("brightens area boundary strokes on dark", () => {
+    expect(themePaintValue("area-boundary-line-main", "line-color", true)).toBe("#fb923c");
+    expect(themePaintValue("area-boundary-line-main", "line-color", false)).toBe("#ea580c");
+    expect(themePaintValue("area-boundary-line-sub", "line-color", true)).toBe("#60a5fa");
+    expect(themePaintValue("area-boundary-line-nbhd", "line-color", true)).toBe("#a78bfa");
+    // Dark fills are stronger than light but stay whisper-light.
+    expect(themePaintValue("area-boundary-fill-main", "fill-opacity", true)).toBe(0.08);
+  });
+
   it("returns undefined for unknown layer/prop", () => {
     expect(themePaintValue("does-not-exist", "circle-color", true)).toBeUndefined();
     expect(themePaintValue("universities", "line-color", true)).toBeUndefined();
