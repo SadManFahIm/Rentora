@@ -91,6 +91,8 @@ function buildParams(filters: RoomFilters): Record<string, string> {
   if (filters.nearLat != null) params.near_lat = String(filters.nearLat);
   if (filters.nearLng != null) params.near_lng = String(filters.nearLng);
   if (filters.radiusKm != null) params.radius_km = String(filters.radiusKm);
+  // Landmark-nearby search (Phase 7 v3): ?near_landmark=<slug>&radius_km=…
+  if (filters.nearLandmark) params.near_landmark = filters.nearLandmark;
 
   switch (filters.sort) {
     case "price-asc":

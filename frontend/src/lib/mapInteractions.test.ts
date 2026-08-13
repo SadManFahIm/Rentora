@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  AREA_BOUNDARY_LINE_COLORS,
+  areaBoundaryFillOpacity,
+  areaBoundaryLineColor,
+  AREA_LABEL_MINZOOM,
   areaStats,
   formatRent,
   heatmapPopupHtml,
@@ -194,17 +198,68 @@ describe("dark-theme paint map (Phase 7 v3 contrast QA)", () => {
     expect(TRAVEL_BAND_DARK_OPACITY).toBe(0.22);
   });
 
-  it("brightens area boundary strokes on dark", () => {
-    expect(themePaintValue("area-boundary-line-main", "line-color", true)).toBe("#fb923c");
-    expect(themePaintValue("area-boundary-line-main", "line-color", false)).toBe("#ea580c");
-    expect(themePaintValue("area-boundary-line-sub", "line-color", true)).toBe("#60a5fa");
-    expect(themePaintValue("area-boundary-line-nbhd", "line-color", true)).toBe("#a78bfa");
-    // Dark fills are stronger than light but stay whisper-light.
-    expect(themePaintValue("area-boundary-fill-main", "fill-opacity", true)).toBe(0.08);
+  it("keeps the boundary highlight INSIDE the theme paint (feature-state)", () => {
+    // Regression: a theme swap must re-apply the full case expression, not a
+    // flat color — a flat color would silently erase the hover/selected
+    // states. The dark/light values must BE expressions starting with "case".
+    const darkLine = themePaintValue("area-boundary-line-main", "line-color", true) as unknown[];
+    const lightLine = themePaintValue("area-boundary-line-main", "line-color", false) as unknown[];
+    expect(darkLine[0]).toBe("case");
+    expect(lightLine[0]).toBe("case");
+    const darkFill = themePaintValue("area-boundary-fill-main", "fill-opacity", true) as unknown[];
+    expect(darkFill[0]).toBe("case");
+    // And the selected color inside the dark expression must be the bright
+    // one (readable on the near-black basemap), not the dark gray base.
+    expect(darkLine).toContain("#fed7aa");
+    expect(lightLine).toContain("#7c2d12");
+  });
+
+  it("area labels are theme-aware (dark text readable on dark tiles)", () => {
+    // Regression for the reported dark-mode bug: the label layers were
+    // created with dark-gray text that was never re-painted, so area names
+    // were invisible on the dark basemap. THEME_PAINTS must carry per-theme
+    // text colors + halos for every label kind.
+    expect(themePaintValue("area-label-main", "text-color", true)).toBe("#f8fafc");
+    expect(themePaintValue("area-label-main", "text-color", false)).toBe("#1f2937");
+    expect(themePaintValue("area-label-main", "text-halo-color", true)).toBe("#111827");
+    expect(themePaintValue("area-label-main", "text-halo-color", false)).toBe("#ffffff");
+    expect(themePaintValue("area-label-sub", "text-color", true)).toBe("#e2e8f0");
+    expect(themePaintValue("area-label-nbhd", "text-color", true)).toBe("#e2e8f0");
+    // Zoom-aware hierarchy: main areas first, then sub-areas, then
+    // neighbourhoods — never all at once.
+    expect(AREA_LABEL_MINZOOM.main_area).toBeLessThan(AREA_LABEL_MINZOOM.sub_area);
+    expect(AREA_LABEL_MINZOOM.sub_area).toBeLessThan(AREA_LABEL_MINZOOM.neighborhood);
   });
 
   it("returns undefined for unknown layer/prop", () => {
     expect(themePaintValue("does-not-exist", "circle-color", true)).toBeUndefined();
     expect(themePaintValue("universities", "line-color", true)).toBeUndefined();
+  });
+});
+
+describe("area boundary paint builders (feature-state + theme)", () => {
+  it("returns a case expression ordering selected > hover > base", () => {
+    const expr = areaBoundaryLineColor("main_area", true) as unknown[];
+    expect(expr[0]).toBe("case");
+    expect(expr[1]).toEqual(["==", ["feature-state", "selected"], true]);
+    expect(expr[3]).toEqual(["==", ["feature-state", "hover"], true]);
+  });
+
+  it("uses the theme's palette inside the expression", () => {
+    const dark = areaBoundaryLineColor("main_area", true) as unknown[];
+    const light = areaBoundaryLineColor("main_area", false) as unknown[];
+    // Selected is brightest on dark, deepest on light.
+    expect(dark).toContain(AREA_BOUNDARY_LINE_COLORS.main_area.selected.dark);
+    expect(light).toContain(AREA_BOUNDARY_LINE_COLORS.main_area.selected.light);
+    expect(AREA_BOUNDARY_LINE_COLORS.main_area.selected.dark).toBe("#fed7aa");
+  });
+
+  it("raises fill opacity for selected/hover and in dark mode", () => {
+    const dark = areaBoundaryFillOpacity("main_area", true) as number[];
+    const light = areaBoundaryFillOpacity("main_area", false) as number[];
+    // dark[2] = selected opacity, dark[4] = hover, dark[5] = base.
+    expect(dark[2]).toBeGreaterThan(dark[4]);
+    expect(dark[4]).toBeGreaterThan(dark[5]);
+    expect(dark[5]).toBeGreaterThan(light[5]); // dark fills a bit stronger
   });
 });
