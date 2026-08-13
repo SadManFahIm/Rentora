@@ -27,6 +27,7 @@ from config.sanitizers import sanitize_text
 
 from . import presence
 from .models import ChatRoom, ChatRoomMembership, Message
+from .safety import record_safety_event, run_chat_safety, safety_payload
 from .serializers import MessageSerializer
 from .utils import room_group_name
 
@@ -206,13 +207,23 @@ class ChatConsumer(AsyncWebsocketConsumer):
         if message_type not in valid_types:
             message_type = Message.MessageType.TEXT
 
+        # Chat Safety Engine (Phase 12.3): same pipeline as the REST path —
+        # assess, apply policy, and store the safety notice when blocked.
+        room = ChatRoom.objects.filter(pk=self.room_id).first()
+        final_content, assessment, outcome = run_chat_safety(content, room, self.user)
+
         message = Message.objects.create(
             chat_room_id=self.room_id,
             sender=self.user,
-            content=content,
+            content=final_content,
             message_type=message_type,
             file_url=file_url,
         )
+        if room is not None:
+            record_safety_event(room, self.user, message, assessment, outcome)
+
         # Bump the room so it sorts to the top of the caller's room list.
         ChatRoom.objects.filter(pk=self.room_id).update(updated_at=timezone.now())
-        return MessageSerializer(message).data
+        data = MessageSerializer(message).data
+        data["safety"] = safety_payload(assessment, outcome)
+        return data

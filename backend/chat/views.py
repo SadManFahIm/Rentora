@@ -16,10 +16,12 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
-from .models import ChatRoom, ChatRoomMembership, Message
+from .models import ChatRoom, ChatRoomMembership, ChatSafetyEvent, Message
 from .presence import bulk_online_status
+from .safety import record_safety_event, run_chat_safety, safety_payload
 from .serializers import (
     ChatRoomSerializer,
+    ChatSafetyEventSerializer,
     MessageCreateSerializer,
     MessageSerializer,
 )
@@ -181,11 +183,20 @@ class MessageViewSet(
         room = self.get_chat_room()
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        message = serializer.save(chat_room=room, sender=request.user)
+
+        # Chat Safety Engine (Phase 12.3): assess the outgoing message and
+        # apply the configured policy before anything is stored. A blocked
+        # message is stored as the safety notice — the sender's raw text is
+        # never persisted or broadcast.
+        content = serializer.validated_data.get("content", "")
+        final_content, assessment, outcome = run_chat_safety(content, room, request.user)
+        message = serializer.save(chat_room=room, sender=request.user, content=final_content)
+        record_safety_event(room, request.user, message, assessment, outcome)
 
         # Bump room ordering and broadcast to any connected sockets.
         room.save(update_fields=["updated_at"])
         payload = MessageSerializer(message, context=self.get_serializer_context()).data
+        payload["safety"] = safety_payload(assessment, outcome)
         broadcast_message(room.pk, payload)
 
         return Response(payload, status=status.HTTP_201_CREATED)
@@ -309,3 +320,32 @@ class ChatUploadView(APIView):
             {"file_url": file_url, "message_type": message_type},
             status=status.HTTP_201_CREATED,
         )
+
+
+class ChatSafetyEventsView(APIView):
+    """Admin-only feed of chat-safety events (Phase 12.3).
+
+    Every warned/flagged/blocked message assessment, newest first, with the
+    metadata the engine recorded (detector keys, risk, outcome) — never the
+    message content. Powers the trust & safety moderation queue.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Chat"],
+        summary="List chat safety events",
+        description="Admin only. Recent chat-safety assessments (metadata only — "
+        "never message content), newest first, at most 100.",
+        responses=ChatSafetyEventSerializer(many=True),
+    )
+    def get(self, request: Request) -> Response:
+        if not (request.user.is_staff or request.user.role == "admin"):
+            return Response(
+                {"detail": "Admin access required."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        events = ChatSafetyEvent.objects.select_related("sender", "chat_room").order_by(
+            "-created_at"
+        )[:100]
+        return Response(ChatSafetyEventSerializer(events, many=True).data)

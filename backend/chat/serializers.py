@@ -4,7 +4,7 @@ from rest_framework import serializers
 
 from config.sanitizers import sanitize_text
 
-from .models import ChatRoom, Message
+from .models import ChatRoom, ChatSafetyEvent, Message
 from .presence import is_online
 
 User = get_user_model()
@@ -154,3 +154,37 @@ class ChatRoomSerializer(serializers.ModelSerializer):
         if membership.last_read_at is not None:
             qs = qs.filter(created_at__gt=membership.last_read_at)
         return qs.count()
+
+
+class ChatSafetyEventSerializer(serializers.ModelSerializer):
+    """Admin-only view of one chat-safety event — metadata only.
+
+    Deliberately excludes the message content: admins see who, where, what
+    tripped (detector keys + risk) and what the engine did, but not the
+    conversation text.
+    """
+
+    sender_username = serializers.CharField(source="sender.username", read_only=True)
+    sender_name = serializers.SerializerMethodField()
+    risk_level_display = serializers.CharField(source="get_risk_level_display", read_only=True)
+    outcome_display = serializers.CharField(source="get_outcome_display", read_only=True)
+
+    class Meta:
+        model = ChatSafetyEvent
+        fields = [
+            "id",
+            "chat_room",
+            "sender_username",
+            "sender_name",
+            "risk_level",
+            "risk_level_display",
+            "outcome",
+            "outcome_display",
+            "detectors",
+            "detail",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_sender_name(self, obj: ChatSafetyEvent) -> str:
+        return obj.sender.get_full_name() or obj.sender.username

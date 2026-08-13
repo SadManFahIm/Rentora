@@ -238,6 +238,46 @@ describe("chat mappers", () => {
     expect(m.sender.username).toBe("sabbir.rahman");
   });
 
+  it("mapChatMessage carries the chat-safety payload", () => {
+    const m = mapChatMessage({
+      id: 22,
+      chat_room: 3,
+      sender: chatUser,
+      content: "🚫 Message blocked for safety review.",
+      message_type: "text",
+      file_url: "",
+      is_read: true,
+      status: "sent",
+      created_at: "2025-01-01T00:00:00Z",
+      safety: {
+        risk_level: "critical",
+        outcome: "blocked",
+        blocked: true,
+        detectors: [{ key: "impersonation", label: "Impersonation of Rentora / staff" }],
+      },
+    });
+    expect(m.safety).toMatchObject({
+      riskLevel: "critical",
+      outcome: "blocked",
+      blocked: true,
+      detectors: [{ key: "impersonation", label: "Impersonation of Rentora / staff" }],
+    });
+    // Messages without safety stay undefined.
+    expect(
+      mapChatMessage({
+        id: 23,
+        chat_room: 3,
+        sender: chatUser,
+        content: "hi",
+        message_type: "text",
+        file_url: "",
+        is_read: true,
+        status: "sent",
+        created_at: "2025-01-01T00:00:00Z",
+      }).safety
+    ).toBeUndefined();
+  });
+
   it("mapChatRoom with full participants and last message", () => {
     const r = mapChatRoom({
       id: 3,
