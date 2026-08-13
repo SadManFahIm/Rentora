@@ -1,0 +1,58 @@
+{
+  "name": "Rentora — Smart Rental Platform",
+  "short_name": "Rentora",
+  "description": "Find, compare and manage rental properties with Rentora — Bangladesh's AI-powered room rental platform.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "lang": "en",
+  "dir": "ltr",
+  "theme_color": "#ea580c",
+  "background_color": "#ffffff",
+  "categories": ["real_estate", "productivity", "lifestyle"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Search Rooms",
+      "short_name": "Search",
+      "description": "Search and filter room listings",
+      "url": "/rooms",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Explore Map",
+      "short_name": "Map",
+      "description": "Browse rooms on the interactive Dhaka map",
+      "url": "/map",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Post Listing",
+      "short_name": "List",
+      "description": "Manage and promote your room listings",
+      "url": "/dashboard?tab=listings",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}
