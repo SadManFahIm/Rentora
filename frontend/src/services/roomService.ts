@@ -155,7 +155,7 @@ export const roomService = {
     }
   },
 
-  /** GET /rooms/landmarks/ — public map landmark layers (universities + metro). */
+  /** GET /rooms/landmarks/ — public map landmark layers (all categories). */
   async getLandmarks(): Promise<Landmark[]> {
     const { data } =
       await api.get<{ key: string; name: string; kind: string; lat: number; lng: number }[]>(
@@ -164,7 +164,7 @@ export const roomService = {
     return data.map((l) => ({
       key: l.key,
       name: l.name,
-      kind: l.kind === "university" ? "university" : "metro",
+      kind: l.kind as Landmark["kind"],
       lat: l.lat,
       lng: l.lng,
     }));

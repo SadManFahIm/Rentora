@@ -5,6 +5,8 @@ import {
   heatmapPopupHtml,
   isochronePopupHtml,
   isochroneStats,
+  LANDMARK_KIND_META,
+  landmarkMinzoom,
   landmarkPopupHtml,
   metroRoutePopupHtml,
   nearbyStats,
@@ -119,6 +121,49 @@ describe("formatRent", () => {
   it("formats with taka symbol and thousand separators", () => {
     expect(formatRent(12345)).toBe("৳12,345");
     expect(formatRent(null)).toBe("—");
+  });
+});
+
+describe("landmark kind metadata", () => {
+  it("covers every category with an icon, label, color and minzoom", () => {
+    const kinds = [
+      "university",
+      "metro",
+      "hospital",
+      "market",
+      "park",
+      "mosque",
+      "bus_terminal",
+    ] as const;
+    kinds.forEach((kind) => {
+      const meta = LANDMARK_KIND_META[kind];
+      expect(meta.icon).toBeTruthy();
+      expect(meta.label).toBeTruthy();
+      expect(meta.color).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(meta.darkColor).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(meta.minzoom).toBeGreaterThanOrEqual(8);
+    });
+  });
+
+  it("declutters the map: dense everyday categories appear later than universities/metro", () => {
+    // Universities + metro are core wayfinding — always visible; the
+    // everyday categories appear progressively as you zoom in so the map
+    // doesn't drown in dots at city level.
+    expect(landmarkMinzoom("university")).toBeLessThan(landmarkMinzoom("market"));
+    expect(landmarkMinzoom("metro")).toBeLessThan(landmarkMinzoom("bus_terminal"));
+    expect(landmarkMinzoom("market")).toBeLessThanOrEqual(landmarkMinzoom("mosque"));
+  });
+
+  it("renders the everyday-category label in the popup", () => {
+    const html = landmarkPopupHtml(
+      "hospital",
+      "Shaheed Suhrawardy Hospital",
+      { count: 2, avgRent: 10000, minRent: 8000, maxRent: 12000 },
+      "Rooms near here →"
+    );
+    expect(html).toContain("🏥");
+    expect(html).toContain("Hospital");
+    expect(html).toContain("2</b> rooms nearby");
   });
 });
 

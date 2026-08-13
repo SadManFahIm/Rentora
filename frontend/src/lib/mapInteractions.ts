@@ -1,4 +1,4 @@
-import type { Room } from "../types";
+import type { LandmarkKind, Room } from "../types";
 import { haversineKm } from "./mapUtils";
 
 /**
@@ -30,6 +30,41 @@ export function nearbyStats(
 /** Stats for rooms in a single area (heatmap / area popups). */
 export function areaStats(rooms: Room[], area: string): NearbyStats {
   return priceStats(rooms.filter((r) => r.area.toLowerCase() === area.toLowerCase()));
+}
+
+/**
+ * Per-kind landmark metadata — color, dark color, popup icon and label.
+ * Single source of truth for both the map layers and the popups, so the
+ * category identity can't drift between paint and copy.
+ */
+export const LANDMARK_KIND_META: Record<
+  LandmarkKind,
+  { color: string; darkColor: string; icon: string; label: string; minzoom: number }
+> = {
+  university: {
+    color: "#7c3aed",
+    darkColor: "#a78bfa",
+    icon: "🎓",
+    label: "University",
+    minzoom: 8,
+  },
+  metro: { color: "#0d9488", darkColor: "#2dd4bf", icon: "🚇", label: "Metro station", minzoom: 8 },
+  hospital: { color: "#e11d48", darkColor: "#fb7185", icon: "🏥", label: "Hospital", minzoom: 9.5 },
+  market: { color: "#f59e0b", darkColor: "#fbbf24", icon: "🛒", label: "Market", minzoom: 10.5 },
+  park: { color: "#16a34a", darkColor: "#4ade80", icon: "🌳", label: "Park", minzoom: 10.5 },
+  mosque: { color: "#0891b2", darkColor: "#22d3ee", icon: "🕌", label: "Mosque", minzoom: 11 },
+  bus_terminal: {
+    color: "#4f46e5",
+    darkColor: "#818cf8",
+    icon: "🚌",
+    label: "Bus terminal",
+    minzoom: 11,
+  },
+};
+
+/** The zoom at which a category's dots begin showing (declutter at low zoom). */
+export function landmarkMinzoom(kind: LandmarkKind): number {
+  return LANDMARK_KIND_META[kind]?.minzoom ?? 8;
 }
 
 /** Stats for rooms inside an isochrone band radius (walking-time model). */
@@ -67,17 +102,18 @@ function statsBlock(stats: NearbyStats): string {
   </div>`;
 }
 
-/** Popup for a university or metro station click. */
+/** Popup for any landmark kind (university/metro/hospital/market/…). */
 export function landmarkPopupHtml(
-  kind: "university" | "metro",
+  kind: LandmarkKind,
   name: string,
   stats: NearbyStats,
   ctaLabel: string
 ): string {
-  const icon = kind === "university" ? "🎓" : "🚇";
+  const icon = LANDMARK_KIND_META[kind]?.icon ?? "📍";
   return `
     <div class="map-popup">
       <div class="map-popup__name">${icon} ${esc(name)}</div>
+      <div class="map-popup__meta">${LANDMARK_KIND_META[kind]?.label ?? "Place"}</div>
       ${statsBlock(stats)}
       <div class="map-popup__cta" data-map-cta="nearby">${ctaLabel}</div>
     </div>
@@ -157,6 +193,29 @@ export const THEME_PAINTS: Record<string, ThemePaintPatch[]> = {
     { prop: "line-color", dark: "#134e4a", light: "#ffffff" },
     { prop: "line-opacity", dark: 0.5, light: 0.55 },
   ],
+  // Everyday places (hospital/market/park/mosque/bus_terminal) — brighter
+  // dots + dark strokes on the dark basemap, same as universities/metro.
+  "places-hospital": [
+    { prop: "circle-color", dark: "#fb7185", light: "#e11d48" },
+    { prop: "circle-stroke-color", dark: "#4c0519", light: "#ffffff" },
+  ],
+  "places-market": [
+    { prop: "circle-color", dark: "#fbbf24", light: "#f59e0b" },
+    { prop: "circle-stroke-color", dark: "#451a03", light: "#ffffff" },
+  ],
+  "places-park": [
+    { prop: "circle-color", dark: "#4ade80", light: "#16a34a" },
+    { prop: "circle-stroke-color", dark: "#052e16", light: "#ffffff" },
+  ],
+  "places-mosque": [
+    { prop: "circle-color", dark: "#22d3ee", light: "#0891b2" },
+    { prop: "circle-stroke-color", dark: "#083344", light: "#ffffff" },
+  ],
+  "places-bus-terminal": [
+    { prop: "circle-color", dark: "#818cf8", light: "#4f46e5" },
+    { prop: "circle-stroke-color", dark: "#1e1b4b", light: "#ffffff" },
+  ],
+  "places-clusters-layer": [{ prop: "circle-stroke-color", dark: "#134e4a", light: "#ffffff" }],
   "price-heatmap": [
     {
       prop: "circle-color",

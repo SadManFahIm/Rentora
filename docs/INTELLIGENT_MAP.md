@@ -28,6 +28,7 @@ of Rentora's existing search, pricing, fraud, listing and location systems.
 | **Structured Dhaka hierarchy** | `GET /api/v1/rooms/area-hierarchy/` returns main areas (Uttara, Mirpur, Dhanmondi…) with sub-areas/neighbourhoods (sectors, blocks, roads), each with parent link + approximate centre + Bangla/English aliases |
 | **Sub-area search** | "Mirpur 10", "Uttara Sector 7", "ধানমন্ডি ২৭" resolve via the hierarchy with their parent district shown under the label |
 | **Area boundary polygons** | `GET /api/v1/rooms/area-boundaries/` — approximate boundary bubbles (GeoJSON circles around real centres, explicitly labelled `approx_radius_km`, not fabricated borders): main areas strong (orange ring, z≈9.5+), sub-areas medium (blue, z≈11.5+), neighbourhoods subtle (violet, z≈13.5+); clicking a bubble opens the area's real listing stats |
+| **Expanded landmark layer** | Beyond universities & metro, the map now shows **hospitals, markets, parks, mosques and bus terminals** — real Dhaka places (Square Hospital, New Market, Baitul Mukarram, Gabtoli/Saidabad terminals…). The everyday categories share **one clustered GeoJSON source**: nearby places group into a count bubble at low zoom (click → zoom into the cluster) and split into per-kind dots as you zoom in, each with its own minzoom so the map never drowns in dots (hospitals z≈9.5 → bus stops z≈11). Every dot opens a real-data popup with a "Rooms near here →" radius-search CTA, and dark mode brightens each category (rose/amber/green/cyan/indigo-400 dots) |
 
 ---
 

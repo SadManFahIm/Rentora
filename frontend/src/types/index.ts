@@ -212,11 +212,15 @@ export interface SimilarImageResult extends Room {
   phash_distance: number;
 }
 
-/** A university or metro station from GET /rooms/landmarks/. */
+/** A landmark category shown on the map (kind drives color + popup icon). */
+export type LandmarkKind =
+  "university" | "metro" | "hospital" | "market" | "park" | "mosque" | "bus_terminal";
+
+/** A landmark (university/metro/hospital/market/…) from GET /rooms/landmarks/. */
 export interface Landmark {
   key: string;
   name: string;
-  kind: "university" | "metro";
+  kind: LandmarkKind;
   lat: number;
   lng: number;
 }
