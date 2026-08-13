@@ -19,6 +19,7 @@ from rest_framework.response import Response
 
 from wishlist.models import Wishlist
 
+from .dhaka_areas import hierarchy_payload, place_payload, search_places
 from .geo import (
     BoundingBox,
     haversine_km,
@@ -216,6 +217,7 @@ class RoomViewSet(viewsets.ModelViewSet):
             "map_affordability",
             "map_ideal_areas",
             "map_search",
+            "area_hierarchy",
         ):
             return [permissions.AllowAny()]
         if self.action == "create":
@@ -577,7 +579,26 @@ class RoomViewSet(viewsets.ModelViewSet):
             return Response([])
 
         suggestions = []
+        # Structured Dhaka hierarchy first (sub-areas / neighbourhoods like
+        # "Uttara Sector 7" or "Mirpur 10" resolve here with their parent
+        # district), then the flat street gazetteer, then landmarks.
+        seen_keys = set()
+        for place in search_places(query):
+            payload = place_payload(place)
+            suggestions.append(
+                {
+                    "key": payload["key"],
+                    "label": payload["name"],
+                    "kind": "area",
+                    "lat": payload["lat"],
+                    "lng": payload["lng"],
+                    "parent_name": payload["parent_name"],
+                }
+            )
+            seen_keys.add(payload["key"])
         for street in search_streets(query):
+            if street.key in seen_keys:
+                continue
             suggestions.append(
                 {
                     "key": street.key,
@@ -614,6 +635,18 @@ class RoomViewSet(viewsets.ModelViewSet):
                     seen.add(hit["key"])
 
         return Response(suggestions[:8])
+
+    @extend_schema(
+        tags=["Rooms"],
+        summary="Dhaka area hierarchy",
+        description="Structured geographic hierarchy of Dhaka — main areas with their "
+        "sub-areas and neighbourhoods (approximate centres + parent links). "
+        "Used by the map to render area labels, focus chips and area cards. "
+        "Public, unpaginated.",
+    )
+    @action(detail=False, methods=["get"], url_path="area-hierarchy")
+    def area_hierarchy(self, request):
+        return Response(hierarchy_payload())
 
     @extend_schema(
         tags=["Rooms"],

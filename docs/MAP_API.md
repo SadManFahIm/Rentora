@@ -4,6 +4,29 @@ All endpoints are **public GET** actions on the room viewset
 (`/api/v1/rooms/map-intel/*`), follow the existing API conventions and return
 JSON. No authentication required (same as the room list).
 
+## `GET /api/v1/rooms/area-hierarchy/`
+
+Structured Dhaka geography: every main area with its sub-areas and
+neighbourhoods. Each entry carries `key`, `name`, `kind` (`main_area` |
+`sub_area` | `neighborhood`), `parent` / `parent_name`, approximate centre
+(`lat`/`lng`) and — for sub-areas — its children. Used by the map to render
+area focus chips, sub-area search and area cards.
+
+```json
+{"main_areas": [{"key": "uttara", "name": "Uttara", "kind": "main_area",
+  "lat": 23.8759, "lng": 90.3795, "children": [
+    {"key": "uttara_sector_7", "name": "Uttara Sector 7", "kind": "sub_area",
+     "parent": "uttara", "parent_name": "Uttara", "lat": 23.867, "lng": 90.376}]}]}
+```
+
+## `GET /api/v1/rooms/geocode/`
+
+Street / area / landmark autocomplete for the map search box. Now merges the
+structured hierarchy first (so "Mirpur 10", "Uttara Sector 7",
+"ধানমন্ডি ২৭" resolve as areas with a `parent_name`), then the flat street
+gazetteer, then universities/metro stations, then Nominatim on a total miss.
+Deduplicated by key; capped at 8 suggestions.
+
 ## `GET /api/v1/rooms/map-intel/stats/`
 
 Per-area aggregate statistics. Query param: `?area=Uttara` to narrow to one

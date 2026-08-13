@@ -227,7 +227,14 @@ export const roomService = {
   /** GET /rooms/geocode/ — street/area/landmark autocomplete for the map search box. */
   async geocode(query: string): Promise<GeocodeSuggestion[]> {
     const { data } = await api.get<
-      { key: string; label: string; kind: string; lat: number; lng: number }[]
+      {
+        key: string;
+        label: string;
+        kind: string;
+        lat: number;
+        lng: number;
+        parent_name?: string | null;
+      }[]
     >("/rooms/geocode/", { params: { q: query } });
     return data.map((s) => ({
       key: s.key,
@@ -235,6 +242,7 @@ export const roomService = {
       kind: s.kind as GeocodeSuggestion["kind"],
       lat: Number(s.lat),
       lng: Number(s.lng),
+      parent_name: s.parent_name ?? null,
     }));
   },
 
