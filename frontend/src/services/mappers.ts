@@ -124,6 +124,7 @@ export interface ApiChatUser {
   last_name?: string;
   avatar?: string | null;
   nid_verified?: boolean;
+  tenant_verified?: boolean;
 }
 
 export interface ApiChatMessage {
@@ -166,6 +167,7 @@ export interface ApiUser {
   is_staff?: boolean;
   gender?: string;
   nid_verified?: boolean;
+  tenant_verified?: boolean;
   bio?: string;
   date_of_birth?: string | null;
   otp_enabled?: boolean;
@@ -320,6 +322,7 @@ export function mapChatUser(api: ApiChatUser): ChatUser {
     lastName: api.last_name ?? "",
     avatar: api.avatar ?? null,
     nidVerified: api.nid_verified,
+    tenantVerified: api.tenant_verified,
   };
 }
 
@@ -367,6 +370,7 @@ export function mapUser(api: ApiUser): User {
     phone: api.phone,
     bio: api.bio,
     nidVerified: api.nid_verified,
+    tenantVerified: api.tenant_verified,
     otpEnabled: api.otp_enabled ?? false,
     passkeys: api.passkeys,
   };

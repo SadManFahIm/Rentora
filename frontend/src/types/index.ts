@@ -79,6 +79,9 @@ export interface User {
   phone?: string;
   bio?: string;
   nidVerified?: boolean;
+  /** Tenant identity verification (Phase 12) — landlords see only this flag,
+   * never the document. Shown as the "Identity Verified" tenant badge. */
+  tenantVerified?: boolean;
   /** Email-OTP two-factor authentication is enabled for this account. */
   otpEnabled?: boolean;
   /** Registered WebAuthn passkeys (from the user detail payload). */
@@ -106,8 +109,10 @@ export interface ChatUser {
   firstName: string;
   lastName: string;
   avatar: string | null;
-  /** KYC-verified — shown as a trust badge next to the participant's name. */
+  /** Landlord KYC-verified — shown as a trust badge next to the name. */
   nidVerified?: boolean;
+  /** Tenant identity-verified (Phase 12) — "Identity Verified" tenant badge. */
+  tenantVerified?: boolean;
 }
 
 export type ChatMessageType = "text" | "image" | "file" | "system";
@@ -551,6 +556,43 @@ export interface KycApplication {
   role: string;
   nidVerified: boolean;
   documents: KycDocument[];
+}
+
+// ---- Tenant KYC verification (Phase 12 — two-sided trust) ----
+
+/** Tenant verification lifecycle. Landlords only ever see the coarse badge
+ * states (verified / pending / not verified) — never this record's document. */
+export type TenantVerificationStatus =
+  "not_started" | "pending" | "verified" | "rejected" | "expired" | "needs_review";
+
+export type TenantKycDecision = "approved" | "rejected" | "needs_review";
+
+/** The tenant's own verification record (owner or admin only). */
+export interface TenantVerification {
+  id: number;
+  status: TenantVerificationStatus;
+  statusDisplay: string;
+  docType: KycDocType;
+  docTypeDisplay: string;
+  /** Private, auth-gated document URL — owner/admin can fetch it. */
+  fileUrl: string | null;
+  reviewNote: string;
+  createdAt: string;
+  updatedAt: string;
+  reviewedAt: string | null;
+  expiresAt: string | null;
+}
+
+/** One applicant in the admin tenant-verification queue. */
+export interface TenantKycApplication {
+  id: number;
+  username: string;
+  email: string;
+  name: string;
+  phone: string;
+  role: string;
+  tenantVerified: boolean;
+  verification: TenantVerification | null;
 }
 
 /** Admin review-queue health from GET /users/kyc/sla/. */

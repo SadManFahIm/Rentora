@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Check, CheckCheck, Paperclip, Send, ShieldCheck } from "lucide-react";
+import { BadgeCheck, Check, CheckCheck, Paperclip, Send, ShieldCheck } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { useChatMessages, useChatRooms, useUploadChatFile } from "../../hooks/useChat";
 import { useWebSocket } from "../../hooks/useWebSocket";
@@ -41,14 +41,28 @@ function initialsOf(u: ChatUser | null | undefined): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-/** Small KYC trust badge shown next to a verified participant's name. */
-function VerifiedMark({ verified }: { verified?: boolean }) {
-  if (!verified) return null;
+/** Small KYC trust badges shown next to a verified participant's name: the
+ * landlord badge (KYC-verified owner) and the Phase 12 tenant badge (identity-
+ * verified tenant) — each only when the respective verification passed. */
+function VerifiedMark({ participant }: { participant?: ChatUser | null }) {
+  if (!participant) return null;
   return (
-    <ShieldCheck
-      className="size-3.5 shrink-0 text-emerald-500"
-      aria-label="KYC-verified landlord"
-    />
+    <>
+      {participant.nidVerified && (
+        <ShieldCheck
+          className="size-3.5 shrink-0 text-emerald-500"
+          aria-label="KYC-verified landlord"
+        />
+      )}
+      {participant.tenantVerified && (
+        <span title="Identity verified by Rentora.">
+          <BadgeCheck
+            className="size-3.5 shrink-0 text-emerald-500"
+            aria-label="Identity verified tenant"
+          />
+        </span>
+      )}
+    </>
   );
 }
 
@@ -244,7 +258,7 @@ export default function ChatWindow() {
                       <span className="truncate text-sm font-semibold text-foreground">
                         {displayName(room.otherParticipant)}
                       </span>
-                      <VerifiedMark verified={room.otherParticipant?.nidVerified} />
+                      <VerifiedMark participant={room.otherParticipant} />
                     </div>
                     {room.unreadCount > 0 && (
                       <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-orange-600 px-1 text-[10px] font-bold text-white">
@@ -286,7 +300,7 @@ export default function ChatWindow() {
                   <span className="truncate text-sm font-bold text-foreground">
                     {displayName(selectedRoom.otherParticipant)}
                   </span>
-                  <VerifiedMark verified={selectedRoom.otherParticipant?.nidVerified} />
+                  <VerifiedMark participant={selectedRoom.otherParticipant} />
                 </div>
                 <div className="text-xs text-gray-600 dark:text-gray-400">
                   {selectedRoom.isOtherUserOnline ? (
