@@ -491,3 +491,41 @@ class AreaBoundaryTests(APITestCase):
         shahbagh = next(f for f in res.data["features"] if f["properties"]["key"] == "shahbagh")
         self.assertEqual(shahbagh["properties"]["kind"], "neighborhood")
         self.assertEqual(shahbagh["properties"]["approx_radius_km"], 0.7)
+
+
+class ExpandedLandmarkTests(APITestCase):
+    """Phase 7 v3 — everyday-places landmark categories."""
+
+    def test_landmarks_endpoint_includes_new_categories(self):
+        res = self.client.get("/api/v1/rooms/landmarks/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        kinds = {lm["kind"] for lm in res.data}
+        self.assertIn("hospital", kinds)
+        self.assertIn("market", kinds)
+        self.assertIn("park", kinds)
+        self.assertIn("mosque", kinds)
+        self.assertIn("bus_terminal", kinds)
+
+    def test_new_categories_have_real_places(self):
+        res = self.client.get("/api/v1/rooms/landmarks/")
+        by_kind: dict[str, list[dict]] = {}
+        for lm in res.data:
+            by_kind.setdefault(lm["kind"], []).append(lm)
+        self.assertGreaterEqual(len(by_kind["hospital"]), 5)
+        self.assertGreaterEqual(len(by_kind["market"]), 5)
+        self.assertGreaterEqual(len(by_kind["park"]), 5)
+        self.assertGreaterEqual(len(by_kind["mosque"]), 5)
+        self.assertGreaterEqual(len(by_kind["bus_terminal"]), 4)
+        # Spot-check real places resolve.
+        names = {lm["name"] for lm in by_kind["hospital"]}
+        self.assertIn("Square Hospital", names)
+        names = {lm["name"] for lm in by_kind["mosque"]}
+        self.assertIn("Baitul Mukarram National Mosque", names)
+
+    def test_geocode_still_finds_landmarks_across_kinds(self):
+        res = self.client.get("/api/v1/rooms/geocode/", {"q": "square hospital"})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(any("Square Hospital" in s["label"] for s in res.data))
+
+        res = self.client.get("/api/v1/rooms/geocode/", {"q": "baitul mukarram"})
+        self.assertTrue(any("Baitul Mukarram" in s["label"] for s in res.data))

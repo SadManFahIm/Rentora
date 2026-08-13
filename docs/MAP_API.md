@@ -30,6 +30,14 @@ property name says so. The map renders them with zoom-based visibility
 (main areas from z≈9.5, sub-areas z≈11.5, neighbourhoods z≈13.5) and opens
 the area's real listing stats on click.
 
+## `GET /api/v1/rooms/area-boundaries/` — landmark categories
+
+Same `landmarks` endpoint as Phase 7, now covering **7 categories**:
+`university`, `metro`, `hospital`, `market`, `park`, `mosque` and
+`bus_terminal` — 63 real Dhaka places total (e.g. Square Hospital, New
+Market, Baitul Mukarram National Mosque, Gabtoli & Saidabad bus terminals).
+Each entry is `{key, name, kind, lat, lng}`.
+
 ## `GET /api/v1/rooms/geocode/`
 
 Street / area / landmark autocomplete for the map search box. Now merges the

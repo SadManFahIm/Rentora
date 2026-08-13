@@ -17,19 +17,24 @@ import * as maplibregl from "maplibre-gl";
 import type { StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
+  Bus,
   Check,
+  Church,
   Crosshair,
   Footprints,
   GraduationCap,
+  Hospital,
   Landmark as LandmarkIcon,
   List as ListIcon,
   Map as MapIcon,
   MapPin,
   Search,
   Share2,
+  ShoppingBasket,
   Sparkles,
-  TrainFront,
   Thermometer,
+  TrainFront,
+  TreePine,
   Users as UsersIcon,
   X,
 } from "lucide-react";
@@ -46,13 +51,15 @@ import { useValueScores } from "../../hooks/useMapIntel";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { useUiStore } from "../../stores/uiStore";
-import type { GeocodeSuggestion, Room } from "../../types";
+import type { GeocodeSuggestion, LandmarkKind, Room } from "../../types";
 import {
   areaStats,
   heatmapPopupHtml,
   isochronePopupHtml,
   isochroneStats,
+  landmarkMinzoom,
   landmarkPopupHtml,
+  LANDMARK_KIND_META,
   metroRoutePopupHtml,
   nearbyStats,
   THEME_PAINTS,
@@ -155,7 +162,8 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
   return debounced;
 }
 
-type MapLayerId = "universities" | "metro";
+type MapLayerId =
+  "universities" | "metro" | "hospital" | "market" | "park" | "mosque" | "bus_terminal";
 
 export default function Map() {
   const darkMode = useUiStore((s) => s.darkMode);
@@ -178,6 +186,11 @@ export default function Map() {
   const [showLandmarks, setShowLandmarks] = useState<Record<MapLayerId, boolean>>({
     universities: true,
     metro: true,
+    hospital: false,
+    market: false,
+    park: false,
+    mosque: false,
+    bus_terminal: false,
   });
   const [heatmap, setHeatmap] = useState(false);
   const [clustering, setClustering] = useState(true);
@@ -439,22 +452,121 @@ export default function Map() {
       }
     };
 
-    const univ = landmarks.filter((l) => l.kind === "university");
-    const metro = landmarks.filter((l) => l.kind === "metro");
-    addSourceLayer("universities", landmarksToFeatureCollection(univ), {
-      "circle-radius": 6,
-      "circle-color": "#7c3aed",
-      "circle-stroke-color": "#ffffff",
-      "circle-stroke-width": 1.5,
-      "circle-opacity": 0.9,
+    // Category → MapLibre source/layer id. Universities and metro keep
+    // their own dot layers (small, always useful); the everyday categories
+    // (hospital/market/park/mosque/bus_terminal) share one CLUSTERED source
+    // so nearby places group into a count bubble at low zoom and split into
+    // per-kind dots as you zoom in (zoom-based visibility via per-kind
+    // minzoom on the dot layers — see landmarkMinzoom).
+    const DOT_LAYER: Record<LandmarkKind, string> = {
+      university: "universities",
+      metro: "metro",
+      hospital: "places-hospital",
+      market: "places-market",
+      park: "places-park",
+      mosque: "places-mosque",
+      bus_terminal: "places-bus-terminal",
+    };
+
+    // Universities + metro: simple dot layers (kept from Phase 7).
+    (["university", "metro"] as const).forEach((kind) => {
+      const group = landmarks.filter((l) => l.kind === kind);
+      const meta = LANDMARK_KIND_META[kind];
+      addSourceLayer(DOT_LAYER[kind], landmarksToFeatureCollection(group), {
+        "circle-radius": kind === "university" ? 6 : 5,
+        "circle-color": meta.color,
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": 1.5,
+        "circle-opacity": 0.9,
+      });
     });
-    addSourceLayer("metro", landmarksToFeatureCollection(metro), {
-      "circle-radius": 5,
-      "circle-color": "#0d9488",
-      "circle-stroke-color": "#ffffff",
-      "circle-stroke-width": 1.5,
-      "circle-opacity": 0.9,
-    });
+
+    // Everyday categories: one clustered source + per-kind dot layers.
+    const PLACES_SOURCE = "places-clusters";
+    const places = landmarks.filter((l) => l.kind !== "university" && l.kind !== "metro");
+    try {
+      if (!map.getSource(PLACES_SOURCE)) {
+        map.addSource(PLACES_SOURCE, {
+          type: "geojson",
+          data: landmarksToFeatureCollection(places),
+          cluster: true,
+          clusterMaxZoom: 13,
+          clusterRadius: 44,
+        });
+        map.addLayer(
+          {
+            id: "places-clusters-layer",
+            type: "circle",
+            source: PLACES_SOURCE,
+            filter: ["has", "point_count"],
+            paint: {
+              "circle-color": [
+                "step",
+                ["get", "point_count"],
+                "#0d9488",
+                6,
+                "#0f766e",
+                12,
+                "#115e59",
+              ],
+              "circle-radius": ["step", ["get", "point_count"], 18, 6, 24, 12, 30],
+              "circle-opacity": 0.85,
+              "circle-stroke-color": "#ffffff",
+              "circle-stroke-width": 1.5,
+            },
+          },
+          // Above the area boundaries, below the room markers.
+          map.getLayer("rooms-clusters-layer") ? "rooms-clusters-layer" : undefined
+        );
+        map.addLayer(
+          {
+            id: "places-clusters-count",
+            type: "symbol",
+            source: PLACES_SOURCE,
+            filter: ["has", "point_count"],
+            layout: {
+              "text-field": ["get", "point_count_abbreviated"],
+              "text-size": 12,
+              "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
+            },
+            paint: { "text-color": "#ffffff" },
+          },
+          map.getLayer("rooms-clusters-layer") ? "rooms-clusters-layer" : undefined
+        );
+      } else {
+        (map.getSource(PLACES_SOURCE) as maplibregl.GeoJSONSource).setData(
+          landmarksToFeatureCollection(places)
+        );
+      }
+      // Per-kind unclustered dots — zoom-based visibility via minzoom.
+      (["hospital", "market", "park", "mosque", "bus_terminal"] as const).forEach((kind) => {
+        const id = DOT_LAYER[kind];
+        const meta = LANDMARK_KIND_META[kind];
+        if (map.getLayer(id)) {
+          map.getSource(PLACES_SOURCE) as maplibregl.GeoJSONSource;
+          return;
+        }
+        map.addLayer(
+          {
+            id,
+            type: "circle",
+            source: PLACES_SOURCE,
+            filter: ["all", ["!", ["has", "point_count"]], ["==", ["get", "kind"], kind]],
+            minzoom: landmarkMinzoom(kind),
+            paint: {
+              "circle-radius": 5,
+              "circle-color": meta.color,
+              "circle-stroke-color": "#ffffff",
+              "circle-stroke-width": 1.5,
+              "circle-opacity": 0.9,
+            },
+          },
+          map.getLayer("rooms-clusters-layer") ? "rooms-clusters-layer" : undefined
+        );
+      });
+    } catch {
+      // Layer juggling during rapid toggles — safe to ignore.
+    }
   }, [landmarks, mapReady]);
 
   // ---- area boundary polygons (Phase 7 v3) -------------------------------
@@ -569,13 +681,30 @@ export default function Map() {
     }
   }, [boundaries, mapReady, rooms]);
 
-  // Layer visibility follows the toggles.
+  // Layer visibility follows the toggles — the fixed dot layers keep their
+  // own visibility; the shared places cluster (count bubble + per-kind dots)
+  // shows when ANY of the everyday categories is on.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
     (["universities", "metro"] as MapLayerId[]).forEach((id) => {
       if (map.getLayer(id))
         map.setLayoutProperty(id, "visibility", showLandmarks[id] ? "visible" : "none");
+    });
+    const placesOn = (["hospital", "market", "park", "mosque", "bus_terminal"] as const).some(
+      (k) => showLandmarks[k]
+    );
+    const placesLayers = [
+      "places-clusters-layer",
+      "places-clusters-count",
+      "places-hospital",
+      "places-market",
+      "places-park",
+      "places-mosque",
+      "places-bus-terminal",
+    ];
+    placesLayers.forEach((id) => {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", placesOn ? "visible" : "none");
     });
   }, [showLandmarks, mapReady]);
 
@@ -1173,8 +1302,17 @@ export default function Map() {
     // function declarations.
     const m = map;
 
+    // Per-kind CTA label: universities/metro already had one; the everyday
+    // categories (hospital/market/…) reuse the same "find rooms near" action.
+    const kindCta = (kind: LandmarkKind) =>
+      kind === "university"
+        ? "Find rooms near this university →"
+        : kind === "metro"
+          ? "Rooms near this station →"
+          : "Rooms near here →";
+
     const openLandmarkPopup = (
-      kind: "university" | "metro",
+      kind: LandmarkKind,
       name: string,
       lat: number,
       lng: number,
@@ -1187,16 +1325,7 @@ export default function Map() {
         maxWidth: "260px",
       })
         .setLngLat(e.lngLat)
-        .setHTML(
-          landmarkPopupHtml(
-            kind,
-            name,
-            stats,
-            kind === "university"
-              ? "Find rooms near this university →"
-              : "Rooms near this station →"
-          )
-        )
+        .setHTML(landmarkPopupHtml(kind, name, stats, kindCta(kind)))
         .addTo(m);
       // CTA -> start a radius search around the landmark (real rooms only).
       const cta = popup.getElement().querySelector('[data-map-cta="nearby"]');
@@ -1239,6 +1368,45 @@ export default function Map() {
     });
     map.on("mouseenter", "metro", pointer(true));
     map.on("mouseleave", "metro", pointer(false));
+
+    // Everyday categories (hospital/market/park/mosque/bus_terminal) —
+    // dot layers over the shared clustered source. Clicking a dot opens the
+    // same real-data popup; clicking a count bubble zooms into the cluster.
+    const PLACE_DOT_LAYERS = [
+      "places-hospital",
+      "places-market",
+      "places-park",
+      "places-mosque",
+      "places-bus-terminal",
+    ] as const;
+    PLACE_DOT_LAYERS.forEach((layerId) => {
+      map.on("click", layerId, (e) => {
+        const f = e.features?.[0];
+        if (!f) return;
+        const p = (f.properties ?? {}) as Record<string, string>;
+        const kind = (p.kind ?? layerId.replace("places-", "")) as LandmarkKind;
+        const meta = LANDMARK_KIND_META[kind];
+        const [lat, lng] = landmarkCoords(f);
+        openLandmarkPopup(kind, p.name || meta.label, lat, lng, e);
+      });
+      map.on("mouseenter", layerId, pointer(true));
+      map.on("mouseleave", layerId, pointer(false));
+    });
+
+    // Count bubble on the shared places source → zoom into the cluster
+    // (same expansion behaviour as the room clusters).
+    map.on("click", "places-clusters-layer", (e) => {
+      const f = e.features?.[0];
+      if (!f) return;
+      const source = map.getSource("places-clusters") as maplibregl.GeoJSONSource;
+      const clusterId = f.properties?.cluster_id as number;
+      if (!source || clusterId == null) return;
+      source
+        .getClusterExpansionZoom(clusterId)
+        .then((zoom) => m.easeTo({ center: e.lngLat, zoom: zoom + 1 }));
+    });
+    map.on("mouseenter", "places-clusters-layer", pointer(true));
+    map.on("mouseleave", "places-clusters-layer", pointer(false));
 
     // MRT Line-6 corridor line.
     map.on("click", "metro-route", (e) => {
@@ -1537,6 +1705,32 @@ export default function Map() {
             >
               <TrainFront className="size-4" /> Metro
             </Button>
+            {/* Everyday categories — one chip each; toggling any of them
+                reveals the shared clustered places layer (see the landmark
+                layers effect). Kept compact so the toolbar doesn't grow. */}
+            {(
+              [
+                ["hospital", Hospital, "Hospitals"],
+                ["market", ShoppingBasket, "Markets"],
+                ["park", TreePine, "Parks"],
+                ["mosque", Church, "Mosques"],
+                ["bus_terminal", Bus, "Bus stops"],
+              ] as const
+            ).map(([kind, Icon, label]) => (
+              <Button
+                key={kind}
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "gap-1.5 rounded-lg",
+                  showLandmarks[kind] &&
+                    "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                )}
+                onClick={() => setShowLandmarks((s) => ({ ...s, [kind]: !s[kind] }))}
+              >
+                <Icon className="size-4" /> {label}
+              </Button>
+            ))}
             <Button
               variant="ghost"
               size="sm"
