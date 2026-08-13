@@ -214,8 +214,10 @@ export function nearbyLandmarkChipsHtml(
   const rows = chips
     .map(
       (c) =>
-        `<button type="button" class="map-popup__chip" data-chip-key="${esc(c.key)}" data-chip-kind="${c.kind}" title="${esc(c.name)}">` +
-        `${LANDMARK_KIND_META[c.kind]?.icon ?? "📍"} ${c.walkMinutes} min ${LANDMARK_KIND_META[c.kind]?.label ?? c.kind}` +
+        // aria-label spells out the place so screen readers don't have to
+        // interpret the emoji icon ("🚇 7 min Metro" reads as Metro).
+        `<button type="button" class="map-popup__chip" data-chip-key="${esc(c.key)}" data-chip-kind="${c.kind}" title="${esc(c.name)}" aria-label="${esc(c.name)} — ${c.walkMinutes} minute walk">` +
+        `<span aria-hidden="true">${LANDMARK_KIND_META[c.kind]?.icon ?? "📍"}</span> ${c.walkMinutes} min ${LANDMARK_KIND_META[c.kind]?.label ?? c.kind}` +
         `</button>`
     )
     .join("");

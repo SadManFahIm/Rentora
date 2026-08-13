@@ -13,6 +13,8 @@ import {
   landmarkMinzoom,
   landmarkPopupHtml,
   metroRoutePopupHtml,
+  nearbyLandmarkChips,
+  nearbyLandmarkChipsHtml,
   nearbyStats,
   THEME_PAINTS,
   themePaintValue,
@@ -261,5 +263,63 @@ describe("area boundary paint builders (feature-state + theme)", () => {
     expect(dark[2]).toBeGreaterThan(dark[4]);
     expect(dark[4]).toBeGreaterThan(dark[5]);
     expect(dark[5]).toBeGreaterThan(light[5]); // dark fills a bit stronger
+  });
+});
+
+describe("nearby landmark chips (Phase 7 v3 — listing popup)", () => {
+  const LANDMARKS = [
+    { key: "mrt_uttara_north", name: "Uttara North", kind: "metro", lat: 23.76, lng: 90.38 },
+    { key: "mrt_mirpur_10", name: "Mirpur 10", kind: "metro", lat: 23.755, lng: 90.375 },
+    { key: "du", name: "University of Dhaka", kind: "university", lat: 23.745, lng: 90.372 },
+    { key: "new_market", name: "New Market", kind: "market", lat: 23.74, lng: 90.375 },
+    { key: "far_park", name: "Far Park", kind: "park", lat: 24.1, lng: 90.5 }, // beyond cap
+  ] as const;
+
+  it("returns the nearest landmark per category, sorted by distance, capped by km", () => {
+    // Reference point (23.75, 90.37): nearest = DU (university) ~0.6 km,
+    // then Mirpur 10 (metro) ~0.8 km, then New Market (market) ~1.2 km.
+    const chips = nearbyLandmarkChips(LANDMARKS as unknown as never[], 23.75, 90.37, 3);
+    const kinds = chips.map((c) => c.kind);
+    expect(kinds).toEqual(["university", "metro", "market"]); // nearest first
+    // Far Park is beyond 3 km — never invented into the list.
+    expect(kinds).not.toContain("park");
+    // One chip per category — the nearest metro wins (Mirpur 10 beats
+    // Uttara North); no duplicate category chips.
+    expect(chips.filter((c) => c.kind === "metro")).toHaveLength(1);
+    expect(chips.find((c) => c.kind === "metro")?.key).toBe("mrt_mirpur_10");
+  });
+
+  it("estimates walk time from straight-line km (labelled as an estimate)", () => {
+    const chips = nearbyLandmarkChips(LANDMARKS as unknown as never[], 23.75, 90.37, 3);
+    const uni = chips.find((c) => c.kind === "university")!;
+    expect(uni.walkMinutes).toBeGreaterThan(0);
+    expect(uni.distanceKm).toBeGreaterThan(0);
+  });
+
+  it("renders chips with accessible labels (screen readers skip the emoji)", () => {
+    const html = nearbyLandmarkChipsHtml(LANDMARKS as unknown as never[], 23.75, 90.37, 3);
+    expect(html).toContain('aria-label="');
+    // The emoji icon is hidden from the accessibility tree; the name + walk
+    // time is what a screen reader announces.
+    expect(html).toContain('aria-hidden="true"');
+    expect(html).toContain("min University");
+  });
+
+  it("returns empty HTML when nothing is within the cap (no invented places)", () => {
+    const html = nearbyLandmarkChipsHtml(LANDMARKS as unknown as never[], 24.2, 90.6, 1);
+    expect(html).toBe("");
+  });
+});
+
+describe("zoom-aware label hierarchy (Phase 7 v3 — decluttering)", () => {
+  it("reveals labels progressively: main areas first, then sub, then neighbourhoods", () => {
+    expect(AREA_LABEL_MINZOOM.main_area).toBeLessThan(AREA_LABEL_MINZOOM.sub_area);
+    expect(AREA_LABEL_MINZOOM.sub_area).toBeLessThan(AREA_LABEL_MINZOOM.neighborhood);
+  });
+
+  it("landmark categories also declutter by zoom (dots only when meaningful)", () => {
+    // Universities/metro are always useful; small categories appear later.
+    expect(landmarkMinzoom("university")).toBeLessThanOrEqual(landmarkMinzoom("hospital"));
+    expect(landmarkMinzoom("hospital")).toBeLessThan(landmarkMinzoom("mosque"));
   });
 });
