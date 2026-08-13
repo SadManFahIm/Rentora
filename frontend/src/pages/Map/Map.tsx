@@ -268,6 +268,11 @@ export default function Map() {
   // When dark tiles (CARTO CDN) fail to load, fall back to dimmed OSM tiles
   // so the map stays readable instead of going black.
   const [darkTileFallback, setDarkTileFallback] = useState(false);
+  // Live zoom — powers the layer-dependency hints (a category toggle that's
+  // only meaningful when zoomed in enough shouldn't look "broken" at low
+  // zoom; we say "Zoom in to see…" instead). Kept in state because it's
+  // rendered in the toolbar/legend, not just read by map layers.
+  const [mapZoom, setMapZoom] = useState(DHAKA_ZOOM);
 
   // ---- radius search state --------------------------------------------
   // Live mirror of radiusCenter for the once-registered map interaction
@@ -484,6 +489,7 @@ export default function Map() {
           })
         )
       );
+      setMapZoom(map.getZoom());
     };
 
     const applyUrlView = () => {
@@ -1008,6 +1014,17 @@ export default function Map() {
         setSelectedArea({ key, name, kind, parentName });
         selectedAreaRef.current = { key };
         setState(key, { selected: true, hover: false });
+        // Fly to the area's real centre so the filter is VISIBLE — clicking
+        // a boundary must answer with pins + list results, not an empty
+        // "No rooms in view" because the selected area sits off-viewport.
+        // Zoom matches the hierarchy level: main areas land at a street-
+        // readable zoom, sub-areas closer, neighbourhoods closer still.
+        const centreLat = Number(p.lat);
+        const centreLng = Number(p.lng);
+        if (Number.isFinite(centreLat) && Number.isFinite(centreLng)) {
+          const zoomForKind = kind === "neighborhood" ? 14.5 : kind === "sub_area" ? 13.5 : 12;
+          map.flyTo({ center: [centreLng, centreLat], zoom: zoomForKind });
+        }
         // The area's real listing stats + the filter applied.
         const stats = areaStats(roomsRef.current, name);
         new maplibregl.Popup({ closeButton: false, closeOnClick: true, maxWidth: "240px" })
@@ -2454,23 +2471,22 @@ export default function Map() {
                   Area
                 </div>
               )}
-              {/* Landmark categories — shown only while their layer is on. */}
+              {/* Landmark categories — shown only while their layer is on.
+                  Consistent lucide iconography (same icons as the toolbar
+                  toggles), not emoji — one visual language across controls
+                  and legend. */}
               {showLandmarks.universities && (
                 <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-                  <span
-                    className={`inline-block size-2.5 rounded-full ${
-                      darkMode ? "bg-[#a78bfa]" : "bg-[#7c3aed]"
-                    }`}
+                  <GraduationCap
+                    className={`size-3.5 ${darkMode ? "text-[#a78bfa]" : "text-[#7c3aed]"}`}
                   />
                   University
                 </div>
               )}
               {showLandmarks.metro && (
                 <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-                  <span
-                    className={`inline-block size-2.5 rounded-full ${
-                      darkMode ? "bg-[#2dd4bf]" : "bg-[#0d9488]"
-                    }`}
+                  <TrainFront
+                    className={`size-3.5 ${darkMode ? "text-[#2dd4bf]" : "text-[#0d9488]"}`}
                   />
                   Metro
                 </div>
@@ -2483,24 +2499,24 @@ export default function Map() {
               )}
               {(
                 [
-                  ["hospital", "Hospital"],
-                  ["market", "Market"],
-                  ["park", "Park"],
-                  ["mosque", "Mosque"],
-                  ["bus_terminal", "Bus terminal"],
+                  ["hospital", "Hospital", Hospital],
+                  ["market", "Market", ShoppingBasket],
+                  ["park", "Park", TreePine],
+                  ["mosque", "Mosque", Church],
+                  ["bus_terminal", "Bus terminal", Bus],
                 ] as const
-              ).map(([kind, label]) =>
+              ).map(([kind, label, Icon]) =>
                 showLandmarks[kind] ? (
                   <div
                     key={kind}
                     className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400"
                   >
-                    <span
-                      className="inline-block size-2.5 rounded-full"
+                    <Icon
+                      className="size-3.5"
                       style={{
                         // Match the dot colour the map actually renders in
                         // this theme (brighter on the dark basemap).
-                        backgroundColor: darkMode
+                        color: darkMode
                           ? LANDMARK_KIND_META[kind].darkColor
                           : LANDMARK_KIND_META[kind].color,
                       }}
@@ -2509,6 +2525,25 @@ export default function Map() {
                   </div>
                 ) : null
               )}
+              {/* Zoom-dependency hint (Phase 7 v3): an everyday landmark
+                  category shares one clustered source — at low zoom you see
+                  count bubbles, not individual dots. Say so instead of
+                  looking broken. */}
+              {(() => {
+                const everydayOn = (
+                  ["hospital", "market", "park", "mosque", "bus_terminal"] as const
+                )
+                  .filter((k) => showLandmarks[k])
+                  .map((k) => LANDMARK_KIND_META[k]);
+                if (everydayOn.length === 0) return null;
+                const minZoomNeeded = Math.min(...everydayOn.map((m) => m.minzoom));
+                if (mapZoom >= minZoomNeeded) return null;
+                return (
+                  <div className="mt-1 text-[10px] italic text-gray-400 dark:text-gray-500">
+                    Zoom in to see individual places
+                  </div>
+                );
+              })()}
             </>
           )}
         </div>
