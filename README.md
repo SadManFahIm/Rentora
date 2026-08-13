@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-581%20(368%20BE%20%2B%20213%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-598%20(368%20BE%20%2B%20230%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -77,7 +77,18 @@ Full gallery (28 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 - **Graceful offline** — an amber "You're offline" banner (safe-area aware) while already-loaded UI stays visible — never fake listings or stale data
 - **Shortcuts** — Search Rooms `/rooms` · Explore Map `/map` · Post Listing `/dashboard?tab=listings`
 - **Branding** — the app name is now **Rentora 🇧🇩** (gradient wordmark in the navbar/footer, Bangladesh-flag badge) matching the push notifications, Copilot and README
-- **Engineering** — 11 new unit tests (`src/lib/pwa.test.ts`), 213 frontend tests total, PWA validation wired into the Frontend CI job. See [`docs/PWA.md`](docs/PWA.md)
+- **Engineering** — 11 new unit tests (`src/lib/pwa.test.ts`), PWA validation wired into the Frontend CI job. See [`docs/PWA.md`](docs/PWA.md)
+
+**Phase 12 P1 — Offline & App Polish**
+
+- **Offline search** — the Rooms page now serves from an **IndexedDB cache of PUBLIC listings** (24 h TTL, room details 7 d) with client-side re-filtering when the network drops, plus a "📡 showing N cached of M (offline)" pill; **auth/private/admin/fraud/payment data is never cached** (`rentora-offline` DB holds only public room lists/details + the action queue)
+- **Background sync** — offline actions (wishlist toggles, saved-search checks) are queued and replayed on reconnect via `registration.sync` + `online`/`visibilitychange` fallbacks; failed replays are re-queued, never dropped
+- **Periodic Background Sync** (research-informed, feasible subset) — when installed, Chromium-only daily `rentora-refresh` keeps the PUBLIC cache fresh; Notification Triggers API documented as future scope (not shipped in any browser)
+- **Splash screens** — 11 device-matched **Apple splash screens** + **dark maskable icon** (`maskable-dark-512`), all generated from the brand by `scripts/generate_pwa_icons.py`
+- **iOS install hint** — one-time, dismissible "Add to Home Screen" card (Safari has no install-prompt API)
+- **Flag everywhere** — brand name now uses an **inline SVG Bangladesh flag** (`BangladeshFlag` component) that renders identically on every OS — no more "BD" letters where the emoji is missing
+- **Lighthouse (prod build)** — Performance **84** · Accessibility **93** · Best practices **96** · SEO **82** (`robots.txt` added); Lighthouse 12+ dropped the PWA category — installability enforced by CI `validate-pwa.mjs` instead
+- **Engineering** — 17 new unit tests (230 frontend total), tsc/eslint/prettier clean
 
 **Phase 9 — Operate It (Reliability & Observability)**
 
@@ -262,6 +273,7 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 | **11++**  | Core AI & Fraud — 🤖 Rentora Copilot, 🏷️ AI pricing suggestion v2 (demand/time-to-rent), 🖼️ cross-listing duplicate-image fraud detection | ✅ Shipped |
 | **7 v2**   | Intelligent Map — 🧠 AI map search, 🚇 metro commute score + commute mode, ⭐ best-value scores, 🏛️ area intelligence + comparison, 💰 affordability map, ideal-area ranking | ✅ Shipped |
 | **12 P0**  | Progressive Web App — 📱 installable manifest + maskable icons, native install CTA, standalone mode, safe SW caching, update + offline UX, shortcuts | ✅ Shipped |
+| **12 P1**  | Offline & polish — 🔌 offline search over cached public listings, background sync (offline action replay), periodic refresh, splash screens, dark icon, iOS install hint, Lighthouse audit | ✅ Shipped |
 
 ---
 
@@ -861,8 +873,9 @@ Passwordless sign-in is live — the phishing-resistant successor to passwords +
 - **Installable** — `manifest.webmanifest` (standalone display, brand `#ea580c` theme), 192/512 standard + **maskable** icons, Apple-touch + favicon set; validated in CI against the built app
 - **Polite install prompt** — no surprise popups: a subtle **"Install app"** button in the navbar shows the browser's native prompt; disappears after install, cools off for a week after dismissal
 - **App-like window** — standalone mode keeps routing, auth, the map (with shareable URL sync), voice search, Copilot, saved searches and both dashboards working exactly as in the browser; deep links open the right page
-- **Safe offline** — a graceful "You're offline" banner, never fake data; the app shell is cached while **API/auth/admin/fraud/payment data is never cached**
+- **Safe offline + offline search** — a graceful "You're offline" banner, never fake data; the app shell is cached while **API/auth/admin/fraud/payment data is never cached**. When offline, the Rooms page searches within the cached **public** listings (client-side filters, "showing N cached" pill) and queued actions (wishlist) replay on reconnect via background sync
 - **Fresh updates** — a "A new version of Rentora is available **[Refresh] [Later]**" banner when a new build deploys
+- **Native polish** — Apple splash screens, dark maskable icon, iOS "Add to Home Screen" hint, and the brand flag rendered as an **inline SVG** (no emoji-rendering issues)
 - **Shortcuts** — right-click / long-press the installed icon → Search Rooms · Explore Map · Post Listing
 
 See [`docs/PWA.md`](docs/PWA.md) for the manifest, icon system, service-worker strategy, update/offline behavior, security review and browser support.

@@ -110,6 +110,32 @@ self.addEventListener("fetch", (event) => {
 });
 
 // ---------------------------------------------------------------------------
+// Periodic background sync — refresh the app's PUBLIC cached listings.
+// ---------------------------------------------------------------------------
+
+self.addEventListener("periodicsync", (event) => {
+  if (event.tag !== "rentora-refresh") return;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) client.postMessage({ type: "rentora-periodic-refresh" });
+    })
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Background sync — tell the app to replay its offline action queue.
+// ---------------------------------------------------------------------------
+
+self.addEventListener("sync", (event) => {
+  if (event.tag !== "rentora-replay") return;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) client.postMessage({ type: "rentora-replay" });
+    })
+  );
+});
+
+// ---------------------------------------------------------------------------
 // Push + notification clicks (unchanged)
 // ---------------------------------------------------------------------------
 

@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Badge } from "../ui/badge";
+import BangladeshFlag from "../BangladeshFlag/BangladeshFlag";
 
 export default function Footer() {
   const navigate = useNavigate();
@@ -12,7 +12,7 @@ export default function Footer() {
             <span className="bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text font-display text-xl font-bold text-transparent dark:from-orange-400 dark:to-amber-300">
               🏠 Rentora
             </span>
-            <Badge variant="brand">🇧🇩</Badge>
+            <BangladeshFlag className="h-5 w-auto" />
           </div>
           <p className="max-w-70 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
             Bangladesh's most trusted AI-powered room rental platform. Find verified, affordable
@@ -84,7 +84,9 @@ export default function Footer() {
         </div>
       </div>
       <div className="mx-auto flex max-w-7xl flex-col items-center gap-2 border-t border-gray-200 pt-5 text-center text-sm text-gray-600 dark:border-gray-800 dark:text-gray-400 sm:flex-row sm:justify-between sm:text-left">
-        <span>© 2025 Rentora 🇧🇩. All rights reserved.</span>
+        <span className="inline-flex items-center gap-1">
+          © 2025 Rentora <BangladeshFlag className="h-3.5 w-auto" />. All rights reserved.
+        </span>
         <span>Made with ❤️ in Bangladesh</span>
       </div>
     </footer>

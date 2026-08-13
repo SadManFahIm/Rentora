@@ -1,0 +1,7 @@
+# Rentora — public crawl policy
+User-agent: *
+Allow: /
+
+# SPA: content is rendered client-side; the sitemap will be added at deploy
+# time when the production domain is live.
+# Sitemap: https://rentora.example.com/sitemap.xml

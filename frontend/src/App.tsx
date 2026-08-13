@@ -6,6 +6,7 @@ import { AppProvider } from "./context/AppContext";
 import { Toaster } from "./components/ui/sonner";
 import ErrorBoundary from "./components/ErrorBoundary";
 import PwaBanners from "./components/PwaBanners/PwaBanners";
+import { useBackgroundSync } from "./hooks/useBackgroundSync";
 
 // Styles
 import "./styles/global.css";
@@ -45,6 +46,8 @@ const queryClient = new QueryClient({
 });
 
 export default function App() {
+  useBackgroundSync();
+
   return (
     <QueryClientProvider client={queryClient}>
       <AppProvider>
