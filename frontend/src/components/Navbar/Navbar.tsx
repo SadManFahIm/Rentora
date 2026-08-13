@@ -12,6 +12,7 @@ import { mapNotification, type ApiNotification } from "../../services/mappers";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import PwaInstallPrompt from "../PwaInstallPrompt/PwaInstallPrompt";
+import BangladeshFlag from "../BangladeshFlag/BangladeshFlag";
 import { cn } from "../../lib/utils";
 
 interface NotificationWsEvent {
@@ -82,7 +83,7 @@ export default function Navbar() {
           <span className="bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text font-display text-lg font-extrabold tracking-tight text-transparent dark:from-orange-400 dark:to-amber-300 sm:text-xl">
             🏠 Rentora
           </span>
-          <Badge variant="brand">🇧🇩</Badge>
+          <BangladeshFlag className="h-4 w-auto sm:h-5" />
         </div>
 
         {/* Desktop nav links */}

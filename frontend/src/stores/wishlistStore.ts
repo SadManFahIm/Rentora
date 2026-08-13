@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { isAuthenticated } from "../services/api";
 import { wishlistService } from "../services/wishlistService";
 import { getApiErrorMessage } from "../services/errors";
+import { enqueueAction } from "../lib/backgroundSync";
 
 // ============================================================
 // WISHLIST STORE
@@ -45,6 +46,12 @@ export const useWishlistStore = create<WishlistState>()(
         try {
           await wishlistService.toggleWishlist(roomId);
         } catch (error) {
+          // Offline (or unreachable): keep the optimistic state and queue the
+          // action for replay when the connection returns (background sync).
+          if (typeof navigator !== "undefined" && !navigator.onLine) {
+            await enqueueAction({ type: "wishlist-toggle", payload: { roomId } });
+            return;
+          }
           // Roll back on failure.
           set((s) => ({
             wishlist: wasWishlisted

@@ -396,7 +396,7 @@ export default function Auth() {
               >
                 {isLogin
                   ? "Sign in to access your dashboard, messages, and bookings."
-                  : "Join Rentora 🇧🇩 and find your perfect room."}
+                  : "Join Rentora and find your perfect room."}
               </motion.p>
             </AnimatePresence>
           </div>

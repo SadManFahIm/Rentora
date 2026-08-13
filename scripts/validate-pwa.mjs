@@ -76,6 +76,9 @@ if (!icons.some((i) => i.purpose === "maskable")) problems.push("no maskable ico
 // ---- service worker shipped ----
 if (!existsSync(join(buildDir, "sw.js"))) problems.push("sw.js missing from build");
 
+// ---- robots.txt shipped (SEO) ----
+if (!existsSync(join(buildDir, "robots.txt"))) problems.push("robots.txt missing from build");
+
 // ---- shortcuts point at app routes ----
 for (const shortcut of Array.isArray(manifest.shortcuts) ? manifest.shortcuts : []) {
   const url = String(shortcut.url || "");
@@ -88,4 +91,4 @@ if (problems.length) {
   process.exit(1);
 }
 
-console.log(`✅ PWA validated: ${manifest.name} (${manifest.short_name}) · ${icons.length} icons · ${(manifest.shortcuts || []).length} shortcuts · sw.js ✓`);
+console.log(`✅ PWA validated: ${manifest.name} (${manifest.short_name}) · ${icons.length} icons · ${(manifest.shortcuts || []).length} shortcuts · sw.js ✓ · robots.txt ✓`);

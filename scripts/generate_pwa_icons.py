@@ -12,6 +12,8 @@ Outputs (relative to the repo root, unless --out is given):
   frontend/public/icons/favicon-48.png    48x48
   frontend/public/icons/favicon-96.png    96x96
   frontend/public/icons/favicon-144.png   144x144
+  frontend/public/icons/maskable-dark-512.png  512x512  maskable (dark)
+  frontend/public/icons/splash-*.png      Apple splash screens (full-bleed)
 
 Usage:
   python scripts/generate_pwa_icons.py
@@ -29,6 +31,8 @@ from PIL import Image, ImageDraw
 # Tailwind orange ramp used by the design tokens (--color-brand = orange-600).
 ORANGE_TOP = (249, 115, 22)  # orange-500
 ORANGE_BOTTOM = (194, 65, 12)  # orange-700
+DARK_TOP = (31, 41, 55)  # gray-800
+DARK_BOTTOM = (17, 24, 39)  # gray-900
 DOOR = (234, 88, 12)  # orange-600
 WHITE = (255, 255, 255)
 
@@ -84,9 +88,10 @@ def draw_house(draw: ImageDraw.ImageDraw, size: int, scale: float, door_color: t
     )
 
 
-def render_icon(size: int, *, maskable: bool = False) -> Image.Image:
+def render_icon(size: int, *, maskable: bool = False, dark: bool = False) -> Image.Image:
     """One icon at `size` px. maskable = full-bleed gradient with safe-zone content."""
-    img = vertical_gradient(size, ORANGE_TOP, ORANGE_BOTTOM)
+    top, bottom = (DARK_TOP, DARK_BOTTOM) if dark else (ORANGE_TOP, ORANGE_BOTTOM)
+    img = vertical_gradient(size, top, bottom)
     draw = ImageDraw.Draw(img, "RGBA")
 
     if maskable:
@@ -117,6 +122,7 @@ def main() -> None:
         "icon-192.png": (192, False),
         "icon-512.png": (512, False),
         "maskable-512.png": (512, True),
+        "maskable-dark-512.png": (512, True),
         "apple-touch-180.png": (180, False),
         "favicon-32.png": (32, False),
         "favicon-48.png": (48, False),
@@ -125,8 +131,36 @@ def main() -> None:
     }
 
     for name, (size, maskable) in targets.items():
-        render_icon(size, maskable=maskable).save(out / name, format="PNG", optimize=True)
-        print(f"wrote {out / name} ({size}x{size}, maskable={maskable})")
+        is_dark = name == "maskable-dark-512.png"
+        img = render_icon(size, maskable=maskable, dark=is_dark)
+        img.save(out / name, format="PNG", optimize=True)
+        print(f"wrote {out / name} ({size}x{size}, maskable={maskable}, dark={is_dark})")
+
+    # ---- Apple splash screens (portrait, full-bleed gradient + centered house) ----
+    # Standard iOS startup-image sizes (device-safe, no text — icon centered).
+    splash_sizes = [
+        (640, 1136),
+        (750, 1334),
+        (828, 1792),
+        (1125, 2436),
+        (1170, 2532),
+        (1242, 2208),
+        (1242, 2688),
+        (1536, 2048),
+        (1668, 2224),
+        (1668, 2388),
+        (2048, 2732),
+    ]
+    for w, h in splash_sizes:
+        img = vertical_gradient(h, ORANGE_TOP, ORANGE_BOTTOM).resize((w, h))
+        # Draw the house on a transparent square canvas, then paste it centered
+        # horizontally — draw_house centers within a square only.
+        square = Image.new("RGBA", (h, h), (0, 0, 0, 0))
+        draw_house(ImageDraw.Draw(square, "RGBA"), h, scale=0.30, door_color=DOOR)
+        x = (w - h) // 2
+        img.paste(square, (x, 0), square)
+        img.save(out / f"splash-{w}x{h}.png", format="PNG", optimize=True)
+        print(f"wrote splash-{w}x{h}.png")
 
 
 if __name__ == "__main__":
