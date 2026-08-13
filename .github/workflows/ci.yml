@@ -255,6 +255,11 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Validate PWA (manifest + icons + sw)
+        # Proves the built app actually ships a valid installable manifest,
+        # real-size icons (PNG header check), a maskable icon and sw.js.
+        run: node ../scripts/validate-pwa.mjs
+
   e2e:
     # Cross-app E2E suites (fraud auto-scan x booking, payments/tier
     # promotions, KYC/verified-badge chain). Kept as their own job so an

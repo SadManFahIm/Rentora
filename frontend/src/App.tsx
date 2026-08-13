@@ -5,6 +5,8 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { AppProvider } from "./context/AppContext";
 import { Toaster } from "./components/ui/sonner";
 import ErrorBoundary from "./components/ErrorBoundary";
+import PwaBanners from "./components/PwaBanners/PwaBanners";
+import { useBackgroundSync } from "./hooks/useBackgroundSync";
 
 // Styles
 import "./styles/global.css";
@@ -44,6 +46,8 @@ const queryClient = new QueryClient({
 });
 
 export default function App() {
+  useBackgroundSync();
+
   return (
     <QueryClientProvider client={queryClient}>
       <AppProvider>
@@ -66,6 +70,7 @@ export default function App() {
           </BrowserRouter>
         </ErrorBoundary>
         <Toaster richColors position="top-right" />
+        <PwaBanners />
       </AppProvider>
       {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
     </QueryClientProvider>

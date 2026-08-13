@@ -4,6 +4,53 @@ All endpoints are **public GET** actions on the room viewset
 (`/api/v1/rooms/map-intel/*`), follow the existing API conventions and return
 JSON. No authentication required (same as the room list).
 
+## `GET /api/v1/rooms/area-hierarchy/`
+
+Structured Dhaka geography: every main area with its sub-areas and
+neighbourhoods. Each entry carries `key`, `name`, `kind` (`main_area` |
+`sub_area` | `neighborhood`), `parent` / `parent_name`, approximate centre
+(`lat`/`lng`) and — for sub-areas — its children. Used by the map to render
+area focus chips, sub-area search and area cards.
+
+```json
+{"main_areas": [{"key": "uttara", "name": "Uttara", "kind": "main_area",
+  "lat": 23.8759, "lng": 90.3795, "children": [
+    {"key": "uttara_sector_7", "name": "Uttara Sector 7", "kind": "sub_area",
+     "parent": "uttara", "parent_name": "Uttara", "lat": 23.867, "lng": 90.376}]}]}
+```
+
+## `GET /api/v1/rooms/area-boundaries/`
+
+Approximate boundary **bubbles** (GeoJSON `FeatureCollection`) for every
+Dhaka area — 20 main areas, 16 sub-areas, 15 neighbourhoods. Each feature is
+a closed Polygon ring (32 points) around the area's real centre, sized by
+hierarchy level (`approx_radius_km`: main 2.8, sub 1.4, neighbourhood 0.7).
+These are circles around real centres, **not cadastral borders** — the
+property name says so. The map renders them with zoom-based visibility
+(main areas from z≈9.5, sub-areas z≈11.5, neighbourhoods z≈13.5) and opens
+the area's real listing stats on click.
+
+Each feature's properties also carry the area's **real centre** (`lat`/`lng`)
+so the frontend can place zoom-aware labels precisely instead of
+averaging polygon vertices — labels appear by hierarchy (main z≈10,
+sub z≈12.5, neighbourhood z≈14.5) and swap text color/halo with the theme.
+
+## `GET /api/v1/rooms/area-boundaries/` — landmark categories
+
+Same `landmarks` endpoint as Phase 7, now covering **7 categories**:
+`university`, `metro`, `hospital`, `market`, `park`, `mosque` and
+`bus_terminal` — 63 real Dhaka places total (e.g. Square Hospital, New
+Market, Baitul Mukarram National Mosque, Gabtoli & Saidabad bus terminals).
+Each entry is `{key, name, kind, lat, lng}`.
+
+## `GET /api/v1/rooms/geocode/`
+
+Street / area / landmark autocomplete for the map search box. Now merges the
+structured hierarchy first (so "Mirpur 10", "Uttara Sector 7",
+"ধানমন্ডি ২৭" resolve as areas with a `parent_name`), then the flat street
+gazetteer, then universities/metro stations, then Nominatim on a total miss.
+Deduplicated by key; capped at 8 suggestions.
+
 ## `GET /api/v1/rooms/map-intel/stats/`
 
 Per-area aggregate statistics. Query param: `?area=Uttara` to narrow to one

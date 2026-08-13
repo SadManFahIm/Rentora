@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { LayoutGrid, List, SearchX, Sparkles } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { useRooms, useSmartRooms } from "../../hooks/useRooms";
+import { useOfflineCacheStatus } from "../../hooks/useOfflineCacheStatus";
 import RoomCard from "../../components/RoomCard/RoomCard";
 import RoomCardSkeleton from "../../components/RoomCardSkeleton";
 import RoomModal from "../../components/RoomModal/RoomModal";
@@ -33,6 +34,7 @@ export default function Rooms() {
     query: searchParams.get("q") ?? "",
   }));
   const [gridView, setGridView] = useState(true);
+  const offline = useOfflineCacheStatus();
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   // Set when a URL-initiated change is applied to state, so the reverse sync
   // skips that pass instead of clobbering the URL with stale state.
@@ -111,8 +113,13 @@ export default function Rooms() {
             <h2 className="font-display text-xl font-bold text-foreground sm:text-2xl">
               Available Rooms
             </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
               {isLoading ? "Loading…" : `${rooms.length} listings found`}
+              {offline.stale && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:border-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+                  📡 showing {offline.servedCount} cached of {offline.cachedTotal} (offline)
+                </span>
+              )}
             </p>
           </div>
           <div className="flex gap-2">

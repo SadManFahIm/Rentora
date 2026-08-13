@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-570%20(368%20BE%20%2B%20202%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-633%20(381%20BE%20%2B%20252%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -30,6 +30,7 @@
 - [Documentation](#documentation)
 - [Security](#-security)
 - [Passkeys / WebAuthn](#-passkeys--webauthn--shipped)
+- [Progressive Web App](#-progressive-web-app--shipped)
 - [Demo Users](#-demo-users)
 - [Screenshots](#-screenshots)
 - [Team Workflow](#-team-workflow)
@@ -65,6 +66,44 @@ Full gallery (28 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 ---
 
 ## 🆕 Changelog
+
+**Phase 12 P0 — Progressive Web App (installable app)**
+
+- **Installable PWA** — `manifest.webmanifest` with `standalone` display, `#ea580c` theme (design-token brand), 192/512 standard + **maskable** icons, Apple-touch + favicon set (32→144), generated reproducibly from the brand (`scripts/generate_pwa_icons.py`) and validated in CI against the **built** app (`scripts/validate-pwa.mjs`)
+- **Native install experience** — the browser's `beforeinstallprompt` is captured but suppressed until a subtle navbar **"Install app"** CTA is clicked, so Rentora never fires a surprise popup; the CTA disappears after install, and a dismissal cools off for a week (`usePwaInstall`)
+- **Standalone + deep links** — works installed on desktop & mobile; routing, auth, the map (viewport/radius/destination URL sync), voice search, Copilot and both dashboards behave identically in standalone mode
+- **Safe service-worker caching** — the push worker now also caches a versioned `rentora-static-v1` app shell + static assets only; **`/api/*` (auth, private, admin, fraud, payment) is never cached**, navigations are network-first with an offline shell fallback, and only our own `rentora-static-*` caches are ever cleaned
+- **Update UX** — when a new build takes over, a "A new version of Rentora is available **[Refresh] [Later]**" banner appears (Later remembered for 24h); the initial install never shows it (`usePwaUpdate`)
+- **Graceful offline** — an amber "You're offline" banner (safe-area aware) while already-loaded UI stays visible — never fake listings or stale data
+- **Shortcuts** — Search Rooms `/rooms` · Explore Map `/map` · Post Listing `/dashboard?tab=listings`
+- **Branding** — the app name is now **Rentora 🇧🇩** (gradient wordmark in the navbar/footer, Bangladesh-flag badge) matching the push notifications, Copilot and README
+- **Engineering** — 11 new unit tests (`src/lib/pwa.test.ts`), PWA validation wired into the Frontend CI job. See [`docs/PWA.md`](docs/PWA.md)
+
+**Phase 12 P1 — Offline & App Polish**
+
+- **Offline search** — the Rooms page now serves from an **IndexedDB cache of PUBLIC listings** (24 h TTL, room details 7 d) with client-side re-filtering when the network drops, plus a "📡 showing N cached of M (offline)" pill; **auth/private/admin/fraud/payment data is never cached** (`rentora-offline` DB holds only public room lists/details + the action queue)
+- **Background sync** — offline actions (wishlist toggles, saved-search checks) are queued and replayed on reconnect via `registration.sync` + `online`/`visibilitychange` fallbacks; failed replays are re-queued, never dropped
+- **Periodic Background Sync** (research-informed, feasible subset) — when installed, Chromium-only daily `rentora-refresh` keeps the PUBLIC cache fresh; Notification Triggers API documented as future scope (not shipped in any browser)
+- **Splash screens** — 11 device-matched **Apple splash screens** + **dark maskable icon** (`maskable-dark-512`), all generated from the brand by `scripts/generate_pwa_icons.py`
+- **iOS install hint** — one-time, dismissible "Add to Home Screen" card (Safari has no install-prompt API)
+- **Flag everywhere** — brand name now uses an **inline SVG Bangladesh flag** (`BangladeshFlag` component) that renders identically on every OS — no more "BD" letters where the emoji is missing
+- **Lighthouse (prod build)** — Performance **84** · Accessibility **93** · Best practices **96** · SEO **82** (`robots.txt` added); Lighthouse 12+ dropped the PWA category — installability enforced by CI `validate-pwa.mjs` instead
+- **Engineering** — 17 new unit tests (230 frontend total), tsc/eslint/prettier clean
+
+**Map Intelligence v3 (Phase 7 v3) — Interactions + Dark Mode + Dhaka Hierarchy**
+
+- **Dark map fixed** — lifted CARTO dark raster paint (brightness floor 0.2, contrast 0.2) keeps roads + street labels readable instead of near-black; dark-fallback also lifted; overlays now visible in dark mode
+- **Dark layer contrast QA** — every overlay gets dark-mode paints via a theme-swap effect (`setPaintProperty`, map state preserved): 🎓/🚇 dots brighten, MRT corridor core brightens with subtle casing, heatmap switches to green-400/amber-400/red-400 at higher opacity with dark strokes, cluster rings darken, isochrone bands get stronger fills (0.1 → 0.22) + white outlines, radius/metro-reach rings brighten; dark popup card (no more white flash); paint values in `lib/mapInteractions` `THEME_PAINTS` (unit-tested)
+- **Every map element is interactive now** — click a 🎓 university or 🚇 metro station → real nearby stats (count · avg/range rent within ~2 km) + "Find rooms near…" CTA; MRT Line-6 corridor clickable; price-heatmap click → clicked area's real stats; 10/20/30-min walking bands clickable → rooms inside
+- **Map ↔ list sync** — list click flies + highlights the pin; map pin click scrolls the list item into view
+- **Room deep links** — `?room=123` in a shared map URL reopens the listing on load
+- **Structured Dhaka hierarchy** — new `GET /api/v1/rooms/area-hierarchy/` (20 main areas → 30+ sub-areas/neighbourhoods, parent links, Bangla + English aliases); sub-area search ("Mirpur 10", "Uttara Sector 7", "ধানমন্ডি ২৭") resolves with its parent district shown
+- **Area boundary polygons** — `GET /api/v1/rooms/area-boundaries/`: approximate boundary bubbles (honest circles, `approx_radius_km`, not fake borders) — main areas strong orange rings (z≈9.5+), sub-areas blue (z≈11.5+), neighbourhoods violet (z≈13.5+), click → real area stats; dark-mode paints included
+- **Expanded landmark layer** — 🏥 hospitals, 🛒 markets, 🌳 parks, 🕌 mosques, 🚌 bus terminals join universities & metro (63 real Dhaka places: Square Hospital, New Market, Baitul Mukarram, Gabtoli/Saidabad terminals…). Everyday categories share one **clustered source**: count bubble at low zoom (click → zoom in) → per-kind dots as you zoom, each with its own minzoom; every dot opens real nearby-room stats + "Rooms near here →" radius CTA; dark mode brightens each category
+- **Nearby-landmark chips** — every listing popup shows the nearest useful places around it (🚇 7 min Metro · 🎓 12 min University — real landmarks only, nearest of each category within ~3 km, honest walk estimates); clicking a chip flies to the place + starts a radius search
+- **Zoom-aware area labels** — area bubbles carry their real centre (`lat`/`lng`), rendered as labels with zoom-based hierarchy (main z≈10, sub z≈12.5, neighbourhood z≈14.5) so the map never drowns in text; theme-aware text + halo
+- **Boundary click → area filter** — clicking an area bubble highlights it (selected > hover > base feature-state), shows its real stats and **filters the room list + URL** (`?area=…`); empty click clears it
+- **Landmark-nearby list search** — filter the room list by "near a metro / university / hospital…" within 0.5–2 km (`?near=<kind>&distance=<km>`), resolved to the nearest real landmark, map flies there once
 
 **Phase 9 — Operate It (Reliability & Observability)**
 
@@ -137,7 +176,7 @@ Full gallery (28 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 - **Room-count API badge** — the "N of M rooms in view" badge reads the authoritative server count (`/rooms/summary/` — COUNT/AVG with the same geo filters), so it is never capped by list pagination
 - **Distance markers** — every listing in a radius search shows `formatDistance` + walking time ("1.2 km away · ≈ 16 min walk") in its map popup and the side list, from the backend's `distance_km` annotation
 - **Viewport bbox cache** — the refetch bbox is quantized to ~100 m, so micro-pans hit the React Query cache instead of firing duplicate API calls
-- **Landmark layers** — toggle universities 🎓 and metro stations 🚇 on/off as map layers (from `/rooms/landmarks/`)
+- **Landmark layers** — toggle universities 🎓, metro stations 🚇, hospitals 🏥, markets 🛒, parks 🌳, mosques 🕌 and bus terminals 🚌 on/off as map layers (from `/rooms/landmarks/`); the everyday categories cluster into count bubbles at low zoom
 - **Price heatmap** — green → amber → red circles scaled by rent, so expensive areas are visible at a glance
 - **Map + list split view** — a viewport-synced sidebar lists the rooms on screen (promoted first, then by price); on mobile it becomes a bottom sheet
 - Tapping a pin opens the room popup → full **RoomModal** (booking, chat, fraud badge, AI price insight)
@@ -248,6 +287,9 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 | **11+**   | Listing Intelligence — 🎤 Bangla voice search, 🧠 AI saved-search matcher + price-drop alerts, ✨ listing quality score, 🛡️ fraud-aware ranking       | ✅ Shipped           |
 | **11++**  | Core AI & Fraud — 🤖 Rentora Copilot, 🏷️ AI pricing suggestion v2 (demand/time-to-rent), 🖼️ cross-listing duplicate-image fraud detection | ✅ Shipped |
 | **7 v2**   | Intelligent Map — 🧠 AI map search, 🚇 metro commute score + commute mode, ⭐ best-value scores, 🏛️ area intelligence + comparison, 💰 affordability map, ideal-area ranking | ✅ Shipped |
+| **7 v3**   | Map Intelligence v3 — 🌙 dark-map fix + 🌑 layer contrast QA, 👆 interactive university/metro/heatmap/isochrone clicks, 🔗 map↔list sync, 🔗 room deep links, 🏙️ structured Dhaka hierarchy + area boundary polygons, 🏥 expanded landmark layer (hospitals/markets/parks/mosques/bus terminals, clustered) | ✅ Shipped |
+| **12 P0**  | Progressive Web App — 📱 installable manifest + maskable icons, native install CTA, standalone mode, safe SW caching, update + offline UX, shortcuts | ✅ Shipped |
+| **12 P1**  | Offline & polish — 🔌 offline search over cached public listings, background sync (offline action replay), periodic refresh, splash screens, dark icon, iOS install hint, Lighthouse audit | ✅ Shipped |
 
 ---
 
@@ -800,7 +842,7 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 | `/api/v1/redoc/`  | ReDoc                 |
 | `/api/v1/schema/` | OpenAPI schema (YAML) |
 
-> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook) · [`docs/RENTORA_COPILOT.md`](docs/RENTORA_COPILOT.md) (Copilot architecture, API, config) · [`docs/AI_PRICING_V2.md`](docs/AI_PRICING_V2.md) (pricing suggestion v2) · [`docs/DUPLICATE_IMAGE_FRAUD.md`](docs/DUPLICATE_IMAGE_FRAUD.md) (duplicate-image detector) · [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) + [`docs/MAP_API.md`](docs/MAP_API.md) + [`docs/MAP_SCORING.md`](docs/MAP_SCORING.md) (intelligent map v2) · [`docs/VOICE_SEARCH_PLAYBOOK.md`](docs/VOICE_SEARCH_PLAYBOOK.md) (voice search) · [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md) (verified feature matrix)
+> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook) · [`docs/RENTORA_COPILOT.md`](docs/RENTORA_COPILOT.md) (Copilot architecture, API, config) · [`docs/AI_PRICING_V2.md`](docs/AI_PRICING_V2.md) (pricing suggestion v2) · [`docs/DUPLICATE_IMAGE_FRAUD.md`](docs/DUPLICATE_IMAGE_FRAUD.md) (duplicate-image detector) · [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) + [`docs/MAP_API.md`](docs/MAP_API.md) + [`docs/MAP_SCORING.md`](docs/MAP_SCORING.md) (intelligent map v2) · [`docs/VOICE_SEARCH_PLAYBOOK.md`](docs/VOICE_SEARCH_PLAYBOOK.md) (voice search) · [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md) (verified feature matrix) · [`docs/PWA.md`](docs/PWA.md) (PWA architecture, manifest, SW strategy, install/update/offline behavior)
 
 ---
 
@@ -837,6 +879,22 @@ Passwordless sign-in is live — the phishing-resistant successor to passwords +
 **Implemented with** `py_webauthn` (webauthn 3.x, Duo Labs) server-side + `@simplewebauthn/browser` client-side. Four DRF endpoints: `passkey/register/begin` → `passkey/register/complete` (JWT-authed), `passkey/login/begin` → `passkey/login/complete` (issues JWTs). Conditional UI (`mediation: 'conditional'`) surfaces passkeys in the browser's native autofill; a manual **"Sign in with a passkey"** button is the fallback. Register/revoke from Dashboard → Security → Passkeys.
 
 **Gotchas handled:** WebAuthn requires a secure origin (`localhost` is fine; IP addresses are not); frontend/backend should share a registrable domain in production (e.g. `app.example.com` + `api.example.com` with `rpId: example.com`); an `AbortController` cancels a pending conditional ceremony when the user submits the password form.
+
+---
+
+## 📱 Progressive Web App — Shipped
+
+**Install Rentora** as a native-feeling app — desktop (Chrome/Edge) and mobile (Android; iOS via **Add to Home Screen**) — without a separate codebase:
+
+- **Installable** — `manifest.webmanifest` (standalone display, brand `#ea580c` theme), 192/512 standard + **maskable** icons, Apple-touch + favicon set; validated in CI against the built app
+- **Polite install prompt** — no surprise popups: a subtle **"Install app"** button in the navbar shows the browser's native prompt; disappears after install, cools off for a week after dismissal
+- **App-like window** — standalone mode keeps routing, auth, the map (with shareable URL sync), voice search, Copilot, saved searches and both dashboards working exactly as in the browser; deep links open the right page
+- **Safe offline + offline search** — a graceful "You're offline" banner, never fake data; the app shell is cached while **API/auth/admin/fraud/payment data is never cached**. When offline, the Rooms page searches within the cached **public** listings (client-side filters, "showing N cached" pill) and queued actions (wishlist) replay on reconnect via background sync
+- **Fresh updates** — a "A new version of Rentora is available **[Refresh] [Later]**" banner when a new build deploys
+- **Native polish** — Apple splash screens, dark maskable icon, iOS "Add to Home Screen" hint, and the brand flag rendered as an **inline SVG** (no emoji-rendering issues)
+- **Shortcuts** — right-click / long-press the installed icon → Search Rooms · Explore Map · Post Listing
+
+See [`docs/PWA.md`](docs/PWA.md) for the manifest, icon system, service-worker strategy, update/offline behavior, security review and browser support.
 
 ---
 
@@ -947,6 +1005,11 @@ Passwordless sign-in is live — the phishing-resistant successor to passwords +
 <img width="1440" alt="AI Pricing Suggestion" src="docs/screenshots/pricing-suggestion.png" />
 
 **Phase 7 v2 — Intelligent Map** — AI map search ("উত্তরায় ১২ হাজারের মধ্যে furnished room" → intent chips + real rooms + map flies to Uttara), metro commute scores, value-score pins, area intelligence with comparison, and the affordability budget view (screenshots in [🖼️ Screenshots](#-screenshots); architecture in [docs/INTELLIGENT_MAP.md](docs/INTELLIGENT_MAP.md)):
+
+**Phase 7 v3 — Map UX polish** — zoom-aware area labels + boundary highlights in light mode (left) and dark mode (right):
+
+<img width="1440" alt="Map UX Light" src="docs/screenshots/map-ux-light-default.png" />
+<img width="1440" alt="Map UX Dark" src="docs/screenshots/map-ux-dark-state.png" />
 
 **Phase 11++ — Cross-listing duplicate-image fraud** — admin Fraud Operations filtered to the duplicate-image detector, showing the HIGH-severity match with matched-listing chips:
 

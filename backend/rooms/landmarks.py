@@ -23,6 +23,11 @@ from enum import Enum
 class LandmarkKind(Enum):
     UNIVERSITY = "university"
     METRO = "metro"
+    HOSPITAL = "hospital"
+    MARKET = "market"
+    PARK = "park"
+    MOSQUE = "mosque"
+    BUS_TERMINAL = "bus_terminal"
 
 
 @dataclass(frozen=True)
@@ -133,7 +138,90 @@ METRO_STATIONS: tuple[Landmark, ...] = (
     Landmark("mrt_motijheel", "Motijheel MRT", LandmarkKind.METRO, 23.7270, 90.4180),
 )
 
-ALL_LANDMARKS: tuple[Landmark, ...] = UNIVERSITIES + METRO_STATIONS
+# ---- everyday places (Phase 7 v3) ----
+# Real, well-known Dhaka hospitals, markets, parks, mosques and bus
+# terminals — the places a tenant actually asks "how far to X" about.
+# Same approximate-coordinates policy as universities/metro.
+HOSPITALS: tuple[Landmark, ...] = (
+    Landmark("dmch", "Dhaka Medical College Hospital", LandmarkKind.HOSPITAL, 23.7260, 90.3940),
+    Landmark("bsmmu", "BSMMU (PG Hospital)", LandmarkKind.HOSPITAL, 23.7380, 90.3950),
+    Landmark("square_hospital", "Square Hospital", LandmarkKind.HOSPITAL, 23.7490, 90.3900),
+    Landmark(
+        "apollo_evercare", "Apollo (Evercare) Hospital", LandmarkKind.HOSPITAL, 23.7900, 90.4080
+    ),
+    Landmark(
+        "mitford_hospital",
+        "Sir Salimullah Medical College (Mitford)",
+        LandmarkKind.HOSPITAL,
+        23.7060,
+        90.4160,
+    ),
+    Landmark(
+        "shyamoli_chest",
+        "National Chest Hospital (Shyamoli)",
+        LandmarkKind.HOSPITAL,
+        23.7730,
+        90.3620,
+    ),
+    Landmark("kurmitola_gh", "Kurmitola General Hospital", LandmarkKind.HOSPITAL, 23.8260, 90.4070),
+)
+
+MARKETS: tuple[Landmark, ...] = (
+    Landmark("new_market", "New Market", LandmarkKind.MARKET, 23.7310, 90.3810),
+    Landmark("kawran_bazar_market", "Kawran Bazar", LandmarkKind.MARKET, 23.7500, 90.3920),
+    Landmark("bashundhara_city", "Bashundhara City Mall", LandmarkKind.MARKET, 23.7500, 90.3960),
+    Landmark("jamuna_future_park", "Jamuna Future Park", LandmarkKind.MARKET, 23.8130, 90.4290),
+    Landmark("gulshan_market", "Gulshan Market (DCC)", LandmarkKind.MARKET, 23.7900, 90.4140),
+    Landmark("mirpur_1_market", "Mirpur 1 New Market", LandmarkKind.MARKET, 23.8060, 90.3640),
+    Landmark(
+        "utara_sector3_market", "Uttara Sector 3 Market", LandmarkKind.MARKET, 23.8680, 90.3890
+    ),
+)
+
+PARKS: tuple[Landmark, ...] = (
+    Landmark("ramna_park", "Ramna Park", LandmarkKind.PARK, 23.7360, 90.4000),
+    Landmark("suhrawardy_udyan", "Suhrawardy Udyan", LandmarkKind.PARK, 23.7340, 90.3950),
+    Landmark("baldha_garden", "Baldha Garden", LandmarkKind.PARK, 23.7240, 90.4010),
+    Landmark("dhaka_zoo", "Dhaka Zoo (Mirpur)", LandmarkKind.PARK, 23.8060, 90.3440),
+    Landmark("dhanmondi_lake", "Dhanmondi Lake Park", LandmarkKind.PARK, 23.7440, 90.3730),
+    Landmark("hatirjheel_park", "Hatirjheel", LandmarkKind.PARK, 23.7760, 90.4090),
+    Landmark("uttara_park", "Uttara Sector 7 Park", LandmarkKind.PARK, 23.8670, 90.3760),
+)
+
+MOSQUES: tuple[Landmark, ...] = (
+    Landmark(
+        "baitul_mukarram", "Baitul Mukarram National Mosque", LandmarkKind.MOSQUE, 23.7290, 90.4120
+    ),
+    Landmark("star_mosque", "Star Mosque (Tara Masjid)", LandmarkKind.MOSQUE, 23.7190, 90.4010),
+    Landmark("lalbagh_fort_mosque", "Lalbagh Fort", LandmarkKind.MOSQUE, 23.7190, 90.3880),
+    Landmark("kakrail_mosque", "Kakrail Mosque", LandmarkKind.MOSQUE, 23.7390, 90.3970),
+    Landmark("chawkbazar_shahi", "Chawkbazar Shahi Mosque", LandmarkKind.MOSQUE, 23.7130, 90.4080),
+    Landmark("gulshan_mosque", "Gulshan Azad Mosque", LandmarkKind.MOSQUE, 23.7920, 90.4170),
+    Landmark("mirpur_mosque", "Mirpur 10 Central Mosque", LandmarkKind.MOSQUE, 23.8070, 90.3690),
+)
+
+BUS_TERMINALS: tuple[Landmark, ...] = (
+    Landmark("gabtoli", "Gabtoli Bus Terminal", LandmarkKind.BUS_TERMINAL, 23.7780, 90.3330),
+    Landmark("saidabad", "Saidabad Bus Terminal", LandmarkKind.BUS_TERMINAL, 23.7050, 90.4260),
+    Landmark(
+        "mohakhali_terminal", "Mohakhali Bus Terminal", LandmarkKind.BUS_TERMINAL, 23.7750, 90.4030
+    ),
+    Landmark(
+        "motijheel_terminal", "Motijheel Bus Stand", LandmarkKind.BUS_TERMINAL, 23.7280, 90.4170
+    ),
+    Landmark("kalabagan_stand", "Kalabagan Bus Stand", LandmarkKind.BUS_TERMINAL, 23.7490, 90.3780),
+    Landmark(
+        "uttara_terminal",
+        "Uttara (Abdullahpur) Bus Terminal",
+        LandmarkKind.BUS_TERMINAL,
+        23.8900,
+        90.3860,
+    ),
+)
+
+ALL_LANDMARKS: tuple[Landmark, ...] = (
+    UNIVERSITIES + METRO_STATIONS + HOSPITALS + MARKETS + PARKS + MOSQUES + BUS_TERMINALS
+)
 
 _BY_KEY: dict[str, Landmark] = {landmark.key: landmark for landmark in ALL_LANDMARKS}
 
