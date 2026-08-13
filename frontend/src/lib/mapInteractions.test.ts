@@ -8,6 +8,10 @@ import {
   landmarkPopupHtml,
   metroRoutePopupHtml,
   nearbyStats,
+  THEME_PAINTS,
+  themePaintValue,
+  TRAVEL_BAND_DARK_OPACITY,
+  TRAVEL_BAND_LIGHT_OPACITY,
 } from "./mapInteractions";
 import type { Room } from "../types";
 
@@ -115,5 +119,38 @@ describe("formatRent", () => {
   it("formats with taka symbol and thousand separators", () => {
     expect(formatRent(12345)).toBe("৳12,345");
     expect(formatRent(null)).toBe("—");
+  });
+});
+
+describe("dark-theme paint map (Phase 7 v3 contrast QA)", () => {
+  it("exposes every layer's dark/light values", () => {
+    expect(Object.keys(THEME_PAINTS).length).toBeGreaterThanOrEqual(8);
+    // Landmark dots brighten in dark so they don't sink into the basemap.
+    expect(themePaintValue("universities", "circle-color", true)).toBe("#a78bfa");
+    expect(themePaintValue("universities", "circle-color", false)).toBe("#7c3aed");
+    expect(themePaintValue("metro", "circle-color", true)).toBe("#2dd4bf");
+  });
+
+  it("brightens the MRT corridor core on dark", () => {
+    expect(themePaintValue("metro-route", "line-color", true)).toBe("#2dd4bf");
+    expect(themePaintValue("metro-route", "line-color", false)).toBe("#0d9488");
+  });
+
+  it("uses dark-friendly heatmap colors + higher opacity on dark", () => {
+    const darkColor = themePaintValue("price-heatmap", "circle-color", true) as unknown[];
+    expect(darkColor).toContain("#4ade80"); // green-400 instead of green-500
+    expect(themePaintValue("price-heatmap", "circle-opacity", true)).toBe(0.6);
+    expect(themePaintValue("price-heatmap", "circle-opacity", false)).toBe(0.45);
+    expect(themePaintValue("price-heatmap", "circle-stroke-color", true)).toBe("#111827");
+  });
+
+  it("keeps isochrone bands visible on dark with stronger fills", () => {
+    expect(TRAVEL_BAND_DARK_OPACITY).toBeGreaterThan(TRAVEL_BAND_LIGHT_OPACITY);
+    expect(TRAVEL_BAND_DARK_OPACITY).toBe(0.22);
+  });
+
+  it("returns undefined for unknown layer/prop", () => {
+    expect(themePaintValue("does-not-exist", "circle-color", true)).toBeUndefined();
+    expect(themePaintValue("universities", "line-color", true)).toBeUndefined();
   });
 });
