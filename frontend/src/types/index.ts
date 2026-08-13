@@ -192,6 +192,9 @@ export type RoomFilters = Partial<Filters> & {
   nearLng?: number;
   /** Keep only rooms within this many km of the reference point. */
   radiusKm?: number;
+  /** Landmark slug to search around (see /rooms/landmarks/ for valid keys).
+   * Pairs with `radiusKm`; e.g. near a metro station or university. */
+  nearLandmark?: string;
   /** AI smart search: semantic ranking + natural-language parsing. */
   smart?: boolean;
 };
@@ -212,13 +215,44 @@ export interface SimilarImageResult extends Room {
   phash_distance: number;
 }
 
-/** A university or metro station from GET /rooms/landmarks/. */
+/** A landmark category shown on the map (kind drives color + popup icon). */
+export type LandmarkKind =
+  "university" | "metro" | "hospital" | "market" | "park" | "mosque" | "bus_terminal";
+
+/** A landmark (university/metro/hospital/market/…) from GET /rooms/landmarks/. */
 export interface Landmark {
   key: string;
   name: string;
-  kind: "university" | "metro";
+  kind: LandmarkKind;
   lat: number;
   lng: number;
+}
+
+/** Hierarchy level of a Dhaka area (drives boundary zoom visibility). */
+export type AreaKind = "main_area" | "sub_area" | "neighborhood";
+
+/** An approximate area boundary bubble from GET /rooms/area-boundaries/. */
+export interface AreaBoundary {
+  key: string;
+  name: string;
+  kind: AreaKind;
+  parent: string | null;
+  parent_name: string | null;
+  /** Transparency: the bubble radius, since these are circles, not borders. */
+  approx_radius_km: number;
+  /** The area's real centre — used to place zoom-aware labels precisely. */
+  lat: number;
+  lng: number;
+}
+
+/** GeoJSON wrapper the map consumes directly as a MapLibre source. */
+export interface AreaBoundaryCollection {
+  type: "FeatureCollection";
+  features: {
+    type: "Feature";
+    geometry: { type: "Polygon"; coordinates: number[][][] };
+    properties: AreaBoundary;
+  }[];
 }
 
 /** A place suggestion from the map's street-search autocomplete. */
@@ -228,6 +262,8 @@ export interface GeocodeSuggestion {
   kind: "street" | "area" | "university" | "metro";
   lat: number;
   lng: number;
+  /** Parent district for sub-area results (e.g. "Mirpur 10" → "Mirpur"). */
+  parent_name?: string | null;
 }
 
 /** Aggregate room counts from GET /rooms/summary/ (map badge + area chips). */

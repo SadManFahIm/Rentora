@@ -1,5 +1,17 @@
 import { api } from "./api";
 import { mapRoom, type ApiRoom, type Paginated } from "./mappers";
+import {
+  buildCacheKey,
+  cacheFresh,
+  filterCachedRooms,
+  getCachedRoom,
+  getCachedRooms,
+  ROOMS_TTL_MS,
+  ROOM_DETAIL_TTL_MS,
+  setCachedRoom,
+  setCachedRooms,
+} from "../lib/offlineDb";
+import { setOfflineCacheStatus } from "../lib/offlineStatus";
 import type {
   GeocodeSuggestion,
   NlParsed,
@@ -12,6 +24,7 @@ import type {
   RoomInsights,
   SimilarImageResult,
   SimilarRoomResult,
+  AreaBoundaryCollection,
 } from "../types";
 
 interface ApiRoomInsights {
@@ -78,6 +91,8 @@ function buildParams(filters: RoomFilters): Record<string, string> {
   if (filters.nearLat != null) params.near_lat = String(filters.nearLat);
   if (filters.nearLng != null) params.near_lng = String(filters.nearLng);
   if (filters.radiusKm != null) params.radius_km = String(filters.radiusKm);
+  // Landmark-nearby search (Phase 7 v3): ?near_landmark=<slug>&radius_km=…
+  if (filters.nearLandmark) params.near_landmark = filters.nearLandmark;
 
   switch (filters.sort) {
     case "price-asc":
@@ -101,21 +116,48 @@ export const roomService = {
    * GET /rooms/ with server-side filtering, sorting and search.
    * Amenities are filtered client-side (the backend has no amenities filter).
    */
+  /**
+   * GET /rooms/ with server-side filtering, sorting and search.
+   * Amenities are filtered client-side (the backend has no amenities filter).
+   *
+   * Offline-aware (Phase 12 P1): successful PUBLIC list responses are cached
+   * in IndexedDB (24h TTL); on network failure the cached result is re-filtered
+   * client-side and served, and offlineCacheStatus flips to `stale` so the UI
+   * can show "showing cached rooms". Nothing private is ever cached.
+   */
   async getRooms(filters: RoomFilters = {}): Promise<Room[]> {
-    const { data } = await api.get<Paginated<ApiRoom>>("/rooms/", {
-      params: buildParams(filters),
-    });
-    let rooms = data.results.map(mapRoom);
+    const params = buildParams(filters);
+    try {
+      const { data } = await api.get<Paginated<ApiRoom>>("/rooms/", {
+        params,
+      });
+      let rooms = data.results.map(mapRoom);
 
-    if (filters.amenities && filters.amenities.length > 0) {
-      const wanted = filters.amenities;
-      rooms = rooms.filter((r) => wanted.every((a) => r.amenities.includes(a)));
+      if (filters.amenities && filters.amenities.length > 0) {
+        const wanted = filters.amenities;
+        rooms = rooms.filter((r) => wanted.every((a) => r.amenities.includes(a)));
+      }
+
+      void setCachedRooms(buildCacheKey(params), { rooms, ts: Date.now() });
+      setOfflineCacheStatus({ stale: false, servedCount: 0, cachedTotal: 0 });
+      return rooms;
+    } catch (err) {
+      const key = buildCacheKey(params);
+      const cached = await getCachedRooms(key);
+      if (cached && cacheFresh(cached.ts, ROOMS_TTL_MS)) {
+        const filtered = filterCachedRooms(cached.rooms, filters);
+        setOfflineCacheStatus({
+          stale: true,
+          servedCount: filtered.length,
+          cachedTotal: cached.rooms.length,
+        });
+        return filtered;
+      }
+      throw err;
     }
-
-    return rooms;
   },
 
-  /** GET /rooms/landmarks/ — public map landmark layers (universities + metro). */
+  /** GET /rooms/landmarks/ — public map landmark layers (all categories). */
   async getLandmarks(): Promise<Landmark[]> {
     const { data } =
       await api.get<{ key: string; name: string; kind: string; lat: number; lng: number }[]>(
@@ -124,16 +166,36 @@ export const roomService = {
     return data.map((l) => ({
       key: l.key,
       name: l.name,
-      kind: l.kind === "university" ? "university" : "metro",
+      kind: l.kind as Landmark["kind"],
       lat: l.lat,
       lng: l.lng,
     }));
   },
 
-  /** GET /rooms/:id/ */
+  /**
+   * GET /rooms/area-boundaries/ — approximate Dhaka area boundary bubbles
+   * (GeoJSON FeatureCollection) for the map's zoom-based area overlay.
+   */
+  async getAreaBoundaries(): Promise<AreaBoundaryCollection> {
+    const { data } = await api.get<AreaBoundaryCollection>("/rooms/area-boundaries/");
+    return data;
+  },
+
+  /** GET /rooms/:id/ — offline-aware like getRooms (public detail, 7d TTL). */
   async getRoomById(id: number): Promise<Room> {
-    const { data } = await api.get<ApiRoom>(`/rooms/${id}/`);
-    return mapRoom(data);
+    try {
+      const { data } = await api.get<ApiRoom>(`/rooms/${id}/`);
+      const room = mapRoom(data);
+      void setCachedRoom(id, { room, ts: Date.now() });
+      return room;
+    } catch (err) {
+      const cached = await getCachedRoom(id);
+      if (cached && cacheFresh(cached.ts, ROOM_DETAIL_TTL_MS)) {
+        setOfflineCacheStatus({ stale: true, servedCount: 1, cachedTotal: 1 });
+        return cached.room;
+      }
+      throw err;
+    }
   },
 
   /** PATCH /rooms/:id/ — used to apply an AI pricing suggestion. */
@@ -177,7 +239,14 @@ export const roomService = {
   /** GET /rooms/geocode/ — street/area/landmark autocomplete for the map search box. */
   async geocode(query: string): Promise<GeocodeSuggestion[]> {
     const { data } = await api.get<
-      { key: string; label: string; kind: string; lat: number; lng: number }[]
+      {
+        key: string;
+        label: string;
+        kind: string;
+        lat: number;
+        lng: number;
+        parent_name?: string | null;
+      }[]
     >("/rooms/geocode/", { params: { q: query } });
     return data.map((s) => ({
       key: s.key,
@@ -185,6 +254,7 @@ export const roomService = {
       kind: s.kind as GeocodeSuggestion["kind"],
       lat: Number(s.lat),
       lng: Number(s.lng),
+      parent_name: s.parent_name ?? null,
     }));
   },
 

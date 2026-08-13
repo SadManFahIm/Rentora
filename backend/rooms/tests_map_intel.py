@@ -389,3 +389,147 @@ class HaversineUnitTests(APITestCase):
 
     def test_zero_distance(self):
         self.assertAlmostEqual(haversine_km(23.8, 90.4, 23.8, 90.4), 0.0, places=6)
+
+
+class DhakaHierarchyTests(APITestCase):
+    """Phase 7 v3 — structured Dhaka geography (area-hierarchy + geocode merge)."""
+
+    def test_area_hierarchy_returns_main_areas_with_children(self):
+        res = self.client.get("/api/v1/rooms/area-hierarchy/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        main_areas = res.data["main_areas"]
+        keys = {m["key"] for m in main_areas}
+        self.assertIn("uttara", keys)
+        self.assertIn("mirpur", keys)
+        self.assertIn("dhanmondi", keys)
+
+        uttara = next(m for m in main_areas if m["key"] == "uttara")
+        child_keys = {c["key"] for c in uttara["children"]}
+        self.assertIn("uttara_sector_7", child_keys)
+        self.assertIn("uttara_sector_10", child_keys)
+        # Every child points back at its parent main area.
+        for child in uttara["children"]:
+            self.assertEqual(child["parent"], "uttara")
+            self.assertEqual(child["parent_name"], "Uttara")
+            self.assertIsInstance(child["lat"], float)
+            self.assertIsInstance(child["lng"], float)
+
+    def test_hierarchy_child_kind(self):
+        res = self.client.get("/api/v1/rooms/area-hierarchy/")
+        uttara = next(m for m in res.data["main_areas"] if m["key"] == "uttara")
+        self.assertTrue(all(c["kind"] == "sub_area" for c in uttara["children"]))
+
+    def test_geocode_resolves_sub_area_with_parent(self):
+        # "Mirpur 10" must resolve to the structured sub-area, not only the
+        # flat gazetteer — and carry its parent district.
+        res = self.client.get("/api/v1/rooms/geocode/", {"q": "mirpur 10"})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        match = next((s for s in res.data if s["label"] == "Mirpur 10"), None)
+        self.assertIsNotNone(match)
+        self.assertEqual(match["kind"], "area")
+        self.assertEqual(match["parent_name"], "Mirpur")
+
+    def test_geocode_resolves_bangla_alias(self):
+        res = self.client.get("/api/v1/rooms/geocode/", {"q": "মিরপুর ১০"})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(any("Mirpur 10" in s["label"] for s in res.data))
+
+    def test_geocode_still_returns_streets_and_landmarks(self):
+        # Hierarchy merge must not break the existing street/landmark flow.
+        res = self.client.get("/api/v1/rooms/geocode/", {"q": "gulshan avenue"})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(any(s["kind"] == "street" for s in res.data))
+
+        res = self.client.get("/api/v1/rooms/geocode/", {"q": "mirpur 10"})
+        self.assertTrue(any(s["kind"] == "metro" for s in res.data))  # MRT station
+
+    def test_geocode_deduplicates_overlapping_entries(self):
+        # The hierarchy and the flat gazetteer both know "Dhanmondi" — the
+        # response should contain the key at most once.
+        res = self.client.get("/api/v1/rooms/geocode/", {"q": "dhanmondi"})
+        keys = [s["key"] for s in res.data]
+        self.assertEqual(len(keys), len(set(keys)))
+        self.assertIn("dhanmondi", keys)
+
+
+class AreaBoundaryTests(APITestCase):
+    """Phase 7 v3 — approximate area boundary polygons."""
+
+    def test_boundaries_returns_geojson_with_hierarchy_kinds(self):
+        res = self.client.get("/api/v1/rooms/area-boundaries/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["type"], "FeatureCollection")
+        features = res.data["features"]
+        self.assertGreater(len(features), 50)
+
+        kinds = {f["properties"]["kind"] for f in features}
+        self.assertEqual(kinds, {"main_area", "sub_area", "neighborhood"})
+
+    def test_polygon_is_closed_and_centered_on_place(self):
+        res = self.client.get("/api/v1/rooms/area-boundaries/")
+        uttara = next(f for f in res.data["features"] if f["properties"]["key"] == "uttara")
+        ring = uttara["geometry"]["coordinates"][0]
+        # Closed ring: first == last point.
+        self.assertEqual(ring[0], ring[-1])
+        # ~2.8 km bubble around Uttara centre (~23.876, 90.380).
+        lats = [p[1] for p in ring]
+        lngs = [p[0] for p in ring]
+        self.assertAlmostEqual((max(lats) + min(lats)) / 2, 23.8759, places=2)
+        self.assertAlmostEqual((max(lngs) + min(lngs)) / 2, 90.3795, places=2)
+        self.assertAlmostEqual((max(lats) - min(lats)) / 2, 2.8 / 111.32, places=3)
+        self.assertEqual(uttara["properties"]["approx_radius_km"], 2.8)
+        # The real centre rides along (Phase 7 v3 labels) so the frontend can
+        # place zoom-aware area labels precisely, not by averaging vertices.
+        self.assertAlmostEqual(uttara["properties"]["lat"], 23.8759, places=2)
+        self.assertAlmostEqual(uttara["properties"]["lng"], 90.3795, places=2)
+
+    def test_sub_area_has_smaller_bubble_and_parent(self):
+        res = self.client.get("/api/v1/rooms/area-boundaries/")
+        mirpur10 = next(f for f in res.data["features"] if f["properties"]["key"] == "mirpur_10")
+        self.assertEqual(mirpur10["properties"]["kind"], "sub_area")
+        self.assertEqual(mirpur10["properties"]["parent_name"], "Mirpur")
+        self.assertEqual(mirpur10["properties"]["approx_radius_km"], 1.4)
+
+    def test_neighborhood_has_smallest_bubble(self):
+        res = self.client.get("/api/v1/rooms/area-boundaries/")
+        shahbagh = next(f for f in res.data["features"] if f["properties"]["key"] == "shahbagh")
+        self.assertEqual(shahbagh["properties"]["kind"], "neighborhood")
+        self.assertEqual(shahbagh["properties"]["approx_radius_km"], 0.7)
+
+
+class ExpandedLandmarkTests(APITestCase):
+    """Phase 7 v3 — everyday-places landmark categories."""
+
+    def test_landmarks_endpoint_includes_new_categories(self):
+        res = self.client.get("/api/v1/rooms/landmarks/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        kinds = {lm["kind"] for lm in res.data}
+        self.assertIn("hospital", kinds)
+        self.assertIn("market", kinds)
+        self.assertIn("park", kinds)
+        self.assertIn("mosque", kinds)
+        self.assertIn("bus_terminal", kinds)
+
+    def test_new_categories_have_real_places(self):
+        res = self.client.get("/api/v1/rooms/landmarks/")
+        by_kind: dict[str, list[dict]] = {}
+        for lm in res.data:
+            by_kind.setdefault(lm["kind"], []).append(lm)
+        self.assertGreaterEqual(len(by_kind["hospital"]), 5)
+        self.assertGreaterEqual(len(by_kind["market"]), 5)
+        self.assertGreaterEqual(len(by_kind["park"]), 5)
+        self.assertGreaterEqual(len(by_kind["mosque"]), 5)
+        self.assertGreaterEqual(len(by_kind["bus_terminal"]), 4)
+        # Spot-check real places resolve.
+        names = {lm["name"] for lm in by_kind["hospital"]}
+        self.assertIn("Square Hospital", names)
+        names = {lm["name"] for lm in by_kind["mosque"]}
+        self.assertIn("Baitul Mukarram National Mosque", names)
+
+    def test_geocode_still_finds_landmarks_across_kinds(self):
+        res = self.client.get("/api/v1/rooms/geocode/", {"q": "square hospital"})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(any("Square Hospital" in s["label"] for s in res.data))
+
+        res = self.client.get("/api/v1/rooms/geocode/", {"q": "baitul mukarram"})
+        self.assertTrue(any("Baitul Mukarram" in s["label"] for s in res.data))

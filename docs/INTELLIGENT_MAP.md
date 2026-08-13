@@ -1,13 +1,38 @@
 # 🗺️ Rentora Intelligent Rental Decision Map
 
-> **Phase 7 v2** — the map evolved from a property map into a **Rental Decision
-> Intelligence Platform**: it answers *"given my budget, destination and
-> preferences, where is the best place for me to live?"* instead of just
-> showing pins.
+> **Phase 7 v2 → v3** — the map evolved from a property map into a **Rental
+> Decision Intelligence Platform**: it answers *"given my budget, destination
+> and preferences, where is the best place for me to live?"* instead of just
+> showing pins. v3 fixes the dark-mode basemap, makes every map element
+> interactive, and adds a structured Dhaka geographic hierarchy.
 
 Built as an extension of the existing **MapLibre GL JS** map (Phase 7) on top
 of Rentora's existing search, pricing, fraud, listing and location systems.
 **No existing Phase 7 behaviour was rewritten.**
+
+---
+
+## What v3 adds
+
+| Feature | What it does |
+|---|---|
+| **Dark map fixed** | Dark mode now uses a lifted CARTO dark raster (brightness floor 0.2 / contrast 0.2) so roads and street labels stay readable instead of dissolving into near-black; dark-fallback keeps labels legible too |
+| **Dark layer contrast QA** | Every overlay layer gets dark-mode paints via a single theme-swap effect (`setPaintProperty`, no layer rebuild): university/metro dots brighten (violet-400 / teal-400), the MRT corridor core brightens with a subtle casing, the price heatmap switches to green-400/amber-400/red-400 at higher opacity with dark strokes, cluster rings darken, isochrone bands get stronger fills (0.1 → 0.22) with white outlines, the radius circle and metro-reach ring brighten — values live in `lib/mapInteractions` (`THEME_PAINTS`, unit-tested) |
+| **Dark popup card** | MapLibre popups are theme-aware now: dark surface + border instead of the default white card that flashed on the dark basemap; price/dist/metro/value accents brighten in dark |
+| **University & metro clicks** | Clicking a 🎓 university or 🚇 station dot opens a popup with real nearby-room counts + avg/range rent within ~2 km, plus a "Find rooms near…" CTA that starts a radius search and flies to the spot |
+| **MRT Line-6 corridor click** | The Line-6 polyline is clickable (info popup + pointer cursor) |
+| **Price-heatmap click** | Clicking the heatmap shows the clicked area's real stats (avg rent, count, range) from the rooms actually in view — no invented numbers |
+| **Isochrone band clicks** | Clicking a 10/20/30-min walking band shows how many rooms (and their price range) fall inside that zone |
+| **Map ↔ list sync** | Clicking a list item flies the map to the room + highlights the pin; clicking a map pin scrolls the matching list item into view |
+| **Room deep links** | `?room=123` in a shareable map URL reopens that listing's popup/modal on load |
+| **Structured Dhaka hierarchy** | `GET /api/v1/rooms/area-hierarchy/` returns main areas (Uttara, Mirpur, Dhanmondi…) with sub-areas/neighbourhoods (sectors, blocks, roads), each with parent link + approximate centre + Bangla/English aliases |
+| **Sub-area search** | "Mirpur 10", "Uttara Sector 7", "ধানমন্ডি ২৭" resolve via the hierarchy with their parent district shown under the label |
+| **Area boundary polygons** | `GET /api/v1/rooms/area-boundaries/` — approximate boundary bubbles (GeoJSON circles around real centres, explicitly labelled `approx_radius_km`, not fabricated borders): main areas strong (orange ring, z≈9.5+), sub-areas medium (blue, z≈11.5+), neighbourhoods subtle (violet, z≈13.5+); clicking a bubble opens the area's real listing stats |
+| **Expanded landmark layer** | Beyond universities & metro, the map now shows **hospitals, markets, parks, mosques and bus terminals** — real Dhaka places (Square Hospital, New Market, Baitul Mukarram, Gabtoli/Saidabad terminals…). The everyday categories share **one clustered GeoJSON source**: nearby places group into a count bubble at low zoom (click → zoom into the cluster) and split into per-kind dots as you zoom in, each with its own minzoom so the map never drowns in dots (hospitals z≈9.5 → bus stops z≈11). Every dot opens a real-data popup with a "Rooms near here →" radius-search CTA, and dark mode brightens each category (rose/amber/green/cyan/indigo-400 dots) |
+| **Nearby-landmark chips** | Every listing popup shows the nearest useful places around it as compact chips (🚇 7 min Metro · 🎓 12 min University) — real landmarks only, nearest of each category within ~3 km, straight-line walk estimates. Clicking a chip flies to the place and starts a radius search around it |
+| **Zoom-aware area labels** | Boundary bubbles carry their area's real centre (`lat`/`lng` on each feature), rendered as symbol-layer labels with zoom-based hierarchy so the map never drowns in text: main areas from z≈10, sub-areas z≈12.5, neighbourhoods z≈14.5. Text swaps with the theme (light text + dark halo on dark, dark text + white halo on light) |
+| **Boundary click → area filter** | Clicking an area bubble selects it (feature-state highlight: selected > hover > base), opens its real listing stats and **filters the room list + URL** to that area (`?area=…`); clicking empty space clears it. Hovering subtly lifts the bubble |
+| **Landmark-nearby list search** | The room list sidebar can filter by proximity to a category of place — "near a metro / university / hospital… within 0.5–2 km" — resolved to the nearest real landmark of that kind (`?near=<kind>&distance=<km>`), with the map flying to it once per applied filter |
 
 ---
 
@@ -106,12 +131,17 @@ All in `backend/config/settings/base.py` (defaults shown):
   (needs an optional routing provider, e.g. OSRM).
 - Transit ETA exists only along the MRT Line-6 corridor and only when both
   ends are near a station.
-- Area centres come from the existing gazetteer (`streets.py`); areas absent
-  from the gazetteer report `null` centres.
+- Area centres come from the existing gazetteer (`streets.py`) plus the
+  structured hierarchy (`dhaka_areas.py`); areas absent from both report
+  `null` centres.
+- The dark basemap depends on the CARTO CDN; if it is unreachable the map
+  falls back to a dimmed OSM raster (still readable after v3's paint lift).
 
 See also:
 
 - [MAP_API.md](./MAP_API.md) — endpoint reference
 - [MAP_SCORING.md](./MAP_SCORING.md) — scoring formulas
 - `backend/rooms/map_intel.py` — the engine
+- `backend/rooms/dhaka_areas.py` — the structured Dhaka hierarchy
+- `frontend/src/lib/mapInteractions.ts` — interaction popup helpers
 - `frontend/src/components/MapIntelPanel/MapIntelPanel.tsx` — the panel UI
