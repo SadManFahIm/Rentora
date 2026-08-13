@@ -356,6 +356,21 @@ describe("parseMapViewUrl", () => {
     expect(parseMapViewUrl("?room=-5").room).toBeNull();
     expect(parseMapViewUrl("?room=abc").room).toBeNull();
   });
+
+  it("parses the area + nearby-landmark filters", () => {
+    const v = parseMapViewUrl("?center=23.81,90.41&zoom=13&area=Uttara&near=metro&distance=1");
+    expect(v.area).toBe("Uttara");
+    expect(v.near).toBe("metro");
+    expect(v.distanceKm).toBe(1);
+  });
+
+  it("returns nulls for missing or invalid nearby filters", () => {
+    const v = parseMapViewUrl("?near=   &distance=50");
+    expect(v.near).toBeNull();
+    expect(v.distanceKm).toBeNull();
+    expect(parseMapViewUrl("").distanceKm).toBeNull();
+    expect(parseMapViewUrl("?distance=0.1").distanceKm).toBeNull();
+  });
 });
 
 describe("buildMapViewUrl", () => {
@@ -372,6 +387,29 @@ describe("buildMapViewUrl", () => {
       roomId: 42,
     });
     expect(parseMapViewUrl(url).room).toBe(42);
+  });
+
+  it("serializes and round-trips the area + nearby filters", () => {
+    const url = buildMapViewUrl({
+      center: { lat: 23.81, lng: 90.41 },
+      zoom: 13,
+      area: "Uttara",
+      near: "metro",
+      distanceKm: 1,
+    });
+    expect(url).toContain("area=Uttara");
+    expect(url).toContain("near=metro");
+    expect(url).toContain("distance=1");
+    const v = parseMapViewUrl(url);
+    expect(v.area).toBe("Uttara");
+    expect(v.near).toBe("metro");
+    expect(v.distanceKm).toBe(1);
+  });
+
+  it("omits nearby params when unset", () => {
+    const url = buildMapViewUrl({ center: { lat: 23.81, lng: 90.41 }, zoom: 13 });
+    expect(url).not.toContain("near=");
+    expect(url).not.toContain("distance=");
   });
 
   it("omits radius params when there is no label or radius", () => {

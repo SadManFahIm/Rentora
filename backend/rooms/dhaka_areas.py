@@ -330,6 +330,11 @@ def place_boundary_feature(place: DhakaPlace) -> dict:
             "parent_name": parent_name,
             # Transparency: these are approximate bubbles, not real borders.
             "approx_radius_km": round(radius, 1),
+            # The area's real centre (the polygon is a bubble around it) —
+            # lets the frontend place zoom-aware labels precisely, instead
+            # of approximating from polygon vertices.
+            "lat": place.lat,
+            "lng": place.lng,
         },
     }
 

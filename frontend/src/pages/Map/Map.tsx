@@ -16,6 +16,16 @@ import { useSearchParams } from "react-router-dom";
 import * as maplibregl from "maplibre-gl";
 import type { StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+// MapLibre v6 loads its worker via `new URL('./maplibre-gl-worker.mjs',
+// import.meta.url)` — a path Vite/Rollup does NOT emit for node_modules libs,
+// so the Worker would 404 (SPA fallback) and the map silently degrade to a
+// main-thread mode where symbol TEXT never renders (area labels, cluster
+// counts) and sources never report loaded. A plain `?url` copy is also
+// insufficient: v6's worker is split — it imports `./maplibre-gl-shared.mjs`,
+// which must ship alongside it. `?worker&url` makes Vite BUNDLE the worker
+// and its imports into one self-contained file, and returns its URL — the
+// correct worker for both dev and production builds.
+import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import {
   Bus,
   Check,
@@ -51,9 +61,13 @@ import { useValueScores } from "../../hooks/useMapIntel";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { useUiStore } from "../../stores/uiStore";
-import type { GeocodeSuggestion, LandmarkKind, Room } from "../../types";
+import type { AreaKind, GeocodeSuggestion, LandmarkKind, Room } from "../../types";
 import {
+  areaBoundaryFillOpacity,
+  areaBoundaryLineColor,
   areaStats,
+  AREA_LABEL_MINZOOM,
+  boundaryLabelsToFeatureCollection,
   heatmapPopupHtml,
   isochronePopupHtml,
   isochroneStats,
@@ -61,8 +75,10 @@ import {
   landmarkPopupHtml,
   LANDMARK_KIND_META,
   metroRoutePopupHtml,
+  nearbyLandmarkChipsHtml,
   nearbyStats,
   THEME_PAINTS,
+  themePaintValue,
   TRAVEL_BAND_DARK_OPACITY,
   TRAVEL_BAND_LIGHT_OPACITY,
 } from "../../lib/mapInteractions";
@@ -115,6 +131,9 @@ const TILE_DARK = "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png";
 type RasterMode = "light" | "dark" | "dark-fallback";
 const MAP_STYLE = (tiles: string, mode: RasterMode): StyleSpecification => ({
   version: 8,
+  // Key-free glyph server so symbol layers (zoom-aware area labels) can
+  // render text — the raster basemap carries no glyphs of its own.
+  glyphs: "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf",
   sources: {
     osm: {
       type: "raster",
@@ -151,6 +170,16 @@ const MAP_STYLE = (tiles: string, mode: RasterMode): StyleSpecification => ({
     },
   ],
 });
+
+/** Escape text before it enters popup HTML (defence-in-depth — backend
+ * sanitizes titles, but map popups interpolate area names too). */
+function escHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
 /** Debounce map-move refetches so panning doesn't hammer the API. */
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -192,11 +221,42 @@ export default function Map() {
     mosque: false,
     bus_terminal: false,
   });
+  // Area boundaries + zoom-aware labels (on by default; can be toggled off
+  // for a cleaner pin view — the filter itself is unaffected).
+  const [showAreas, setShowAreas] = useState(true);
   const [heatmap, setHeatmap] = useState(false);
   const [clustering, setClustering] = useState(true);
   const [listOpen, setListOpen] = useState(false);
   const [showTravel, setShowTravel] = useState(false);
   const [activeRoomId, setActiveRoomId] = useState<number | null>(null);
+  // Selected area boundary (Phase 7 v3 — boundary click filters the list).
+  // `name` is what goes into the URL + the `area=` filter; `key`/`kind`
+  // drive the highlight. Clicking empty map space clears it.
+  const [selectedArea, setSelectedArea] = useState<{
+    key: string;
+    name: string;
+    kind: AreaKind;
+    parentName: string | null;
+  } | null>(null);
+  // Boundary hover — subtle fill + stronger ring via feature-state. Kept in
+  // a ref (not state) so a mousemove across bubbles doesn't re-run the whole
+  // boundary effect — feature-state paints update live without a re-render.
+  const hoverAreaKeyRef = useRef<string | null>(null);
+  // Mirror of `selectedArea` for the map-level empty-click handler (which is
+  // registered once per map instance and can't close over fresh state).
+  const selectedAreaRef = useRef<{ key: string } | null>(null);
+  // Landmark-nearby search (Phase 7 v3): nearest N landmark category within
+  // a radius. Feeds ?near_landmark=&radius_km= to the room list API.
+  const [nearbyFilter, setNearbyFilter] = useState<{
+    kind: LandmarkKind;
+    distanceKm: number;
+  } | null>(null);
+  // The landmark slug resolved for `nearbyFilter` (nearest of its kind to
+  // the current map centre — recomputed when the viewport settles).
+  const [nearbyLandmarkKey, setNearbyLandmarkKey] = useState<string | null>(null);
+  // The filter identity we last flew to for (kind@distance) — so the map
+  // centres on the chosen landmark once per apply, not on every pan.
+  const flownNearbyForRef = useRef<string | null>(null);
 
   // ---- street search / autocomplete state --------------------------------
   const [searchQuery, setSearchQuery] = useState("");
@@ -208,6 +268,11 @@ export default function Map() {
   // When dark tiles (CARTO CDN) fail to load, fall back to dimmed OSM tiles
   // so the map stays readable instead of going black.
   const [darkTileFallback, setDarkTileFallback] = useState(false);
+  // Live zoom — powers the layer-dependency hints (a category toggle that's
+  // only meaningful when zoomed in enough shouldn't look "broken" at low
+  // zoom; we say "Zoom in to see…" instead). Kept in state because it's
+  // rendered in the toolbar/legend, not just read by map layers.
+  const [mapZoom, setMapZoom] = useState(DHAKA_ZOOM);
 
   // ---- radius search state --------------------------------------------
   // Live mirror of radiusCenter for the once-registered map interaction
@@ -264,10 +329,22 @@ export default function Map() {
         radiusKm: radiusCenter ? radiusKm : null,
         label: radiusCenter?.label ?? null,
         roomId: activeRoomId,
+        area: selectedArea?.name ?? null,
+        near: nearbyFilter?.kind ?? null,
+        distanceKm: nearbyFilter?.distanceKm ?? null,
       }),
       { replace: true }
     );
-  }, [debouncedViewbox, radiusCenter, radiusKm, activeRoomId, mapReady, setSearchParams]);
+  }, [
+    debouncedViewbox,
+    radiusCenter,
+    radiusKm,
+    activeRoomId,
+    mapReady,
+    setSearchParams,
+    selectedArea,
+    nearbyFilter,
+  ]);
 
   const filters = useMemo(() => {
     const f: {
@@ -275,6 +352,8 @@ export default function Map() {
       nearLat?: number;
       nearLng?: number;
       radiusKm?: number;
+      area?: string;
+      nearLandmark?: string;
     } = {};
     if (debouncedRadiusCenter) {
       f.nearLat = debouncedRadiusCenter.lat;
@@ -283,12 +362,79 @@ export default function Map() {
     } else if (debouncedViewbox) {
       f.bbox = debouncedViewbox;
     }
+    // Boundary click: filter by the selected main area (sub-areas/neighbour-
+    // hoods filter through their parent so the backend's `area=` — which only
+    // knows Room.Area main districts — keeps working).
+    if (selectedArea?.parentName) {
+      f.area = selectedArea.parentName;
+    } else if (selectedArea) {
+      f.area = selectedArea.name;
+    }
+    // Landmark-nearby search: ?near_landmark=<slug>&radius_km=…
+    if (nearbyFilter && nearbyLandmarkKey) {
+      f.nearLandmark = nearbyLandmarkKey;
+      f.radiusKm = nearbyFilter.distanceKm;
+    }
     return f;
-  }, [debouncedViewbox, debouncedRadiusCenter, radiusKm]);
+  }, [
+    debouncedViewbox,
+    debouncedRadiusCenter,
+    radiusKm,
+    selectedArea,
+    nearbyFilter,
+    nearbyLandmarkKey,
+  ]);
 
   const { data: rooms = [], isLoading } = useRooms(filters);
   const { data: landmarks = [] } = useLandmarks();
   const { data: boundaries } = useAreaBoundaries();
+  // Keep the empty-click guard's ref in sync with the state (URL restore
+  // sets state directly; this covers every other path).
+  useEffect(() => {
+    if (selectedArea) selectedAreaRef.current = { key: selectedArea.key };
+  }, [selectedArea]);
+
+  // Landmark-nearby search (Phase 7 v3): resolve the chosen category to the
+  // NEAREST real landmark of that kind to the current map centre, then pass
+  // its slug as `near_landmark` so the backend radius-filters the room list.
+  // Re-resolves when the category, distance or viewport centre changes.
+  useEffect(() => {
+    if (!nearbyFilter) {
+      setNearbyLandmarkKey(null);
+      flownNearbyForRef.current = null;
+      return;
+    }
+    const map = mapRef.current;
+    const centre = map?.getCenter();
+    if (!map || !centre) return;
+    const kind = nearbyFilter.kind;
+    let bestKey: string | null = null;
+    let bestKm = Infinity;
+    // Primitives (not an object union) so TypeScript's control-flow analysis
+    // tracks the closure assignment — an object assigned only inside the
+    // forEach would stay narrowed to `null` and make the flyTo branch `never`.
+    let bestLat: number | null = null;
+    let bestLng: number | null = null;
+    landmarks.forEach((lm) => {
+      if (lm.kind !== kind) return;
+      const km = haversineKm(centre.lat, centre.lng, lm.lat, lm.lng);
+      if (km < bestKm) {
+        bestKm = km;
+        bestKey = lm.key;
+        bestLat = lm.lat;
+        bestLng = lm.lng;
+      }
+    });
+    setNearbyLandmarkKey(bestKey);
+    // Fly to the chosen landmark ONCE per applied filter (identity =
+    // kind@distance) so the map visibly responds to the list filter — but
+    // panning afterwards never yanks the viewport back.
+    const identity = `${kind}@${nearbyFilter.distanceKm}`;
+    if (bestLat != null && bestLng != null && flownNearbyForRef.current !== identity) {
+      flownNearbyForRef.current = identity;
+      mapRef.current?.flyTo({ center: [bestLng, bestLat], zoom: 13 });
+    }
+  }, [nearbyFilter, landmarks, debouncedViewbox]);
   // Authoritative room counts for the badge (COUNT/AVG server-side — the
   // paginated list caps at one page, so client-side counting undercounts).
   const { data: summary } = useMapSummary(filters);
@@ -306,6 +452,10 @@ export default function Map() {
     const style = darkTileFallback
       ? MAP_STYLE(darkMode ? TILE_LIGHT : TILE_LIGHT, darkMode ? "dark-fallback" : "light")
       : MAP_STYLE(darkMode ? TILE_DARK : TILE_LIGHT, darkMode ? "dark" : "light");
+    // Point MapLibre at the bundled worker (see the ?url import above) so
+    // symbol layers — zoom-aware area labels, cluster counts — can render.
+    // Idempotent: re-applied on every map (re)creation with the same URL.
+    maplibregl.setWorkerUrl(maplibreWorkerUrl);
     const map = new maplibregl.Map({
       container: containerRef.current,
       style,
@@ -339,6 +489,7 @@ export default function Map() {
           })
         )
       );
+      setMapZoom(map.getZoom());
     };
 
     const applyUrlView = () => {
@@ -361,6 +512,24 @@ export default function Map() {
           lat: (urlView.center ?? [DHAKA_CENTER[1], DHAKA_CENTER[0]])[0],
           lng: (urlView.center ?? [DHAKA_CENTER[1], DHAKA_CENTER[0]])[1],
           label: urlView.query,
+        });
+      }
+      if (urlView.area) {
+        const area = {
+          key: "",
+          name: urlView.area,
+          kind: "main_area" as AreaKind,
+          parentName: null,
+        };
+        selectedAreaRef.current = area;
+        setSelectedArea(area);
+      }
+      // Landmark-nearby filter from ?near=<kind>&distance=<km>.
+      if (urlView.near) {
+        const kind = urlView.near as LandmarkKind;
+        setNearbyFilter({
+          kind,
+          distanceKm: urlView.distanceKm ?? 1,
         });
       }
     };
@@ -402,6 +571,26 @@ export default function Map() {
         }
         setRadiusCenter(null);
         setActiveRoomId(null);
+        // Empty click clears the selected boundary — but only when the click
+        // didn't land on a boundary bubble itself (layer click handlers fire
+        // first and re-select; queryRenderedFeatures tells us the truth).
+        const hitBoundary = map
+          .queryRenderedFeatures(e.point, {
+            layers: [
+              "area-boundary-line-main",
+              "area-boundary-line-sub",
+              "area-boundary-line-nbhd",
+            ],
+          })
+          .some((f) => f.properties?.key);
+        if (!hitBoundary) {
+          const prevKey = selectedAreaRef.current?.key;
+          if (prevKey) {
+            map.setFeatureState({ source: "area-boundaries", id: prevKey }, { selected: false });
+          }
+          selectedAreaRef.current = null;
+          setSelectedArea(null);
+        }
       }
     });
 
@@ -569,20 +758,39 @@ export default function Map() {
     }
   }, [landmarks, mapReady]);
 
-  // ---- area boundary polygons (Phase 7 v3) -------------------------------
+  // ---- area boundary polygons + labels (Phase 7 v3) ----------------------
   // Approximate boundary bubbles from /rooms/area-boundaries/ — main areas
   // strong, sub-areas medium, neighbourhoods subtle — with zoom-based
   // visibility so the map never drowns in rings: main areas appear from
   // z≈10, sub-areas from z≈12, neighbourhoods from z≈13.5. Clicking a bubble
-  // opens the area's real listing stats.
+  // FILTERS the room list to that area (Phase 7 v3 — connected interaction:
+  // boundary → area filter → list + URL + highlight); hovering subtly lifts
+  // the bubble via feature-state. Zoom-aware text labels sit on top, each
+  // kind appearing at its own zoom (AREA_LABEL_MINZOOM).
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
     if (!boundaries) return;
     const SOURCE = "area-boundaries";
+    const LABEL_SOURCE = "area-labels";
+    const LINE_IDS = [
+      "area-boundary-line-main",
+      "area-boundary-line-sub",
+      "area-boundary-line-nbhd",
+    ] as const;
+    // Read the CURRENT theme at creation so a map built in dark mode gets
+    // dark-tuned labels/boundaries immediately (the theme-swap effect only
+    // re-paints layers that already exist, so creation-time theme matters).
+    const dark = useUiStore.getState().darkMode;
     try {
       if (!map.getSource(SOURCE)) {
-        map.addSource(SOURCE, { type: "geojson", data: boundaries as GeoJSON.FeatureCollection });
+        // promoteId: "key" lets feature-state address each bubble by its
+        // stable area slug (hover/selected highlight without new layers).
+        map.addSource(SOURCE, {
+          type: "geojson",
+          data: boundaries as GeoJSON.FeatureCollection,
+          promoteId: "key",
+        });
         const spec: {
           id: string;
           kind: "main_area" | "sub_area" | "neighborhood";
@@ -595,42 +803,87 @@ export default function Map() {
             kind: "main_area",
             type: "fill",
             minzoom: 9.5,
-            paint: { "fill-color": "#f97316", "fill-opacity": 0.06 },
+            paint: {
+              "fill-color": "#f97316",
+              // Selected > hover > default — feature-state keeps the highlight
+              // live without rebuilding layers; the expression builder bakes
+              // the theme in so dark mode keeps the states too.
+              "fill-opacity": areaBoundaryFillOpacity("main_area", dark),
+            },
           },
           {
             id: "area-boundary-line-main",
             kind: "main_area",
             type: "line",
             minzoom: 9.5,
-            paint: { "line-color": "#ea580c", "line-width": 2.5, "line-opacity": 0.75 },
+            paint: {
+              "line-color": areaBoundaryLineColor("main_area", dark),
+              "line-width": [
+                "case",
+                ["==", ["feature-state", "selected"], true],
+                4,
+                ["==", ["feature-state", "hover"], true],
+                3,
+                2.5,
+              ],
+              "line-opacity": 0.75,
+            },
           },
           {
             id: "area-boundary-fill-sub",
             kind: "sub_area",
             type: "fill",
             minzoom: 11.5,
-            paint: { "fill-color": "#3b82f6", "fill-opacity": 0.05 },
+            paint: {
+              "fill-color": "#3b82f6",
+              "fill-opacity": areaBoundaryFillOpacity("sub_area", dark),
+            },
           },
           {
             id: "area-boundary-line-sub",
             kind: "sub_area",
             type: "line",
             minzoom: 11.5,
-            paint: { "line-color": "#3b82f6", "line-width": 1.5, "line-opacity": 0.6 },
+            paint: {
+              "line-color": areaBoundaryLineColor("sub_area", dark),
+              "line-width": [
+                "case",
+                ["==", ["feature-state", "selected"], true],
+                3,
+                ["==", ["feature-state", "hover"], true],
+                2,
+                1.5,
+              ],
+              "line-opacity": 0.6,
+            },
           },
           {
             id: "area-boundary-fill-nbhd",
             kind: "neighborhood",
             type: "fill",
             minzoom: 13.5,
-            paint: { "fill-color": "#7c3aed", "fill-opacity": 0.04 },
+            paint: {
+              "fill-color": "#7c3aed",
+              "fill-opacity": areaBoundaryFillOpacity("neighborhood", dark),
+            },
           },
           {
             id: "area-boundary-line-nbhd",
             kind: "neighborhood",
             type: "line",
             minzoom: 13.5,
-            paint: { "line-color": "#7c3aed", "line-width": 1, "line-opacity": 0.5 },
+            paint: {
+              "line-color": areaBoundaryLineColor("neighborhood", dark),
+              "line-width": [
+                "case",
+                ["==", ["feature-state", "selected"], true],
+                2.5,
+                ["==", ["feature-state", "hover"], true],
+                1.5,
+                1,
+              ],
+              "line-opacity": 0.5,
+            },
           },
         ];
         spec.forEach(({ id, kind, type, minzoom, paint }) => {
@@ -650,36 +903,181 @@ export default function Map() {
         });
       }
 
-      // Click a boundary bubble → the area's real listing stats.
+      // ---- zoom-aware area labels --------------------------------------
+      // Point labels at each area's real centre, one symbol layer per
+      // hierarchy kind with its own minzoom (main areas first, then sub-
+      // areas, then neighbourhoods). Colors/halos swap with the theme via
+      // THEME_PAINTS so text stays readable on dark tiles.
+      if (!map.getSource(LABEL_SOURCE)) {
+        map.addSource(LABEL_SOURCE, {
+          type: "geojson",
+          data: boundaryLabelsToFeatureCollection(
+            boundaries as unknown as {
+              type: "FeatureCollection";
+              features: { properties?: Record<string, unknown> | null }[];
+            }
+          ),
+        });
+        (
+          [
+            ["area-label-main", "main_area"],
+            ["area-label-sub", "sub_area"],
+            ["area-label-nbhd", "neighborhood"],
+          ] as const
+        ).forEach(([id, kind]) => {
+          map.addLayer(
+            {
+              id,
+              type: "symbol",
+              source: LABEL_SOURCE,
+              filter: ["==", ["get", "kind"], kind],
+              minzoom: AREA_LABEL_MINZOOM[kind] ?? 12,
+              layout: {
+                "text-field": ["get", "name"],
+                "text-size": kind === "main_area" ? 13 : 11,
+                // "Noto Sans Regular" is served by the key-free glyph server;
+                // a font NOT on that server (e.g. "Arial Unicode MS Regular")
+                // would 404 the glyph request and blank the whole label.
+                "text-font": ["Noto Sans Regular"],
+                "text-anchor": "center",
+                "text-letter-spacing": 0.02,
+              },
+              // Theme-aware paint baked in at creation (light: dark text +
+              // white halo; dark: near-white text + dark halo). The
+              // theme-swap effect also re-applies these via THEME_PAINTS so
+              // toggling after load keeps the labels readable. themePaintValue
+              // returns `unknown`, so the fallback cast pins the type.
+              paint: {
+                "text-color": (themePaintValue(id, "text-color", dark) ??
+                  (kind === "main_area" ? "#1f2937" : "#4b5563")) as string,
+                "text-halo-color": (themePaintValue(id, "text-halo-color", dark) ??
+                  "#ffffff") as string,
+                "text-halo-width": kind === "main_area" ? 2 : 1.5,
+                "text-halo-blur": 0.5,
+              },
+            },
+            map.getLayer("rooms-clusters-layer") ? "rooms-clusters-layer" : undefined
+          );
+        });
+      }
+
+      // ---- boundary interactions (click filters, hover lifts) -----------
       const pointer = (on: boolean) => () => {
         map.getCanvas().style.cursor = on ? "pointer" : "";
       };
-      (
-        ["area-boundary-line-main", "area-boundary-line-sub", "area-boundary-line-nbhd"] as const
-      ).forEach((id) => {
-        map.on("click", id, (e) => {
-          const f = e.features?.[0];
-          if (!f) return;
-          const p = (f.properties ?? {}) as Record<string, string>;
-          const area = String(p.name ?? "");
-          const stats = areaStats(roomsRef.current, area);
-          new maplibregl.Popup({ closeButton: false, closeOnClick: true, maxWidth: "240px" })
-            .setLngLat(e.lngLat)
-            .setHTML(
-              heatmapPopupHtml(area, stats) +
-                (p.approx_radius_km
-                  ? `<div class="map-popup__meta" style="margin-top:4px">~${p.approx_radius_km} km approximate boundary</div>`
-                  : "")
-            )
-            .addTo(map);
-        });
-        map.on("mouseenter", id, pointer(true));
-        map.on("mouseleave", id, pointer(false));
+      const setState = (key: string, state: Record<string, boolean>) => {
+        try {
+          map.setFeatureState({ source: SOURCE, id: key }, state);
+        } catch {
+          // Feature id not present (source data changed) — no-op.
+        }
+      };
+
+      // A URL-restored selection (?area=…) has no key (the slug isn't in the
+      // URL) — resolve it from the boundary data so the highlight lands.
+      if (selectedArea && !selectedArea.key) {
+        const features = (
+          boundaries as unknown as {
+            type: "FeatureCollection";
+            features: { properties?: Record<string, unknown> | null }[];
+          }
+        ).features;
+        const match = features.find(
+          (f) =>
+            typeof f.properties?.name === "string" &&
+            f.properties.name.toLowerCase() === selectedArea.name.toLowerCase()
+        );
+        const resolvedKey = match?.properties?.key ? String(match.properties.key) : null;
+        if (resolvedKey) {
+          selectedAreaRef.current = { key: resolvedKey };
+          setSelectedArea({ ...selectedArea, key: resolvedKey });
+          setState(resolvedKey, { selected: true });
+        }
+      }
+
+      // All handlers are removed before being re-added so the effect's
+      // re-runs (rooms/selectedArea change on every refetch + click) never
+      // stack duplicate listeners — a stacked click handler would open the
+      // same popup N times.
+      const onClick = (e: maplibregl.MapLayerMouseEvent) => {
+        const f = e.features?.[0];
+        if (!f) return;
+        const p = (f.properties ?? {}) as Record<string, string>;
+        const key = String(p.key ?? "");
+        const name = String(p.name ?? "");
+        const kind = (p.kind ?? "main_area") as AreaKind;
+        const parentName = (p.parent_name as string | null) ?? null;
+        // Select + highlight this boundary, clear the previous selection.
+        if (selectedArea?.key && selectedArea.key !== key) {
+          setState(selectedArea.key, { selected: false });
+        }
+        setSelectedArea({ key, name, kind, parentName });
+        selectedAreaRef.current = { key };
+        setState(key, { selected: true, hover: false });
+        // Fly to the area's real centre so the filter is VISIBLE — clicking
+        // a boundary must answer with pins + list results, not an empty
+        // "No rooms in view" because the selected area sits off-viewport.
+        // Zoom matches the hierarchy level: main areas land at a street-
+        // readable zoom, sub-areas closer, neighbourhoods closer still.
+        const centreLat = Number(p.lat);
+        const centreLng = Number(p.lng);
+        if (Number.isFinite(centreLat) && Number.isFinite(centreLng)) {
+          const zoomForKind = kind === "neighborhood" ? 14.5 : kind === "sub_area" ? 13.5 : 12;
+          map.flyTo({ center: [centreLng, centreLat], zoom: zoomForKind });
+        }
+        // The area's real listing stats + the filter applied.
+        const stats = areaStats(roomsRef.current, name);
+        new maplibregl.Popup({ closeButton: false, closeOnClick: true, maxWidth: "240px" })
+          .setLngLat(e.lngLat)
+          .setHTML(
+            heatmapPopupHtml(name, stats) +
+              `<div class="map-popup__meta" style="margin-top:4px">Filtered to ${escHtml(name)}${
+                parentName ? ` (${escHtml(parentName)})` : ""
+              }</div>`
+          )
+          .addTo(map);
+      };
+      const pointerIn = pointer(true);
+      const pointerOut = pointer(false);
+      LINE_IDS.forEach((id) => {
+        map.off("click", id, onClick);
+        map.off("mouseenter", id, pointerIn);
+        map.off("mouseleave", id, pointerOut);
+        map.on("click", id, onClick);
+        map.on("mouseenter", id, pointerIn);
+        map.on("mouseleave", id, pointerOut);
+      });
+
+      // Hover: lift the bubble under the cursor (fast + subtle), clear when
+      // the pointer leaves a boundary or selects another area. Registered on
+      // the three line layers — `mousemove` with a layer id fires only over
+      // that layer's rendered features. The listeners are removed first so
+      // re-runs (data refresh) never stack them.
+      const onHover = (e: maplibregl.MapLayerMouseEvent) => {
+        const f = e.features?.[0];
+        const key = f ? String((f.properties ?? {}).key ?? "") : null;
+        const prev = hoverAreaKeyRef.current;
+        if (prev && prev !== key) setState(prev, { hover: false });
+        if (key && key !== prev && key !== selectedArea?.key) {
+          setState(key, { hover: true });
+        }
+        hoverAreaKeyRef.current = key;
+      };
+      const clearHover = () => {
+        const prev = hoverAreaKeyRef.current;
+        if (prev) setState(prev, { hover: false });
+        hoverAreaKeyRef.current = null;
+      };
+      LINE_IDS.forEach((layerId) => {
+        map.off("mousemove", layerId, onHover);
+        map.off("mouseleave", layerId, clearHover);
+        map.on("mousemove", layerId, onHover);
+        map.on("mouseleave", layerId, clearHover);
       });
     } catch {
       // Rapid toggle during layer juggling — safe to ignore.
     }
-  }, [boundaries, mapReady, rooms]);
+  }, [boundaries, mapReady, rooms, selectedArea]);
 
   // Layer visibility follows the toggles — the fixed dot layers keep their
   // own visibility; the shared places cluster (count bubble + per-kind dots)
@@ -706,7 +1104,23 @@ export default function Map() {
     placesLayers.forEach((id) => {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", placesOn ? "visible" : "none");
     });
-  }, [showLandmarks, mapReady]);
+    // Area boundaries + zoom-aware labels follow the Areas toggle. Hiding a
+    // selected boundary is fine — the `area=` filter and list stay intact.
+    const areaLayers = [
+      "area-boundary-fill-main",
+      "area-boundary-line-main",
+      "area-boundary-fill-sub",
+      "area-boundary-line-sub",
+      "area-boundary-fill-nbhd",
+      "area-boundary-line-nbhd",
+      "area-label-main",
+      "area-label-sub",
+      "area-label-nbhd",
+    ];
+    areaLayers.forEach((id) => {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", showAreas ? "visible" : "none");
+    });
+  }, [showLandmarks, showAreas, mapReady]);
 
   // ---- metro route corridor -----------------------------------------------
   // A polyline threading the MRT Line 6 stations (Uttara → Motijheel) so the
@@ -1074,6 +1488,13 @@ export default function Map() {
       const valueLine = valueScores?.[room.id]
         ? `<div class="map-popup__value">⭐ Value score <b>${valueScores[room.id].score}/100</b> · ${valueScores[room.id].factors.metro}/100 transit</div>`
         : "";
+      // Nearby useful places (nearest of each category within ~3 km, real
+      // landmarks only) — click a chip to fly to the place + radius search.
+      const nearbyChips = nearbyLandmarkChipsHtml(
+        landmarks as { key: string; name: string; kind: LandmarkKind; lat: number; lng: number }[],
+        room.lat,
+        room.lng
+      );
       const popup = new maplibregl.Popup({ offset: 22, closeButton: false, maxWidth: "290px" })
         .setHTML(`
         <div class="map-popup">
@@ -1081,12 +1502,33 @@ export default function Map() {
           <div class="map-popup__name">${esc(room.name)}</div>
           <div class="map-popup__meta">${esc(room.area)} · ${esc(room.type)} · ★ ${room.rating} (${room.reviews})</div>
           ${valueLine}
+          ${nearbyChips}
           ${metroLine}
           ${distanceLine}
           ${directionsRow}
           <div class="map-popup__cta">View listing →</div>
         </div>
       `);
+      // Chip click → fly to the landmark + start a radius search around it
+      // (reuses the same interaction as university/metro dot clicks).
+      popup.on("open", () => {
+        popup
+          .getElement()
+          .querySelectorAll("[data-chip-key]")
+          .forEach((chip) => {
+            const key = (chip as HTMLElement).dataset.chipKey;
+            const lm = landmarks.find((l) => l.key === key);
+            if (!lm) return;
+            chip.addEventListener("click", () => {
+              setRadiusCenter({ lat: lm.lat, lng: lm.lng, label: lm.name });
+              setRadiusKm(2);
+              mapRef.current?.flyTo({
+                center: [lm.lng, lm.lat],
+                zoom: Math.max(mapRef.current.getZoom(), 13.5),
+              });
+            });
+          });
+      });
 
       const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
         .setLngLat([room.lng, room.lat])
@@ -1098,7 +1540,7 @@ export default function Map() {
     });
     // radiusCenter feeds the popup's directions origin, so markers rebuild
     // when the search point moves (they also refetch rooms then anyway).
-  }, [rooms, mapReady, clustering, radiusCenter, valueScores]);
+  }, [rooms, mapReady, clustering, radiusCenter, valueScores, landmarks]);
 
   // Destination pin for the commute mode — a teal flag the user drops by
   // clicking the map (or via the panel), persisted in URL state.
@@ -1684,6 +2126,7 @@ export default function Map() {
             <Button
               variant="ghost"
               size="sm"
+              aria-pressed={showLandmarks.universities}
               className={cn(
                 "gap-1.5 rounded-lg",
                 showLandmarks.universities &&
@@ -1696,6 +2139,7 @@ export default function Map() {
             <Button
               variant="ghost"
               size="sm"
+              aria-pressed={showLandmarks.metro}
               className={cn(
                 "gap-1.5 rounded-lg",
                 showLandmarks.metro &&
@@ -1721,6 +2165,11 @@ export default function Map() {
                 key={kind}
                 variant="ghost"
                 size="sm"
+                aria-pressed={showLandmarks[kind]}
+                // Everyday places only appear as individual dots when zoomed
+                // in enough (they share one clustered source at low zoom) —
+                // say so in the tooltip so the layer never feels "broken".
+                title="Zoom in to see individual places"
                 className={cn(
                   "gap-1.5 rounded-lg",
                   showLandmarks[kind] &&
@@ -1734,6 +2183,20 @@ export default function Map() {
             <Button
               variant="ghost"
               size="sm"
+              aria-pressed={showAreas}
+              className={cn(
+                "gap-1.5 rounded-lg",
+                showAreas && "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+              )}
+              onClick={() => setShowAreas((a) => !a)}
+              title="Area boundary bubbles + labels"
+            >
+              <MapPin className="size-4" /> Areas
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-pressed={heatmap}
               className={cn(
                 "gap-1.5 rounded-lg",
                 heatmap && "bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300"
@@ -1751,6 +2214,7 @@ export default function Map() {
             <Button
               variant="ghost"
               size="sm"
+              aria-pressed={clustering}
               className={cn(
                 "gap-1.5 rounded-lg",
                 clustering && "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
@@ -1765,6 +2229,7 @@ export default function Map() {
             <Button
               variant="ghost"
               size="sm"
+              aria-pressed={showTravel}
               className={cn(
                 "gap-1.5 rounded-lg",
                 showTravel && "bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300"
@@ -1777,6 +2242,7 @@ export default function Map() {
             <Button
               variant="ghost"
               size="sm"
+              aria-pressed={listOpen}
               className={cn(
                 "gap-1.5 rounded-lg",
                 listOpen && "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
@@ -1788,6 +2254,7 @@ export default function Map() {
             <Button
               variant="ghost"
               size="sm"
+              aria-pressed={!!intelMode}
               className={cn(
                 "gap-1.5 rounded-lg",
                 intelMode &&
@@ -1916,6 +2383,10 @@ export default function Map() {
                   zoom: map.getZoom(),
                   radiusKm: radiusCenter ? radiusKm : null,
                   label: radiusCenter?.label ?? null,
+                  roomId: activeRoomId,
+                  area: selectedArea?.name ?? null,
+                  near: nearbyFilter?.kind ?? null,
+                  distanceKm: nearbyFilter?.distanceKm ?? null,
                 });
               const done = () => {
                 setShareCopied(true);
@@ -1960,8 +2431,12 @@ export default function Map() {
           </Badge>
         </div>
 
-        {/* Legend — switches to the heatmap scale when the price heatmap is on */}
-        <div className="absolute bottom-4 right-4 z-10 hidden rounded-lg border border-gray-200 bg-white/95 px-3 py-2 text-xs shadow backdrop-blur sm:block dark:border-gray-800 dark:bg-gray-900/95">
+        {/* Legend — switches to the heatmap scale when the price heatmap is
+            on; otherwise lists what's ACTUALLY rendered: rental tiers always,
+            area boundaries when enabled, and each landmark category only
+            while its toggle is on (no unexplained entries). Visible on mobile
+            too (the map list sheet only covers it when open). */}
+        <div className="absolute bottom-4 right-4 z-10 block rounded-lg border border-gray-200 bg-white/95 px-3 py-2 text-xs shadow backdrop-blur dark:border-gray-800 dark:bg-gray-900/95">
           {heatmap ? (
             <>
               <div className="mb-1 font-semibold text-foreground">Rent heatmap</div>
@@ -1989,15 +2464,86 @@ export default function Map() {
               <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
                 <span className="inline-block size-2.5 rounded-full bg-[#f59e0b]" /> Premium
               </div>
-              <div className="mt-1.5 flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-                <span className="inline-block size-2.5 rounded-full bg-[#7c3aed]" /> University
-              </div>
-              <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-                <span className="inline-block size-2.5 rounded-full bg-[#0d9488]" /> Metro
-              </div>
-              <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-                <span className="inline-block h-0.5 w-4 rounded bg-[#0d9488]" /> MRT Line 6
-              </div>
+              {/* Area boundary bubbles — main / sub / neighbourhood rings. */}
+              {showAreas && (
+                <div className="mt-1.5 flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                  <span className="inline-block h-0.5 w-4 rounded bg-[#ea580c] dark:bg-[#fb923c]" />
+                  Area
+                </div>
+              )}
+              {/* Landmark categories — shown only while their layer is on.
+                  Consistent lucide iconography (same icons as the toolbar
+                  toggles), not emoji — one visual language across controls
+                  and legend. */}
+              {showLandmarks.universities && (
+                <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                  <GraduationCap
+                    className={`size-3.5 ${darkMode ? "text-[#a78bfa]" : "text-[#7c3aed]"}`}
+                  />
+                  University
+                </div>
+              )}
+              {showLandmarks.metro && (
+                <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                  <TrainFront
+                    className={`size-3.5 ${darkMode ? "text-[#2dd4bf]" : "text-[#0d9488]"}`}
+                  />
+                  Metro
+                </div>
+              )}
+              {(showLandmarks.metro || showTravel) && (
+                <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                  <span className="inline-block h-0.5 w-4 rounded bg-[#0d9488] dark:bg-[#2dd4bf]" />
+                  MRT Line 6
+                </div>
+              )}
+              {(
+                [
+                  ["hospital", "Hospital", Hospital],
+                  ["market", "Market", ShoppingBasket],
+                  ["park", "Park", TreePine],
+                  ["mosque", "Mosque", Church],
+                  ["bus_terminal", "Bus terminal", Bus],
+                ] as const
+              ).map(([kind, label, Icon]) =>
+                showLandmarks[kind] ? (
+                  <div
+                    key={kind}
+                    className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400"
+                  >
+                    <Icon
+                      className="size-3.5"
+                      style={{
+                        // Match the dot colour the map actually renders in
+                        // this theme (brighter on the dark basemap).
+                        color: darkMode
+                          ? LANDMARK_KIND_META[kind].darkColor
+                          : LANDMARK_KIND_META[kind].color,
+                      }}
+                    />
+                    {label}
+                  </div>
+                ) : null
+              )}
+              {/* Zoom-dependency hint (Phase 7 v3): an everyday landmark
+                  category shares one clustered source — at low zoom you see
+                  count bubbles, not individual dots. Say so instead of
+                  looking broken. */}
+              {(() => {
+                const everydayOn = (
+                  ["hospital", "market", "park", "mosque", "bus_terminal"] as const
+                )
+                  .filter((k) => showLandmarks[k])
+                  .map((k) => LANDMARK_KIND_META[k]);
+                if (everydayOn.length === 0) return null;
+                const minZoomNeeded = Math.min(...everydayOn.map((m) => m.minzoom));
+                if (mapZoom >= minZoomNeeded) return null;
+                return (
+                  <div className="mt-1 text-[10px] italic text-gray-400 dark:text-gray-500">
+                    Zoom in to see individual places
+                  </div>
+                );
+              })()}
             </>
           )}
         </div>
@@ -2037,6 +2583,8 @@ export default function Map() {
           rooms={rooms}
           loading={isLoading}
           activeId={activeRoomId}
+          nearbyFilter={nearbyFilter}
+          onNearbyFilterChange={setNearbyFilter}
           onSelect={(room) => {
             setActiveRoomId(room.id);
             setListOpen(true);
@@ -2057,6 +2605,8 @@ export default function Map() {
             rooms={rooms}
             loading={isLoading}
             activeId={activeRoomId}
+            nearbyFilter={nearbyFilter}
+            onNearbyFilterChange={setNearbyFilter}
             onSelect={(room) => {
               setActiveRoomId(room.id);
               setSelectedRoom(room);
@@ -2111,9 +2661,33 @@ interface MapSidebarProps {
   activeId: number | null;
   onSelect: (room: Room) => void;
   onClose: () => void;
+  /** Landmark-nearby search — the list can filter rooms by "near a metro /
+   * university / … within N km" without touching the map. */
+  nearbyFilter: { kind: LandmarkKind; distanceKm: number } | null;
+  onNearbyFilterChange: (next: { kind: LandmarkKind; distanceKm: number } | null) => void;
 }
 
-function MapSidebar({ rooms, loading, activeId, onSelect, onClose }: MapSidebarProps) {
+const NEARBY_KIND_OPTIONS: { kind: LandmarkKind; label: string }[] = [
+  { kind: "metro", label: "Metro station" },
+  { kind: "university", label: "University" },
+  { kind: "hospital", label: "Hospital" },
+  { kind: "market", label: "Market" },
+  { kind: "park", label: "Park" },
+  { kind: "mosque", label: "Mosque" },
+  { kind: "bus_terminal", label: "Bus stop" },
+];
+
+const NEARBY_DISTANCES = [0.5, 1, 2];
+
+function MapSidebar({
+  rooms,
+  loading,
+  activeId,
+  onSelect,
+  onClose,
+  nearbyFilter,
+  onNearbyFilterChange,
+}: MapSidebarProps) {
   const sorted = useMemo(() => sortRoomsForList(rooms), [rooms]);
   // NB: the global Map ctor is shadowed by this module's `Map` component,
   // so reference it explicitly through globalThis.
@@ -2141,6 +2715,59 @@ function MapSidebar({ rooms, loading, activeId, onSelect, onClose }: MapSidebarP
         >
           <X className="size-4" />
         </Button>
+      </div>
+      {/* Landmark-nearby search — filter the list (and map) by proximity to a
+          category of place, without touching the map itself. The selected
+          kind/distance flow up to the Map filters via onNearbyFilterChange. */}
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-gray-200 px-3 py-2 dark:border-gray-800">
+        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Near</span>
+        <select
+          aria-label="Nearby landmark category"
+          value={nearbyFilter?.kind ?? ""}
+          onChange={(e) => {
+            const kind = e.target.value as LandmarkKind | "";
+            onNearbyFilterChange(kind ? { kind, distanceKm: nearbyFilter?.distanceKm ?? 1 } : null);
+          }}
+          className="rounded-lg border border-gray-200 bg-card px-2 py-1 text-xs text-foreground dark:border-gray-700"
+        >
+          <option value="">— anywhere —</option>
+          {NEARBY_KIND_OPTIONS.map((o) => (
+            <option key={o.kind} value={o.kind}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        {nearbyFilter && (
+          <>
+            <span className="text-xs text-gray-500 dark:text-gray-400">within</span>
+            <select
+              aria-label="Nearby distance"
+              value={nearbyFilter.distanceKm}
+              onChange={(e) =>
+                onNearbyFilterChange({
+                  kind: nearbyFilter.kind,
+                  distanceKm: Number(e.target.value),
+                })
+              }
+              className="rounded-lg border border-gray-200 bg-card px-2 py-1 text-xs text-foreground dark:border-gray-700"
+            >
+              {NEARBY_DISTANCES.map((km) => (
+                <option key={km} value={km}>
+                  {km} km
+                </option>
+              ))}
+            </select>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="size-6 rounded-md p-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              onClick={() => onNearbyFilterChange(null)}
+              aria-label="Clear nearby filter"
+            >
+              <X className="size-3.5" />
+            </Button>
+          </>
+        )}
       </div>
       <div className="flex-1 overflow-y-auto p-2">
         {loading && rooms.length === 0 ? (

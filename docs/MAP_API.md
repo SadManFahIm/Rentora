@@ -30,6 +30,11 @@ property name says so. The map renders them with zoom-based visibility
 (main areas from z≈9.5, sub-areas z≈11.5, neighbourhoods z≈13.5) and opens
 the area's real listing stats on click.
 
+Each feature's properties also carry the area's **real centre** (`lat`/`lng`)
+so the frontend can place zoom-aware labels precisely instead of
+averaging polygon vertices — labels appear by hierarchy (main z≈10,
+sub z≈12.5, neighbourhood z≈14.5) and swap text color/halo with the theme.
+
 ## `GET /api/v1/rooms/area-boundaries/` — landmark categories
 
 Same `landmarks` endpoint as Phase 7, now covering **7 categories**:
