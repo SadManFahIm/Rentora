@@ -21,6 +21,7 @@ import PushNotificationCard from "../../components/PushNotificationCard/PushNoti
 import ReferralCard from "../../components/ReferralCard/ReferralCard";
 import WishlistShareButton from "../../components/WishlistShareButton/WishlistShareButton";
 import KycCard from "../../components/KycCard/KycCard";
+import TenantKycCard from "../../components/TenantKycCard/TenantKycCard";
 import AdminKycPanel from "../../components/AdminKycPanel/AdminKycPanel";
 import RoomCard from "../../components/RoomCard/RoomCard";
 import RoomModal from "../../components/RoomModal/RoomModal";
@@ -434,7 +435,10 @@ export default function Dashboard() {
 
           {!isAdmin && (
             <div className="mb-6">
-              <KycCard />
+              {/* Two-sided trust (Phase 12): landlords verify identity to get
+                  the listing badge; tenants verify to get the verified-tenant
+                  badge landlords see when they inquire or book. */}
+              {user?.role === "tenant" ? <TenantKycCard /> : <KycCard />}
             </div>
           )}
 

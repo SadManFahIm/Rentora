@@ -13,13 +13,22 @@ User = get_user_model()
 class ChatUserSerializer(serializers.ModelSerializer):
     """Public-safe user subset embedded in chat payloads.
 
-    ``nid_verified`` is exposed so chat participants can show a verified
-    badge next to the other person's name — same trust signal as rooms.
+    ``nid_verified`` (landlord) and ``tenant_verified`` (tenant) are exposed so
+    chat participants can show the right trust badge next to the other person's
+    name — same trust signal as rooms.
     """
 
     class Meta:
         model = User
-        fields = ["id", "username", "first_name", "last_name", "avatar", "nid_verified"]
+        fields = [
+            "id",
+            "username",
+            "first_name",
+            "last_name",
+            "avatar",
+            "nid_verified",
+            "tenant_verified",
+        ]
 
 
 class MessageSerializer(serializers.ModelSerializer):

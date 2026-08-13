@@ -13,6 +13,8 @@ vi.mock("../../hooks/useKyc", () => ({
   useReviewKycApplication: vi.fn(),
   useKycSla: vi.fn(),
   useKycAuditTrail: vi.fn(),
+  usePendingTenantKycApplications: vi.fn(() => ({ data: [], isLoading: false })),
+  useReviewTenantKycApplication: vi.fn(() => ({ isPending: false, mutateAsync: vi.fn() })),
 }));
 
 vi.mock("../../services/kycService", () => ({
