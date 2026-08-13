@@ -389,3 +389,64 @@ class HaversineUnitTests(APITestCase):
 
     def test_zero_distance(self):
         self.assertAlmostEqual(haversine_km(23.8, 90.4, 23.8, 90.4), 0.0, places=6)
+
+
+class DhakaHierarchyTests(APITestCase):
+    """Phase 7 v3 — structured Dhaka geography (area-hierarchy + geocode merge)."""
+
+    def test_area_hierarchy_returns_main_areas_with_children(self):
+        res = self.client.get("/api/v1/rooms/area-hierarchy/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        main_areas = res.data["main_areas"]
+        keys = {m["key"] for m in main_areas}
+        self.assertIn("uttara", keys)
+        self.assertIn("mirpur", keys)
+        self.assertIn("dhanmondi", keys)
+
+        uttara = next(m for m in main_areas if m["key"] == "uttara")
+        child_keys = {c["key"] for c in uttara["children"]}
+        self.assertIn("uttara_sector_7", child_keys)
+        self.assertIn("uttara_sector_10", child_keys)
+        # Every child points back at its parent main area.
+        for child in uttara["children"]:
+            self.assertEqual(child["parent"], "uttara")
+            self.assertEqual(child["parent_name"], "Uttara")
+            self.assertIsInstance(child["lat"], float)
+            self.assertIsInstance(child["lng"], float)
+
+    def test_hierarchy_child_kind(self):
+        res = self.client.get("/api/v1/rooms/area-hierarchy/")
+        uttara = next(m for m in res.data["main_areas"] if m["key"] == "uttara")
+        self.assertTrue(all(c["kind"] == "sub_area" for c in uttara["children"]))
+
+    def test_geocode_resolves_sub_area_with_parent(self):
+        # "Mirpur 10" must resolve to the structured sub-area, not only the
+        # flat gazetteer — and carry its parent district.
+        res = self.client.get("/api/v1/rooms/geocode/", {"q": "mirpur 10"})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        match = next((s for s in res.data if s["label"] == "Mirpur 10"), None)
+        self.assertIsNotNone(match)
+        self.assertEqual(match["kind"], "area")
+        self.assertEqual(match["parent_name"], "Mirpur")
+
+    def test_geocode_resolves_bangla_alias(self):
+        res = self.client.get("/api/v1/rooms/geocode/", {"q": "মিরপুর ১০"})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(any("Mirpur 10" in s["label"] for s in res.data))
+
+    def test_geocode_still_returns_streets_and_landmarks(self):
+        # Hierarchy merge must not break the existing street/landmark flow.
+        res = self.client.get("/api/v1/rooms/geocode/", {"q": "gulshan avenue"})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(any(s["kind"] == "street" for s in res.data))
+
+        res = self.client.get("/api/v1/rooms/geocode/", {"q": "mirpur 10"})
+        self.assertTrue(any(s["kind"] == "metro" for s in res.data))  # MRT station
+
+    def test_geocode_deduplicates_overlapping_entries(self):
+        # The hierarchy and the flat gazetteer both know "Dhanmondi" — the
+        # response should contain the key at most once.
+        res = self.client.get("/api/v1/rooms/geocode/", {"q": "dhanmondi"})
+        keys = [s["key"] for s in res.data]
+        self.assertEqual(len(keys), len(set(keys)))
+        self.assertIn("dhanmondi", keys)

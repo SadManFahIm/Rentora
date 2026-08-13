@@ -228,6 +228,8 @@ export interface GeocodeSuggestion {
   kind: "street" | "area" | "university" | "metro";
   lat: number;
   lng: number;
+  /** Parent district for sub-area results (e.g. "Mirpur 10" → "Mirpur"). */
+  parent_name?: string | null;
 }
 
 /** Aggregate room counts from GET /rooms/summary/ (map badge + area chips). */

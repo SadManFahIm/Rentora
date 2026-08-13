@@ -344,6 +344,18 @@ describe("parseMapViewUrl", () => {
     expect(parseMapViewUrl("?r=0").radiusKm).toBeNull();
     expect(parseMapViewUrl("?q=   ").query).toBeNull();
   });
+
+  it("parses a selected-room deep link", () => {
+    const v = parseMapViewUrl("?center=23.81,90.41&zoom=14&room=42");
+    expect(v.room).toBe(42);
+  });
+
+  it("returns null for missing or invalid room ids", () => {
+    expect(parseMapViewUrl("").room).toBeNull();
+    expect(parseMapViewUrl("?room=0").room).toBeNull();
+    expect(parseMapViewUrl("?room=-5").room).toBeNull();
+    expect(parseMapViewUrl("?room=abc").room).toBeNull();
+  });
 });
 
 describe("buildMapViewUrl", () => {
@@ -351,6 +363,15 @@ describe("buildMapViewUrl", () => {
     expect(buildMapViewUrl({ center: { lat: 23.8103, lng: 90.4125 }, zoom: 11.2 })).toBe(
       "?center=23.8103,90.4125&zoom=11.2"
     );
+  });
+
+  it("round-trips a room deep link", () => {
+    const url = buildMapViewUrl({
+      center: { lat: 23.81, lng: 90.41 },
+      zoom: 14,
+      roomId: 42,
+    });
+    expect(parseMapViewUrl(url).room).toBe(42);
   });
 
   it("omits radius params when there is no label or radius", () => {

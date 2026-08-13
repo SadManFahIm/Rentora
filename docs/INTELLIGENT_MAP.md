@@ -1,13 +1,30 @@
 # 🗺️ Rentora Intelligent Rental Decision Map
 
-> **Phase 7 v2** — the map evolved from a property map into a **Rental Decision
-> Intelligence Platform**: it answers *"given my budget, destination and
-> preferences, where is the best place for me to live?"* instead of just
-> showing pins.
+> **Phase 7 v2 → v3** — the map evolved from a property map into a **Rental
+> Decision Intelligence Platform**: it answers *"given my budget, destination
+> and preferences, where is the best place for me to live?"* instead of just
+> showing pins. v3 fixes the dark-mode basemap, makes every map element
+> interactive, and adds a structured Dhaka geographic hierarchy.
 
 Built as an extension of the existing **MapLibre GL JS** map (Phase 7) on top
 of Rentora's existing search, pricing, fraud, listing and location systems.
 **No existing Phase 7 behaviour was rewritten.**
+
+---
+
+## What v3 adds
+
+| Feature | What it does |
+|---|---|
+| **Dark map fixed** | Dark mode now uses a lifted CARTO dark raster (brightness floor 0.2 / contrast 0.2) so roads and street labels stay readable instead of dissolving into near-black; dark-fallback keeps labels legible too |
+| **University & metro clicks** | Clicking a 🎓 university or 🚇 station dot opens a popup with real nearby-room counts + avg/range rent within ~2 km, plus a "Find rooms near…" CTA that starts a radius search and flies to the spot |
+| **MRT Line-6 corridor click** | The Line-6 polyline is clickable (info popup + pointer cursor) |
+| **Price-heatmap click** | Clicking the heatmap shows the clicked area's real stats (avg rent, count, range) from the rooms actually in view — no invented numbers |
+| **Isochrone band clicks** | Clicking a 10/20/30-min walking band shows how many rooms (and their price range) fall inside that zone |
+| **Map ↔ list sync** | Clicking a list item flies the map to the room + highlights the pin; clicking a map pin scrolls the matching list item into view |
+| **Room deep links** | `?room=123` in a shareable map URL reopens that listing's popup/modal on load |
+| **Structured Dhaka hierarchy** | `GET /api/v1/rooms/area-hierarchy/` returns main areas (Uttara, Mirpur, Dhanmondi…) with sub-areas/neighbourhoods (sectors, blocks, roads), each with parent link + approximate centre + Bangla/English aliases |
+| **Sub-area search** | "Mirpur 10", "Uttara Sector 7", "ধানমন্ডি ২৭" resolve via the hierarchy with their parent district shown under the label |
 
 ---
 
@@ -106,12 +123,17 @@ All in `backend/config/settings/base.py` (defaults shown):
   (needs an optional routing provider, e.g. OSRM).
 - Transit ETA exists only along the MRT Line-6 corridor and only when both
   ends are near a station.
-- Area centres come from the existing gazetteer (`streets.py`); areas absent
-  from the gazetteer report `null` centres.
+- Area centres come from the existing gazetteer (`streets.py`) plus the
+  structured hierarchy (`dhaka_areas.py`); areas absent from both report
+  `null` centres.
+- The dark basemap depends on the CARTO CDN; if it is unreachable the map
+  falls back to a dimmed OSM raster (still readable after v3's paint lift).
 
 See also:
 
 - [MAP_API.md](./MAP_API.md) — endpoint reference
 - [MAP_SCORING.md](./MAP_SCORING.md) — scoring formulas
 - `backend/rooms/map_intel.py` — the engine
+- `backend/rooms/dhaka_areas.py` — the structured Dhaka hierarchy
+- `frontend/src/lib/mapInteractions.ts` — interaction popup helpers
 - `frontend/src/components/MapIntelPanel/MapIntelPanel.tsx` — the panel UI

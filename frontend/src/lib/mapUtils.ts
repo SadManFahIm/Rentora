@@ -191,6 +191,8 @@ export interface MapViewParams {
   radiusKm: number | null;
   /** Radius-search label from `?q=` (the street/area/station name). */
   query: string | null;
+  /** Selected listing id from `?room=` (deep link reopens its popup). */
+  room: number | null;
 }
 
 /**
@@ -217,11 +219,13 @@ export function parseMapViewUrl(search: string): MapViewParams {
   const zoom = Number(params.get("zoom"));
   const radiusKm = Number(params.get("r"));
   const query = params.get("q");
+  const room = Number(params.get("room"));
   return {
     center,
     zoom: Number.isFinite(zoom) && zoom >= 2 && zoom <= 20 ? zoom : null,
     radiusKm: Number.isFinite(radiusKm) && radiusKm > 0 && radiusKm <= 10 ? radiusKm : null,
     query: query && query.trim().length > 0 ? query.trim().slice(0, 80) : null,
+    room: Number.isInteger(room) && room > 0 ? room : null,
   };
 }
 
@@ -236,6 +240,7 @@ export function buildMapViewUrl(view: {
   zoom: number;
   radiusKm?: number | null;
   label?: string | null;
+  roomId?: number | null;
 }): string {
   // encodeURIComponent keeps commas (unlike URLSearchParams' %2C) so the
   // address stays readable: ?center=23.8103,90.4125&zoom=11.2. parseMapViewUrl
@@ -244,6 +249,9 @@ export function buildMapViewUrl(view: {
   parts.push(`zoom=${view.zoom.toFixed(1)}`);
   if (view.radiusKm != null && view.radiusKm > 0 && view.label) {
     parts.push(`r=${view.radiusKm}`, `q=${encodeURIComponent(view.label.slice(0, 80))}`);
+  }
+  if (view.roomId != null && Number.isInteger(view.roomId) && view.roomId > 0) {
+    parts.push(`room=${view.roomId}`);
   }
   return `?${parts.join("&")}`;
 }

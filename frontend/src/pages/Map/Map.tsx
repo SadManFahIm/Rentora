@@ -42,6 +42,15 @@ import { Badge } from "../../components/ui/badge";
 import { useUiStore } from "../../stores/uiStore";
 import type { GeocodeSuggestion, Room } from "../../types";
 import {
+  areaStats,
+  heatmapPopupHtml,
+  isochronePopupHtml,
+  isochroneStats,
+  landmarkPopupHtml,
+  metroRoutePopupHtml,
+  nearbyStats,
+} from "../../lib/mapInteractions";
+import {
   avgPrice,
   buildBbox,
   buildMapViewUrl,
@@ -107,17 +116,20 @@ const MAP_STYLE = (tiles: string, mode: RasterMode): StyleSpecification => ({
       paint:
         mode === "dark"
           ? {
-              "raster-brightness-min": 0.12,
-              "raster-brightness-max": 0.72,
-              "raster-saturation": 0.15,
-              "raster-contrast": 0.4,
+              // Phase 7 v3: lifted brightness floor + gentler contrast so CARTO's
+              // dark tiles keep roads and street labels readable instead of
+              // dissolving into near-black (the original dark-mode complaint).
+              "raster-brightness-min": 0.2,
+              "raster-brightness-max": 0.85,
+              "raster-saturation": 0.2,
+              "raster-contrast": 0.2,
             }
           : mode === "dark-fallback"
             ? {
-                "raster-brightness-min": 0.08,
-                "raster-brightness-max": 0.6,
-                "raster-saturation": -0.5,
-                "raster-contrast": 0.3,
+                "raster-brightness-min": 0.12,
+                "raster-brightness-max": 0.68,
+                "raster-saturation": -0.4,
+                "raster-contrast": 0.25,
               }
             : {},
     },
@@ -145,6 +157,9 @@ export default function Map() {
   const roomsRef = useRef<Room[]>([]);
   // Guards the once-per-map registration of cluster click/hover handlers.
   const clusterHandlersRef = useRef<maplibregl.Map | null>(null);
+  // Guards the once-per-map registration of landmark/metro/heatmap/isochrone
+  // interaction handlers (Phase 7 v3).
+  const interactionHandlersRef = useRef<maplibregl.Map | null>(null);
   const pickDestinationRef = useRef(false);
   // The cluster stats popup — closed before opening another / on map move so
   // a stale "N rooms here" bubble can't linger over changed geometry.
@@ -173,6 +188,9 @@ export default function Map() {
   const [darkTileFallback, setDarkTileFallback] = useState(false);
 
   // ---- radius search state --------------------------------------------
+  // Live mirror of radiusCenter for the once-registered map interaction
+  // handlers (their closures are created when the map first becomes ready).
+  const radiusCenterRef = useRef<{ lat: number; lng: number; label: string } | null>(null);
   const [radiusCenter, setRadiusCenter] = useState<{
     lat: number;
     lng: number;
@@ -223,10 +241,11 @@ export default function Map() {
         zoom: map.getZoom(),
         radiusKm: radiusCenter ? radiusKm : null,
         label: radiusCenter?.label ?? null,
+        roomId: activeRoomId,
       }),
       { replace: true }
     );
-  }, [debouncedViewbox, radiusCenter, radiusKm, mapReady, setSearchParams]);
+  }, [debouncedViewbox, radiusCenter, radiusKm, activeRoomId, mapReady, setSearchParams]);
 
   const filters = useMemo(() => {
     const f: {
@@ -309,6 +328,9 @@ export default function Map() {
       }
       if (urlView.zoom != null) {
         map.setZoom(urlView.zoom);
+      }
+      if (urlView.room != null) {
+        setActiveRoomId(urlView.room);
       }
       if (urlView.radiusKm != null && urlView.query) {
         setRadiusKm(urlView.radiusKm);
@@ -1000,6 +1022,148 @@ export default function Map() {
     }
   }, [showTravel, radiusCenter, mapReady, landmarks]);
 
+  useEffect(() => {
+    radiusCenterRef.current = radiusCenter;
+  }, [radiusCenter]);
+
+  // Deep-link: a shared ?room=123 URL selects that listing once its row is
+  // in the loaded set, reopening the same popup/modal the click would.
+  useEffect(() => {
+    if (activeRoomId == null) return;
+    const room = rooms.find((r) => r.id === activeRoomId);
+    if (room && !selectedRoom) {
+      setSelectedRoom(room);
+    }
+  }, [activeRoomId, rooms, selectedRoom]);
+
+  // ---- interaction layer (Phase 7 v3) ------------------------------------
+  // Click/hover wiring for the layers that previously "did nothing":
+  // university dots, metro station dots, the MRT Line-6 corridor, the price
+  // heatmap and the walking isochrone bands. Registered ONCE per map instance
+  // (MapLibre .on() does not dedupe); every number comes from the ACTUAL
+  // rooms in view (roomsRef) via the pure helpers in lib/mapInteractions.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    if (interactionHandlersRef.current === map) return;
+    interactionHandlersRef.current = map;
+    // Non-null alias for closures — TS drops the narrowing inside nested
+    // function declarations.
+    const m = map;
+
+    const openLandmarkPopup = (
+      kind: "university" | "metro",
+      name: string,
+      lat: number,
+      lng: number,
+      e: maplibregl.MapMouseEvent
+    ) => {
+      const stats = nearbyStats(roomsRef.current, lat, lng, 2); // ~2 km radius
+      const popup = new maplibregl.Popup({
+        closeButton: false,
+        closeOnClick: true,
+        maxWidth: "260px",
+      })
+        .setLngLat(e.lngLat)
+        .setHTML(
+          landmarkPopupHtml(
+            kind,
+            name,
+            stats,
+            kind === "university"
+              ? "Find rooms near this university →"
+              : "Rooms near this station →"
+          )
+        )
+        .addTo(m);
+      // CTA -> start a radius search around the landmark (real rooms only).
+      const cta = popup.getElement().querySelector('[data-map-cta="nearby"]');
+      cta?.addEventListener("click", () => {
+        setRadiusCenter({ lat, lng, label: name });
+        setRadiusKm(2);
+        m.flyTo({ center: [lng, lat], zoom: Math.max(m.getZoom(), 13.5) });
+      });
+    };
+
+    const pointer = (on: boolean) => () => {
+      m.getCanvas().style.cursor = on ? "pointer" : "";
+    };
+
+    // Landmark coordinates come from the feature GEOMETRY (the layer's
+    // features only carry name/kind in their properties).
+    const landmarkCoords = (f: GeoJSON.Feature): [number, number] => {
+      const c = (f.geometry as GeoJSON.Point).coordinates;
+      return [Number(c[1]), Number(c[0])]; // [lat, lng]
+    };
+
+    // Universities (purple dots).
+    map.on("click", "universities", (e) => {
+      const f = e.features?.[0];
+      if (!f) return;
+      const p = (f.properties ?? {}) as Record<string, string>;
+      const [lat, lng] = landmarkCoords(f);
+      openLandmarkPopup("university", p.name || "University", lat, lng, e);
+    });
+    map.on("mouseenter", "universities", pointer(true));
+    map.on("mouseleave", "universities", pointer(false));
+
+    // Metro stations (teal dots).
+    map.on("click", "metro", (e) => {
+      const f = e.features?.[0];
+      if (!f) return;
+      const p = (f.properties ?? {}) as Record<string, string>;
+      const [lat, lng] = landmarkCoords(f);
+      openLandmarkPopup("metro", p.name || "Metro station", lat, lng, e);
+    });
+    map.on("mouseenter", "metro", pointer(true));
+    map.on("mouseleave", "metro", pointer(false));
+
+    // MRT Line-6 corridor line.
+    map.on("click", "metro-route", (e) => {
+      new maplibregl.Popup({ closeButton: false, closeOnClick: true, maxWidth: "240px" })
+        .setLngLat(e.lngLat)
+        .setHTML(metroRoutePopupHtml())
+        .addTo(m);
+    });
+    map.on("mouseenter", "metro-route", pointer(true));
+    map.on("mouseleave", "metro-route", pointer(false));
+
+    // Price heatmap — click shows the clicked listing's area stats.
+    map.on("click", "price-heatmap", (e) => {
+      const f = e.features?.[0];
+      if (!f) return;
+      const area = String((f.properties ?? {}).area ?? "");
+      const stats = areaStats(roomsRef.current, area);
+      new maplibregl.Popup({ closeButton: false, closeOnClick: true, maxWidth: "240px" })
+        .setLngLat(e.lngLat)
+        .setHTML(heatmapPopupHtml(area, stats))
+        .addTo(m);
+    });
+    map.on("mouseenter", "price-heatmap", pointer(true));
+    map.on("mouseleave", "price-heatmap", pointer(false));
+
+    // Walking isochrone bands — click shows how many rooms are inside.
+    const BAND_MINUTES = [10, 20, 30];
+    map.on("click", "travel-bands-0", (e) => showBandStats(0, e));
+    map.on("click", "travel-bands-1", (e) => showBandStats(1, e));
+    map.on("click", "travel-bands-2", (e) => showBandStats(2, e));
+    function showBandStats(band: number, e: maplibregl.MapMouseEvent) {
+      const center = radiusCenterRef.current;
+      if (!center) return;
+      const minutes = BAND_MINUTES[band];
+      const radiusKm = (minutes / 60) * 4.5; // WALKING_SPEED_KMH
+      const stats = isochroneStats(roomsRef.current, center, radiusKm);
+      new maplibregl.Popup({ closeButton: false, closeOnClick: true, maxWidth: "240px" })
+        .setLngLat(e.lngLat)
+        .setHTML(isochronePopupHtml(minutes, stats))
+        .addTo(m);
+    }
+    ["travel-bands-0", "travel-bands-1", "travel-bands-2"].forEach((id) => {
+      m.on("mouseenter", id, pointer(true));
+      m.on("mouseleave", id, pointer(false));
+    });
+  }, [mapReady]);
+
   // Room-count badge: prefer the authoritative server summary (COUNT/AVG over
   // every row in view, not just page 1); fall back to the client-side list
   // while the summary request is in flight or when it isn't available.
@@ -1152,10 +1316,19 @@ export default function Map() {
                         )}
                       >
                         <SuggestionIcon kind={s.kind} />
-                        <span className="min-w-0 flex-1 truncate text-foreground">{s.label}</span>
-                        <span className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
-                          {s.kind}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-foreground">{s.label}</span>
+                          {s.parent_name && (
+                            <span className="block truncate text-[11px] text-gray-400 dark:text-gray-500">
+                              {s.parent_name} · {s.kind}
+                            </span>
+                          )}
                         </span>
+                        {!s.parent_name && (
+                          <span className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                            {s.kind}
+                          </span>
+                        )}
                       </button>
                     </li>
                   ))}
@@ -1576,6 +1749,19 @@ interface MapSidebarProps {
 
 function MapSidebar({ rooms, loading, activeId, onSelect, onClose }: MapSidebarProps) {
   const sorted = useMemo(() => sortRoomsForList(rooms), [rooms]);
+  // NB: the global Map ctor is shadowed by this module's `Map` component,
+  // so reference it explicitly through globalThis.
+  const itemRefs = useRef<globalThis.Map<number, HTMLButtonElement>>(new globalThis.Map());
+
+  // Map → list sync: when a marker/popup selects a room, scroll the matching
+  // list item into view so both panels agree (guarded against the auto-scroll
+  // fighting a user-initiated scroll on first render).
+  useEffect(() => {
+    if (activeId == null) return;
+    const el = itemRefs.current.get(activeId);
+    el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [activeId, sorted]);
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-800">
@@ -1601,6 +1787,10 @@ function MapSidebar({ rooms, loading, activeId, onSelect, onClose }: MapSidebarP
           sorted.map((room) => (
             <button
               key={room.id}
+              ref={(el) => {
+                if (el) itemRefs.current.set(room.id, el);
+                else itemRefs.current.delete(room.id);
+              }}
               onClick={() => onSelect(room)}
               className={cn(
                 "mb-1.5 flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-colors",
