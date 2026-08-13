@@ -478,6 +478,10 @@ class AreaBoundaryTests(APITestCase):
         self.assertAlmostEqual((max(lngs) + min(lngs)) / 2, 90.3795, places=2)
         self.assertAlmostEqual((max(lats) - min(lats)) / 2, 2.8 / 111.32, places=3)
         self.assertEqual(uttara["properties"]["approx_radius_km"], 2.8)
+        # The real centre rides along (Phase 7 v3 labels) so the frontend can
+        # place zoom-aware area labels precisely, not by averaging vertices.
+        self.assertAlmostEqual(uttara["properties"]["lat"], 23.8759, places=2)
+        self.assertAlmostEqual(uttara["properties"]["lng"], 90.3795, places=2)
 
     def test_sub_area_has_smaller_bubble_and_parent(self):
         res = self.client.get("/api/v1/rooms/area-boundaries/")

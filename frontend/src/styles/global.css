@@ -243,3 +243,55 @@
   background: #111827;
   color: #f3f4f6;
 }
+/* Nearby-landmark chips inside listing popups (Phase 7 v3) — compact,
+   scannable badges (🚇 7 min Metro · 🎓 12 min University). Clicking one
+   flies the map to the place + starts a radius search. Buttons don't inherit
+   popup text colour, so explicit colours per theme (same class-toggle the
+   rest of the popup uses). */
+.map-popup__nearby {
+  margin-top: 8px;
+}
+.map-popup__nearby-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+.map-popup__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.map-popup__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: 1px solid #e5e7eb;
+  border-radius: 9999px;
+  background: #ffffff;
+  padding: 2px 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: #111827;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.map-popup__chip:hover {
+  border-color: #0d9488;
+  color: #0d9488;
+}
+:is(.dark, [data-theme="dark"]) .map-popup__chip {
+  border-color: #374151;
+  background: #1f2937;
+  color: #e5e7eb;
+}
+:is(.dark, [data-theme="dark"]) .map-popup__chip:hover {
+  border-color: #2dd4bf;
+  color: #2dd4bf;
+}
