@@ -11,6 +11,7 @@ import { useWebSocket } from "../../hooks/useWebSocket";
 import { mapNotification, type ApiNotification } from "../../services/mappers";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
+import PwaInstallPrompt from "../PwaInstallPrompt/PwaInstallPrompt";
 import { cn } from "../../lib/utils";
 
 interface NotificationWsEvent {
@@ -75,10 +76,13 @@ export default function Navbar() {
     <nav className="sticky top-0 z-[100] border-b border-gray-200 bg-card/95 backdrop-blur-md dark:border-gray-800">
       <div className="flex h-16 items-center justify-between px-4 md:px-6 lg:px-8">
         <div
-          className="flex shrink-0 cursor-pointer items-center gap-2 font-display text-lg font-extrabold tracking-tight text-brand sm:text-xl"
+          className="flex shrink-0 cursor-pointer items-center gap-2"
           onClick={() => navigate("/")}
         >
-          🏠 RentRoom <Badge variant="brand">BD</Badge>
+          <span className="bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text font-display text-lg font-extrabold tracking-tight text-transparent dark:from-orange-400 dark:to-amber-300 sm:text-xl">
+            🏠 Rentora
+          </span>
+          <Badge variant="brand">🇧🇩</Badge>
         </div>
 
         {/* Desktop nav links */}
@@ -97,6 +101,7 @@ export default function Navbar() {
 
         {/* Desktop actions */}
         <div className="hidden items-center gap-2 md:flex">
+          <PwaInstallPrompt />
           <Button
             variant="outline"
             size="icon"

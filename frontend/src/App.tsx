@@ -5,6 +5,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { AppProvider } from "./context/AppContext";
 import { Toaster } from "./components/ui/sonner";
 import ErrorBoundary from "./components/ErrorBoundary";
+import PwaBanners from "./components/PwaBanners/PwaBanners";
 
 // Styles
 import "./styles/global.css";
@@ -66,6 +67,7 @@ export default function App() {
           </BrowserRouter>
         </ErrorBoundary>
         <Toaster richColors position="top-right" />
+        <PwaBanners />
       </AppProvider>
       {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
     </QueryClientProvider>

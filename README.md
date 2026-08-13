@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-570%20(368%20BE%20%2B%20202%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-581%20(368%20BE%20%2B%20213%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -30,6 +30,7 @@
 - [Documentation](#documentation)
 - [Security](#-security)
 - [Passkeys / WebAuthn](#-passkeys--webauthn--shipped)
+- [Progressive Web App](#-progressive-web-app--shipped)
 - [Demo Users](#-demo-users)
 - [Screenshots](#-screenshots)
 - [Team Workflow](#-team-workflow)
@@ -65,6 +66,18 @@ Full gallery (28 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 ---
 
 ## 🆕 Changelog
+
+**Phase 12 P0 — Progressive Web App (installable app)**
+
+- **Installable PWA** — `manifest.webmanifest` with `standalone` display, `#ea580c` theme (design-token brand), 192/512 standard + **maskable** icons, Apple-touch + favicon set (32→144), generated reproducibly from the brand (`scripts/generate_pwa_icons.py`) and validated in CI against the **built** app (`scripts/validate-pwa.mjs`)
+- **Native install experience** — the browser's `beforeinstallprompt` is captured but suppressed until a subtle navbar **"Install app"** CTA is clicked, so Rentora never fires a surprise popup; the CTA disappears after install, and a dismissal cools off for a week (`usePwaInstall`)
+- **Standalone + deep links** — works installed on desktop & mobile; routing, auth, the map (viewport/radius/destination URL sync), voice search, Copilot and both dashboards behave identically in standalone mode
+- **Safe service-worker caching** — the push worker now also caches a versioned `rentora-static-v1` app shell + static assets only; **`/api/*` (auth, private, admin, fraud, payment) is never cached**, navigations are network-first with an offline shell fallback, and only our own `rentora-static-*` caches are ever cleaned
+- **Update UX** — when a new build takes over, a "A new version of Rentora is available **[Refresh] [Later]**" banner appears (Later remembered for 24h); the initial install never shows it (`usePwaUpdate`)
+- **Graceful offline** — an amber "You're offline" banner (safe-area aware) while already-loaded UI stays visible — never fake listings or stale data
+- **Shortcuts** — Search Rooms `/rooms` · Explore Map `/map` · Post Listing `/dashboard?tab=listings`
+- **Branding** — the app name is now **Rentora 🇧🇩** (gradient wordmark in the navbar/footer, Bangladesh-flag badge) matching the push notifications, Copilot and README
+- **Engineering** — 11 new unit tests (`src/lib/pwa.test.ts`), 213 frontend tests total, PWA validation wired into the Frontend CI job. See [`docs/PWA.md`](docs/PWA.md)
 
 **Phase 9 — Operate It (Reliability & Observability)**
 
@@ -248,6 +261,7 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 | **11+**   | Listing Intelligence — 🎤 Bangla voice search, 🧠 AI saved-search matcher + price-drop alerts, ✨ listing quality score, 🛡️ fraud-aware ranking       | ✅ Shipped           |
 | **11++**  | Core AI & Fraud — 🤖 Rentora Copilot, 🏷️ AI pricing suggestion v2 (demand/time-to-rent), 🖼️ cross-listing duplicate-image fraud detection | ✅ Shipped |
 | **7 v2**   | Intelligent Map — 🧠 AI map search, 🚇 metro commute score + commute mode, ⭐ best-value scores, 🏛️ area intelligence + comparison, 💰 affordability map, ideal-area ranking | ✅ Shipped |
+| **12 P0**  | Progressive Web App — 📱 installable manifest + maskable icons, native install CTA, standalone mode, safe SW caching, update + offline UX, shortcuts | ✅ Shipped |
 
 ---
 
@@ -800,7 +814,7 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 | `/api/v1/redoc/`  | ReDoc                 |
 | `/api/v1/schema/` | OpenAPI schema (YAML) |
 
-> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook) · [`docs/RENTORA_COPILOT.md`](docs/RENTORA_COPILOT.md) (Copilot architecture, API, config) · [`docs/AI_PRICING_V2.md`](docs/AI_PRICING_V2.md) (pricing suggestion v2) · [`docs/DUPLICATE_IMAGE_FRAUD.md`](docs/DUPLICATE_IMAGE_FRAUD.md) (duplicate-image detector) · [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) + [`docs/MAP_API.md`](docs/MAP_API.md) + [`docs/MAP_SCORING.md`](docs/MAP_SCORING.md) (intelligent map v2) · [`docs/VOICE_SEARCH_PLAYBOOK.md`](docs/VOICE_SEARCH_PLAYBOOK.md) (voice search) · [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md) (verified feature matrix)
+> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook) · [`docs/RENTORA_COPILOT.md`](docs/RENTORA_COPILOT.md) (Copilot architecture, API, config) · [`docs/AI_PRICING_V2.md`](docs/AI_PRICING_V2.md) (pricing suggestion v2) · [`docs/DUPLICATE_IMAGE_FRAUD.md`](docs/DUPLICATE_IMAGE_FRAUD.md) (duplicate-image detector) · [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) + [`docs/MAP_API.md`](docs/MAP_API.md) + [`docs/MAP_SCORING.md`](docs/MAP_SCORING.md) (intelligent map v2) · [`docs/VOICE_SEARCH_PLAYBOOK.md`](docs/VOICE_SEARCH_PLAYBOOK.md) (voice search) · [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md) (verified feature matrix) · [`docs/PWA.md`](docs/PWA.md) (PWA architecture, manifest, SW strategy, install/update/offline behavior)
 
 ---
 
@@ -837,6 +851,21 @@ Passwordless sign-in is live — the phishing-resistant successor to passwords +
 **Implemented with** `py_webauthn` (webauthn 3.x, Duo Labs) server-side + `@simplewebauthn/browser` client-side. Four DRF endpoints: `passkey/register/begin` → `passkey/register/complete` (JWT-authed), `passkey/login/begin` → `passkey/login/complete` (issues JWTs). Conditional UI (`mediation: 'conditional'`) surfaces passkeys in the browser's native autofill; a manual **"Sign in with a passkey"** button is the fallback. Register/revoke from Dashboard → Security → Passkeys.
 
 **Gotchas handled:** WebAuthn requires a secure origin (`localhost` is fine; IP addresses are not); frontend/backend should share a registrable domain in production (e.g. `app.example.com` + `api.example.com` with `rpId: example.com`); an `AbortController` cancels a pending conditional ceremony when the user submits the password form.
+
+---
+
+## 📱 Progressive Web App — Shipped
+
+**Install Rentora** as a native-feeling app — desktop (Chrome/Edge) and mobile (Android; iOS via **Add to Home Screen**) — without a separate codebase:
+
+- **Installable** — `manifest.webmanifest` (standalone display, brand `#ea580c` theme), 192/512 standard + **maskable** icons, Apple-touch + favicon set; validated in CI against the built app
+- **Polite install prompt** — no surprise popups: a subtle **"Install app"** button in the navbar shows the browser's native prompt; disappears after install, cools off for a week after dismissal
+- **App-like window** — standalone mode keeps routing, auth, the map (with shareable URL sync), voice search, Copilot, saved searches and both dashboards working exactly as in the browser; deep links open the right page
+- **Safe offline** — a graceful "You're offline" banner, never fake data; the app shell is cached while **API/auth/admin/fraud/payment data is never cached**
+- **Fresh updates** — a "A new version of Rentora is available **[Refresh] [Later]**" banner when a new build deploys
+- **Shortcuts** — right-click / long-press the installed icon → Search Rooms · Explore Map · Post Listing
+
+See [`docs/PWA.md`](docs/PWA.md) for the manifest, icon system, service-worker strategy, update/offline behavior, security review and browser support.
 
 ---
 
