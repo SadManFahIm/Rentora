@@ -122,3 +122,89 @@ function esc(s: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
+
+// ============================================================
+// DARK-THEME LAYER PAINTS (Phase 7 v3 — visual QA)
+// ============================================================
+// MapLibre layers are created with light-tuned paints; when the app switches
+// to dark mode we re-paint them via setPaintProperty. This map is the single
+// source of truth for those values — kept here (pure data) so the contrast
+// choices are unit-testable and consistent between the theme-swap effect and
+// any future layer. ``undefined`` means "leave the layer's current value" —
+// the theme-swap effect skips it.
+
+export interface ThemePaintPatch {
+  /** Property name passed to map.setPaintProperty (typed at the call site). */
+  prop: string;
+  /** Paint value for dark mode. */
+  dark: unknown;
+  /** Paint value for light mode. */
+  light: unknown;
+}
+
+/** Layer → theme-aware paint patches applied on dark/light toggle. */
+export const THEME_PAINTS: Record<string, ThemePaintPatch[]> = {
+  universities: [
+    { prop: "circle-color", dark: "#a78bfa", light: "#7c3aed" },
+    { prop: "circle-stroke-color", dark: "#2b1b4d", light: "#ffffff" },
+  ],
+  metro: [
+    { prop: "circle-color", dark: "#2dd4bf", light: "#0d9488" },
+    { prop: "circle-stroke-color", dark: "#0b3a35", light: "#ffffff" },
+  ],
+  "metro-route": [{ prop: "line-color", dark: "#2dd4bf", light: "#0d9488" }],
+  "metro-route-casing": [
+    { prop: "line-color", dark: "#134e4a", light: "#ffffff" },
+    { prop: "line-opacity", dark: 0.5, light: 0.55 },
+  ],
+  "price-heatmap": [
+    {
+      prop: "circle-color",
+      dark: [
+        "interpolate",
+        ["linear"],
+        ["get", "price"],
+        5000,
+        "#4ade80",
+        15000,
+        "#fbbf24",
+        30000,
+        "#f87171",
+      ],
+      light: [
+        "interpolate",
+        ["linear"],
+        ["get", "price"],
+        5000,
+        "#22c55e",
+        15000,
+        "#f59e0b",
+        30000,
+        "#ef4444",
+      ],
+    },
+    { prop: "circle-opacity", dark: 0.6, light: 0.45 },
+    { prop: "circle-stroke-color", dark: "#111827", light: "#ffffff" },
+  ],
+  "rooms-clusters-layer": [{ prop: "circle-stroke-color", dark: "#7c2d12", light: "#ffffff" }],
+  "rooms-unclustered-point": [{ prop: "circle-stroke-color", dark: "#111827", light: "#ffffff" }],
+  "radius-circle": [
+    { prop: "circle-opacity", dark: 0.18, light: 0.12 },
+    { prop: "circle-stroke-color", dark: "#60a5fa", light: "#3b82f6" },
+  ],
+  "metro-reach": [
+    { prop: "circle-color", dark: "#2dd4bf", light: "#0d9488" },
+    { prop: "circle-stroke-color", dark: "#134e4a", light: "#ffffff" },
+  ],
+};
+
+/** Travel-band layers get stronger fills on dark (0.1 is invisible there). */
+export const TRAVEL_BAND_DARK_OPACITY = 0.22;
+export const TRAVEL_BAND_LIGHT_OPACITY = 0.1;
+
+/** Resolve the paint value for a layer+prop in the given theme. */
+export function themePaintValue(layer: string, prop: string, dark: boolean): unknown | undefined {
+  const patches = THEME_PAINTS[layer];
+  const patch = patches?.find((p) => p.prop === prop);
+  return patch ? (dark ? patch.dark : patch.light) : undefined;
+}

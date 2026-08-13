@@ -103,6 +103,14 @@
   padding: 0;
   box-shadow: 0 8px 30px rgb(0 0 0 / 0.18);
 }
+/* Dark popup card — MapLibre defaults to a white card, which flashes and
+   washes out on the dark basemap. Match the app's surface tokens instead. */
+:is(.dark, [data-theme="dark"]) .maplibregl-popup-content {
+  background: var(--color-card, #111827);
+  color: var(--foreground, #f9fafb);
+  border: 1px solid var(--color-border, #1f2937);
+  box-shadow: 0 8px 30px rgb(0 0 0 / 0.55);
+}
 .maplibregl-popup-tip {
   display: none;
 }
@@ -120,6 +128,10 @@
   font-size: 11px;
   font-weight: 500;
   color: var(--color-muted, #6b7280);
+}
+/* Brighter price on the dark popup card — orange-600 sinks into #111827. */
+:is(.dark, [data-theme="dark"]) .map-popup__price {
+  color: #fb923c;
 }
 .map-popup__name {
   margin-top: 2px;

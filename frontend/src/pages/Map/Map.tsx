@@ -49,6 +49,9 @@ import {
   landmarkPopupHtml,
   metroRoutePopupHtml,
   nearbyStats,
+  THEME_PAINTS,
+  TRAVEL_BAND_DARK_OPACITY,
+  TRAVEL_BAND_LIGHT_OPACITY,
 } from "../../lib/mapInteractions";
 import {
   avgPrice,
@@ -1163,6 +1166,56 @@ export default function Map() {
       m.on("mouseleave", id, pointer(false));
     });
   }, [mapReady]);
+
+  // ---- dark-theme paint swap (Phase 7 v3) --------------------------------
+  // The basemap style swaps on theme change, but the overlay layers (pins,
+  // clusters, heatmap, isochrone bands, metro/landmark dots) are added with
+  // light-tuned paints. This effect re-paints them via setPaintProperty when
+  // darkMode flips so they stay readable on the dark CARTO basemap — without
+  // rebuilding the layers (which would lose map state). Layers that aren't
+  // currently shown are skipped; the effect re-runs on mapReady and on every
+  // layer toggle so layers turned on after the theme swap still get the
+  // correct paint on their first render.
+  //
+  // The actual dark/light values live in lib/mapInteractions (THEME_PAINTS) —
+  // pure data, unit-tested — so this effect is just "apply the map".
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const dark = darkMode;
+
+    // Layers differ in type (circle/line/fill/symbol), so the property name
+    // can't be a single keyof AllPaintProperties — a runtime-guarded cast is
+    // the pragmatic call (the try/catch swallows genuinely invalid combos).
+    const set = (
+      layer: string,
+      prop: Parameters<typeof map.setPaintProperty>[1],
+      value: unknown
+    ) => {
+      if (map.getLayer(layer)) {
+        try {
+          map.setPaintProperty(layer, prop, value as never);
+        } catch {
+          // Layer exists but the property isn't paintable in this context.
+        }
+      }
+    };
+
+    Object.entries(THEME_PAINTS).forEach(([layer, patches]) => {
+      patches.forEach(({ prop, dark: darkVal, light }) => {
+        set(layer, prop as Parameters<typeof map.setPaintProperty>[1], dark ? darkVal : light);
+      });
+    });
+
+    // Walking isochrone bands — stronger fill + outline on dark (the 0.1
+    // opacity light-mode tint is invisible over dark tiles). The per-band
+    // colors stay the same in both themes; only opacity + outline change.
+    [0, 1, 2].forEach((i) => {
+      const id = `travel-bands-${i}`;
+      set(id, "fill-opacity", dark ? TRAVEL_BAND_DARK_OPACITY : TRAVEL_BAND_LIGHT_OPACITY);
+      if (dark) set(id, "fill-outline-color", "#ffffff");
+    });
+  }, [darkMode, mapReady, showLandmarks, heatmap, clustering, showTravel, radiusCenter]);
 
   // Room-count badge: prefer the authoritative server summary (COUNT/AVG over
   // every row in view, not just page 1); fall back to the client-side list

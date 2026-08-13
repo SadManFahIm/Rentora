@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-611%20(368%20BE%20%2B%20243%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-616%20(368%20BE%20%2B%20248%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -93,6 +93,7 @@ Full gallery (28 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 **Map Intelligence v3 (Phase 7 v3) — Interactions + Dark Mode + Dhaka Hierarchy**
 
 - **Dark map fixed** — lifted CARTO dark raster paint (brightness floor 0.2, contrast 0.2) keeps roads + street labels readable instead of near-black; dark-fallback also lifted; overlays now visible in dark mode
+- **Dark layer contrast QA** — every overlay gets dark-mode paints via a theme-swap effect (`setPaintProperty`, map state preserved): 🎓/🚇 dots brighten, MRT corridor core brightens with subtle casing, heatmap switches to green-400/amber-400/red-400 at higher opacity with dark strokes, cluster rings darken, isochrone bands get stronger fills (0.1 → 0.22) + white outlines, radius/metro-reach rings brighten; dark popup card (no more white flash); paint values in `lib/mapInteractions` `THEME_PAINTS` (unit-tested)
 - **Every map element is interactive now** — click a 🎓 university or 🚇 metro station → real nearby stats (count · avg/range rent within ~2 km) + "Find rooms near…" CTA; MRT Line-6 corridor clickable; price-heatmap click → clicked area's real stats; 10/20/30-min walking bands clickable → rooms inside
 - **Map ↔ list sync** — list click flies + highlights the pin; map pin click scrolls the list item into view
 - **Room deep links** — `?room=123` in a shared map URL reopens the listing on load
@@ -280,7 +281,7 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 | **11+**   | Listing Intelligence — 🎤 Bangla voice search, 🧠 AI saved-search matcher + price-drop alerts, ✨ listing quality score, 🛡️ fraud-aware ranking       | ✅ Shipped           |
 | **11++**  | Core AI & Fraud — 🤖 Rentora Copilot, 🏷️ AI pricing suggestion v2 (demand/time-to-rent), 🖼️ cross-listing duplicate-image fraud detection | ✅ Shipped |
 | **7 v2**   | Intelligent Map — 🧠 AI map search, 🚇 metro commute score + commute mode, ⭐ best-value scores, 🏛️ area intelligence + comparison, 💰 affordability map, ideal-area ranking | ✅ Shipped |
-| **7 v3**   | Map Intelligence v3 — 🌙 dark-map fix, 👆 interactive university/metro/heatmap/isochrone clicks, 🔗 map↔list sync, 🔗 room deep links, 🏙️ structured Dhaka hierarchy (area-hierarchy API) | ✅ Shipped |
+| **7 v3**   | Map Intelligence v3 — 🌙 dark-map fix + 🌑 layer contrast QA, 👆 interactive university/metro/heatmap/isochrone clicks, 🔗 map↔list sync, 🔗 room deep links, 🏙️ structured Dhaka hierarchy (area-hierarchy API) | ✅ Shipped |
 | **12 P0**  | Progressive Web App — 📱 installable manifest + maskable icons, native install CTA, standalone mode, safe SW caching, update + offline UX, shortcuts | ✅ Shipped |
 | **12 P1**  | Offline & polish — 🔌 offline search over cached public listings, background sync (offline action replay), periodic refresh, splash screens, dark icon, iOS install hint, Lighthouse audit | ✅ Shipped |
 

@@ -17,6 +17,8 @@ of Rentora's existing search, pricing, fraud, listing and location systems.
 | Feature | What it does |
 |---|---|
 | **Dark map fixed** | Dark mode now uses a lifted CARTO dark raster (brightness floor 0.2 / contrast 0.2) so roads and street labels stay readable instead of dissolving into near-black; dark-fallback keeps labels legible too |
+| **Dark layer contrast QA** | Every overlay layer gets dark-mode paints via a single theme-swap effect (`setPaintProperty`, no layer rebuild): university/metro dots brighten (violet-400 / teal-400), the MRT corridor core brightens with a subtle casing, the price heatmap switches to green-400/amber-400/red-400 at higher opacity with dark strokes, cluster rings darken, isochrone bands get stronger fills (0.1 → 0.22) with white outlines, the radius circle and metro-reach ring brighten — values live in `lib/mapInteractions` (`THEME_PAINTS`, unit-tested) |
+| **Dark popup card** | MapLibre popups are theme-aware now: dark surface + border instead of the default white card that flashed on the dark basemap; price/dist/metro/value accents brighten in dark |
 | **University & metro clicks** | Clicking a 🎓 university or 🚇 station dot opens a popup with real nearby-room counts + avg/range rent within ~2 km, plus a "Find rooms near…" CTA that starts a radius search and flies to the spot |
 | **MRT Line-6 corridor click** | The Line-6 polyline is clickable (info popup + pointer cursor) |
 | **Price-heatmap click** | Clicking the heatmap shows the clicked area's real stats (avg rent, count, range) from the rooms actually in view — no invented numbers |
