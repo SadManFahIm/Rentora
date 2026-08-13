@@ -383,6 +383,18 @@ SAVED_SEARCH_MATCH_WEIGHTS = {
 # requires an external model and never hallucinates listings (every claim
 # comes from retrieved database rows).
 COPILOT_ENABLED = os.getenv("COPILOT_ENABLED", "True") == "True"
+
+# ---- Chat Safety Engine (Phase 12.3) ----
+# Rule-based fraud/safety detection on chat messages (see chat/safety.py).
+# Detection is conservative by design: low/medium risk delivers with a
+# caution warning, high risk flags the message for admin review, and
+# critical risk *blocks* it (the sender's message is replaced with a safety
+# notice and the raw content is never stored).
+CHAT_SAFETY_ENABLED = os.getenv("CHAT_SAFETY_ENABLED", "True") == "True"
+# Messages at or above this risk level are replaced with a blocked notice.
+CHAT_SAFETY_BLOCK_LEVEL = os.getenv("CHAT_SAFETY_BLOCK_LEVEL", "critical")
+# Messages at or above this risk level are flagged for admin review.
+CHAT_SAFETY_FLAG_LEVEL = os.getenv("CHAT_SAFETY_FLAG_LEVEL", "high")
 # Max listings returned per Copilot turn.
 COPILOT_MAX_RESULTS = int(os.getenv("COPILOT_MAX_RESULTS", "5"))
 # Follow-up conversation context lives in the Django cache under a random

@@ -17,6 +17,7 @@ import type {
   ChatMessageStatus,
   ChatRoom,
   ChatRoomType,
+  ChatSafetyInfo,
 } from "../types";
 
 // ---- DRF wire shapes (only the fields we consume) ----
@@ -137,6 +138,14 @@ export interface ApiChatMessage {
   is_read: boolean;
   status: string;
   created_at: string;
+  /** Chat safety engine (Phase 12.3) — attached to warned/flagged/blocked. */
+  safety?: {
+    risk_level: string;
+    outcome: string;
+    blocked: boolean;
+    warning?: string;
+    detectors?: { key: string; label: string }[];
+  };
 }
 
 export interface ApiChatRoom {
@@ -336,6 +345,15 @@ export function mapChatMessage(api: ApiChatMessage): ChatMessage {
     fileUrl: api.file_url,
     status: api.status as ChatMessageStatus,
     createdAt: api.created_at,
+    safety: api.safety
+      ? {
+          riskLevel: api.safety.risk_level as ChatSafetyInfo["riskLevel"],
+          outcome: api.safety.outcome as ChatSafetyInfo["outcome"],
+          blocked: api.safety.blocked,
+          warning: api.safety.warning,
+          detectors: api.safety.detectors,
+        }
+      : undefined,
   };
 }
 

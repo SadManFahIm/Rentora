@@ -96,3 +96,66 @@ class Message(models.Model):
     def __str__(self) -> str:
         preview = (self.content[:30] + "…") if len(self.content) > 30 else self.content
         return f"{self.sender}: {preview}"
+
+
+class ChatSafetyEvent(models.Model):
+    """One chat-message safety assessment (Phase 12.3 — chat safety engine).
+
+    Created whenever the rule-based engine finds something worth remembering:
+    a warning (medium), a flagged message (high) or a blocked message
+    (critical). Only *metadata* is stored — the detector keys, the risk level,
+    the outcome and short matched fragments — never the full conversation
+    content, so sensitive chat text is not persisted beyond what the messages
+    table already holds by design.
+
+    ``outcome`` records what the engine did:
+
+    - ``warned``  — delivered, recipient should be cautious (medium)
+    - ``flagged`` — delivered but flagged for admin review (high)
+    - ``blocked`` — replaced with a safety notice, raw content never stored
+
+    A ``blocked`` event's ``message`` points at the placeholder message (the
+    one that was actually stored), so the trail stays complete.
+    """
+
+    class RiskLevel(models.TextChoices):
+        LOW = "low", "Low"
+        MEDIUM = "medium", "Medium"
+        HIGH = "high", "High"
+        CRITICAL = "critical", "Critical"
+
+    class Outcome(models.TextChoices):
+        WARNED = "warned", "Warned"
+        FLAGGED = "flagged", "Flagged"
+        BLOCKED = "blocked", "Blocked"
+
+    chat_room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, related_name="safety_events")
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="chat_safety_events",
+    )
+    message = models.ForeignKey(
+        Message,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="safety_event",
+    )
+    risk_level = models.CharField(max_length=10, choices=RiskLevel.choices)
+    outcome = models.CharField(max_length=10, choices=Outcome.choices)
+    # Metadata only: [{"key", "label", "fragments": [snippet, ...]}, ...]
+    detectors = models.JSONField(default=list, blank=True)
+    detail = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["sender", "created_at"]),
+            models.Index(fields=["chat_room", "created_at"]),
+            models.Index(fields=["outcome", "created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.risk_level}/{self.outcome} from {self.sender_id} in room {self.chat_room_id}"

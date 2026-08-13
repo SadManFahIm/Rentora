@@ -127,6 +127,19 @@ export interface ChatMessage {
   fileUrl: string;
   status: ChatMessageStatus;
   createdAt: string;
+  /** Chat safety engine (Phase 12.3) — present only on messages that tripped
+   * a rule: warned/flagged carry a caution warning, blocked messages were
+   * replaced with a safety notice server-side. */
+  safety?: ChatSafetyInfo;
+}
+
+/** The slice of a chat-safety assessment the client sees (never raw content). */
+export interface ChatSafetyInfo {
+  riskLevel: "low" | "medium" | "high" | "critical";
+  outcome: "allowed" | "warned" | "flagged" | "blocked";
+  blocked: boolean;
+  warning?: string;
+  detectors?: { key: string; label: string }[];
 }
 
 export type ChatRoomType = "direct" | "group";

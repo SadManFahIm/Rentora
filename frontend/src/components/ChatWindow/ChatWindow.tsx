@@ -1,11 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { BadgeCheck, Check, CheckCheck, Paperclip, Send, ShieldCheck } from "lucide-react";
+import {
+  BadgeCheck,
+  Check,
+  CheckCheck,
+  Paperclip,
+  Send,
+  ShieldAlert,
+  ShieldCheck,
+  X,
+} from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { useChatMessages, useChatRooms, useUploadChatFile } from "../../hooks/useChat";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { mapChatMessage, type ApiChatMessage } from "../../services/mappers";
-import type { ChatMessage, ChatRoom, ChatUser } from "../../types";
+import type { ChatMessage, ChatRoom, ChatSafetyInfo, ChatUser } from "../../types";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { cn } from "../../lib/utils";
@@ -109,6 +118,9 @@ export default function ChatWindow() {
   );
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [typingUserName, setTypingUserName] = useState<string | null>(null);
+  // Chat safety (Phase 12.3): the last warned/flagged assessment to surface
+  // as a dismissible caution banner above the conversation.
+  const [safetyNotice, setSafetyNotice] = useState<ChatSafetyInfo | null>(null);
   const [input, setInput] = useState("");
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -139,6 +151,7 @@ export default function ChatWindow() {
 
   useEffect(() => {
     setTypingUserName(null);
+    setSafetyNotice(null);
   }, [selectedRoomId]);
 
   const wsPath = selectedRoomId != null ? `/ws/chat/${selectedRoomId}/` : null;
@@ -150,6 +163,14 @@ export default function ChatWindow() {
     if (lastMessage.type === "chat_message") {
       const incoming = mapChatMessage(lastMessage.message);
       setMessages((prev) => (prev.some((m) => m.id === incoming.id) ? prev : [...prev, incoming]));
+      // Chat safety engine (Phase 12.3): warned/flagged messages raise a
+      // caution banner; blocked messages render styled in the list itself.
+      if (
+        incoming.safety &&
+        (incoming.safety.outcome === "warned" || incoming.safety.outcome === "flagged")
+      ) {
+        setSafetyNotice(incoming.safety);
+      }
       if (incoming.sender.id !== user?.id) {
         // Someone else's message, and we're actively looking at this room
         // right now — tell the server we've read it immediately.
@@ -314,19 +335,39 @@ export default function ChatWindow() {
             </div>
 
             <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-5">
+              {safetyNotice && (
+                <div className="flex items-start justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs dark:border-amber-500/30 dark:bg-amber-500/10">
+                  <p className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
+                    <ShieldAlert className="size-3.5 shrink-0" />
+                    {safetyNotice.warning ?? "Please be cautious with this conversation."}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setSafetyNotice(null)}
+                    aria-label="Dismiss safety notice"
+                    className="shrink-0 text-amber-600/70 hover:text-amber-700 dark:text-amber-400/70"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              )}
+
               {messagesQuery.isLoading ? (
                 <div className="text-sm text-gray-600 dark:text-gray-400">Loading messages…</div>
               ) : (
                 messages.map((m) => {
                   const mine = m.sender.id === user?.id;
+                  const blocked = m.safety?.blocked === true;
                   return (
                     <div key={m.id} className={cn("max-w-[70%]", mine && "self-end")}>
                       <div
                         className={cn(
                           "rounded-2xl rounded-bl-sm px-3.5 py-2.5 text-sm leading-relaxed",
-                          mine
-                            ? "rounded-bl-2xl rounded-br-sm bg-orange-600 text-white"
-                            : "bg-gray-100 text-foreground dark:bg-gray-800"
+                          blocked
+                            ? "flex items-center gap-1.5 border border-red-200 bg-red-50 text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400"
+                            : mine
+                              ? "rounded-bl-2xl rounded-br-sm bg-orange-600 text-white"
+                              : "bg-gray-100 text-foreground dark:bg-gray-800"
                         )}
                       >
                         {m.messageType === "image" && m.fileUrl ? (
@@ -342,6 +383,11 @@ export default function ChatWindow() {
                           >
                             <Paperclip className="size-4 shrink-0" /> {m.content}
                           </a>
+                        ) : blocked ? (
+                          <span className="flex items-center gap-1.5">
+                            <ShieldAlert className="size-4 shrink-0" />
+                            {m.content}
+                          </span>
                         ) : (
                           m.content
                         )}
