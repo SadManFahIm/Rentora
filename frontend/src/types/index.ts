@@ -192,6 +192,9 @@ export type RoomFilters = Partial<Filters> & {
   nearLng?: number;
   /** Keep only rooms within this many km of the reference point. */
   radiusKm?: number;
+  /** Landmark slug to search around (see /rooms/landmarks/ for valid keys).
+   * Pairs with `radiusKm`; e.g. near a metro station or university. */
+  nearLandmark?: string;
   /** AI smart search: semantic ranking + natural-language parsing. */
   smart?: boolean;
 };
@@ -237,6 +240,9 @@ export interface AreaBoundary {
   parent_name: string | null;
   /** Transparency: the bubble radius, since these are circles, not borders. */
   approx_radius_km: number;
+  /** The area's real centre — used to place zoom-aware labels precisely. */
+  lat: number;
+  lng: number;
 }
 
 /** GeoJSON wrapper the map consumes directly as a MapLibre source. */

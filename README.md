@@ -100,6 +100,10 @@ Full gallery (28 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 - **Structured Dhaka hierarchy** — new `GET /api/v1/rooms/area-hierarchy/` (20 main areas → 30+ sub-areas/neighbourhoods, parent links, Bangla + English aliases); sub-area search ("Mirpur 10", "Uttara Sector 7", "ধানমন্ডি ২৭") resolves with its parent district shown
 - **Area boundary polygons** — `GET /api/v1/rooms/area-boundaries/`: approximate boundary bubbles (honest circles, `approx_radius_km`, not fake borders) — main areas strong orange rings (z≈9.5+), sub-areas blue (z≈11.5+), neighbourhoods violet (z≈13.5+), click → real area stats; dark-mode paints included
 - **Expanded landmark layer** — 🏥 hospitals, 🛒 markets, 🌳 parks, 🕌 mosques, 🚌 bus terminals join universities & metro (63 real Dhaka places: Square Hospital, New Market, Baitul Mukarram, Gabtoli/Saidabad terminals…). Everyday categories share one **clustered source**: count bubble at low zoom (click → zoom in) → per-kind dots as you zoom, each with its own minzoom; every dot opens real nearby-room stats + "Rooms near here →" radius CTA; dark mode brightens each category
+- **Nearby-landmark chips** — every listing popup shows the nearest useful places around it (🚇 7 min Metro · 🎓 12 min University — real landmarks only, nearest of each category within ~3 km, honest walk estimates); clicking a chip flies to the place + starts a radius search
+- **Zoom-aware area labels** — area bubbles carry their real centre (`lat`/`lng`), rendered as labels with zoom-based hierarchy (main z≈10, sub z≈12.5, neighbourhood z≈14.5) so the map never drowns in text; theme-aware text + halo
+- **Boundary click → area filter** — clicking an area bubble highlights it (selected > hover > base feature-state), shows its real stats and **filters the room list + URL** (`?area=…`); empty click clears it
+- **Landmark-nearby list search** — filter the room list by "near a metro / university / hospital…" within 0.5–2 km (`?near=<kind>&distance=<km>`), resolved to the nearest real landmark, map flies there once
 
 **Phase 9 — Operate It (Reliability & Observability)**
 
@@ -1001,6 +1005,11 @@ See [`docs/PWA.md`](docs/PWA.md) for the manifest, icon system, service-worker s
 <img width="1440" alt="AI Pricing Suggestion" src="docs/screenshots/pricing-suggestion.png" />
 
 **Phase 7 v2 — Intelligent Map** — AI map search ("উত্তরায় ১২ হাজারের মধ্যে furnished room" → intent chips + real rooms + map flies to Uttara), metro commute scores, value-score pins, area intelligence with comparison, and the affordability budget view (screenshots in [🖼️ Screenshots](#-screenshots); architecture in [docs/INTELLIGENT_MAP.md](docs/INTELLIGENT_MAP.md)):
+
+**Phase 7 v3 — Map UX polish** — zoom-aware area labels + boundary highlights in light mode (left) and dark mode (right):
+
+<img width="1440" alt="Map UX Light" src="docs/screenshots/map-ux-light-default.png" />
+<img width="1440" alt="Map UX Dark" src="docs/screenshots/map-ux-dark-state.png" />
 
 **Phase 11++ — Cross-listing duplicate-image fraud** — admin Fraud Operations filtered to the duplicate-image detector, showing the HIGH-severity match with matched-listing chips:
 
