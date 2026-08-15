@@ -83,6 +83,7 @@ INSTALLED_APPS = [
     "fraud",
     "savedsearches",
     "copilot",
+    "moderation",
 ]
 
 MIDDLEWARE = [
@@ -452,6 +453,17 @@ IMAGE_DUPLICATE_THRESHOLD = int(os.getenv("IMAGE_DUPLICATE_THRESHOLD", "8"))
 # other listings on the platform — with one or two listings there is nothing
 # to compare against and hashing every image is pure waste.
 IMAGE_DUPLICATE_MIN_LISTINGS = int(os.getenv("IMAGE_DUPLICATE_MIN_LISTINGS", "2"))
+
+# ============================================================
+# Content moderation (Phase 12.5 — photo + review moderation)
+# ============================================================
+# Deterministic review-text and photo moderation with an admin queue.
+# Low-risk reviews/photos are auto-approved (published immediately — existing
+# behaviour preserved); high-risk ones land in the admin moderation queue.
+REVIEW_MODERATION_ENABLED = os.getenv("REVIEW_MODERATION_ENABLED", "True") == "True"
+# Reviews scoring at or above this 0-100 risk are held for admin review.
+REVIEW_MODERATION_FLAG_THRESHOLD = int(os.getenv("REVIEW_MODERATION_FLAG_THRESHOLD", "60"))
+PHOTO_MODERATION_ENABLED = os.getenv("PHOTO_MODERATION_ENABLED", "True") == "True"
 
 # ============================================================
 # Alert email throttling (notifications.email_guard)

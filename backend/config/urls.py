@@ -89,6 +89,7 @@ urlpatterns = [
     path("api/v1/fraud/", include("fraud.urls")),
     path("api/v1/saved-searches/", include("savedsearches.urls")),
     path("api/v1/copilot/", include("copilot.urls")),
+    path("api/v1/moderation/", include("moderation.urls")),
 ]
 
 if settings.DEBUG:

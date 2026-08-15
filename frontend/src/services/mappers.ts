@@ -18,9 +18,12 @@ import type {
   ChatRoom,
   ChatRoomType,
   ChatSafetyInfo,
+  ModerationOverview,
+  PhotoModerationItem,
   Report,
   ReportCategory,
   ReportStatus,
+  ReviewModerationItem,
 } from "../types";
 
 // ---- DRF wire shapes (only the fields we consume) ----
@@ -169,6 +172,45 @@ export interface ApiReport {
   admin_note: string;
   created_at: string;
   resolved_at: string | null;
+}
+
+export interface ApiReviewModeration {
+  id: number;
+  review: number;
+  room_id: number;
+  room_title: string;
+  author_username: string;
+  author_name: string;
+  rating: number;
+  comment_preview: string;
+  status: string;
+  status_display: string;
+  risk_score: number;
+  signals: { key: string; label: string }[];
+  admin_note: string;
+  reviewed_by_username: string;
+  created_at: string;
+  reviewed_at: string | null;
+}
+
+export interface ApiPhotoModeration {
+  id: number;
+  target_type: string;
+  target_type_display: string;
+  room: number | null;
+  room_title: string;
+  review: number | null;
+  image_url: string;
+  phash: string;
+  status: string;
+  status_display: string;
+  risk_score: number;
+  signals: { key: string; label: string }[];
+  admin_note: string;
+  uploaded_by_username: string;
+  reviewed_by_username: string;
+  created_at: string;
+  reviewed_at: string | null;
 }
 
 export interface ApiChatRoom {
@@ -399,6 +441,64 @@ export function mapReport(api: ApiReport): Report {
     adminNote: api.admin_note,
     createdAt: api.created_at,
     resolvedAt: api.resolved_at,
+  };
+}
+
+export function mapReviewModeration(api: ApiReviewModeration): ReviewModerationItem {
+  return {
+    id: api.id,
+    review: api.review,
+    roomId: api.room_id,
+    roomTitle: api.room_title,
+    authorUsername: api.author_username,
+    authorName: api.author_name,
+    rating: api.rating,
+    commentPreview: api.comment_preview,
+    status: api.status as ReviewModerationItem["status"],
+    statusDisplay: api.status_display,
+    riskScore: api.risk_score,
+    signals: api.signals,
+    adminNote: api.admin_note,
+    reviewedByUsername: api.reviewed_by_username,
+    createdAt: api.created_at,
+    reviewedAt: api.reviewed_at,
+  };
+}
+
+export function mapPhotoModeration(api: ApiPhotoModeration): PhotoModerationItem {
+  return {
+    id: api.id,
+    targetType: api.target_type as PhotoModerationItem["targetType"],
+    targetTypeDisplay: api.target_type_display,
+    room: api.room,
+    roomTitle: api.room_title,
+    review: api.review,
+    imageUrl: api.image_url,
+    phash: api.phash,
+    status: api.status as PhotoModerationItem["status"],
+    statusDisplay: api.status_display,
+    riskScore: api.risk_score,
+    signals: api.signals,
+    adminNote: api.admin_note,
+    uploadedByUsername: api.uploaded_by_username,
+    reviewedByUsername: api.reviewed_by_username,
+    createdAt: api.created_at,
+    reviewedAt: api.reviewed_at,
+  };
+}
+
+export function mapModerationOverview(api: Record<string, number>): ModerationOverview {
+  return {
+    reviews: api.reviews ?? 0,
+    reviewsPending: api.reviews_pending ?? 0,
+    reviewsFlagged: api.reviews_flagged ?? 0,
+    reviewsApproved: api.reviews_approved ?? 0,
+    reviewsRejected: api.reviews_rejected ?? 0,
+    photos: api.photos ?? 0,
+    photosPending: api.photos_pending ?? 0,
+    photosFlagged: api.photos_flagged ?? 0,
+    photosApproved: api.photos_approved ?? 0,
+    photosRejected: api.photos_rejected ?? 0,
   };
 }
 

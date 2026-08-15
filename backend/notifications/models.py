@@ -32,6 +32,8 @@ class Notification(models.Model):
         ACCOUNT_WARNING = "account_warning", "Account Warning"
         ACCOUNT_SUSPENDED = "account_suspended", "Account Suspended"
         REPORT_RESOLVED = "report_resolved", "Report Resolved"
+        # Content moderation decisions (Phase 12.5) — review/photo approved or rejected.
+        CONTENT_MODERATED = "content_moderated", "Content Moderated"
         SAVED_SEARCH_MATCH = "saved_search_match", "Saved Search Match"
         SYSTEM = "system", "System"
 

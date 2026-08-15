@@ -17,6 +17,7 @@ import { useApp } from "../../context/AppContext";
 import FraudTab from "../../components/FraudTab/FraudTab";
 import AdminFraudPanel from "../../components/AdminFraudPanel/AdminFraudPanel";
 import AdminReportsPanel from "../../components/AdminReportsPanel/AdminReportsPanel";
+import AdminModerationPanel from "../../components/AdminModerationPanel/AdminModerationPanel";
 import LandlordInsights from "../../components/LandlordInsights/LandlordInsights";
 import PushNotificationCard from "../../components/PushNotificationCard/PushNotificationCard";
 import ReferralCard from "../../components/ReferralCard/ReferralCard";
@@ -59,6 +60,7 @@ type DashboardTab =
   | "fraud"
   | "kyc"
   | "reports"
+  | "moderation"
   | "insights";
 const TABS: DashboardTab[] = [
   "overview",
@@ -69,6 +71,7 @@ const TABS: DashboardTab[] = [
   "fraud",
   "kyc",
   "reports",
+  "moderation",
   "insights",
 ];
 
@@ -222,7 +225,7 @@ export default function Dashboard() {
   const isAdmin = user?.role === "admin" || user?.isStaff === true;
   const isLandlord = isAdmin || user?.role === "landlord";
   const visibleTabs = TABS.filter((t) => {
-    if (t === "kyc" || t === "reports") return isAdmin;
+    if (t === "kyc" || t === "reports" || t === "moderation") return isAdmin;
     if (t === "insights") return isLandlord;
     return true;
   });
@@ -666,6 +669,8 @@ export default function Dashboard() {
       {activeTab === "kyc" && isAdmin && <AdminKycPanel />}
 
       {activeTab === "reports" && isAdmin && <AdminReportsPanel />}
+
+      {activeTab === "moderation" && isAdmin && <AdminModerationPanel />}
 
       {activeTab === "insights" && isLandlord && <LandlordInsights />}
 
