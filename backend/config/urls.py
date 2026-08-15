@@ -13,10 +13,14 @@ from drf_spectacular.views import (
 )
 
 from config.auth_views import ThrottledLoginView, ThrottledRegisterView
+from config.views import security_txt
 from users import otp_views as users_otp_views
 from users import passkey_views as users_passkey_views
 
 urlpatterns = [
+    # RFC 9116 security.txt — both canonical and convenience paths.
+    path(".well-known/security.txt", security_txt, name="security-txt"),
+    path("security.txt", security_txt),
     path("admin/", admin.site.urls),
     # API schema & interactive docs.
     path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema"),
