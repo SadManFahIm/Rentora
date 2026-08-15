@@ -318,6 +318,10 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 - Book rooms with one click
 - Real-time chat with landlords (WebSocket — typing, read receipts, file upload)
 - **Roommate matching** — find compatible flatmates by budget, area, lifestyle, and gender preference
+- **Tenant identity verification** — verify once with a NID/passport and carry the **✓ Identity Verified badge** (identity only — never a behavioral or financial guarantee)
+- **Chat safety** — every message is screened for payment-redirect scams, phishing links and impersonation; risky messages show warnings and blocked ones are replaced with a safety notice
+- **Report & block** — report a user or a specific message (scam, harassment, fake listing, payment fraud…) and block/unblock to close a conversation both ways
+- **Dispute resolution** — open a structured dispute on an approved booking (deposit, property condition, cancellation…) with evidence, admin review and a clear outcome
 - Dashboard with booking stats and notifications
 
 **For Landlords**
@@ -328,6 +332,8 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 - **Fraud protection** — every listing is auto-scanned on creation; flagged listings show an "under review" badge
 - **Paid listing tiers** — promote a listing to **Featured** (৳199/30 days) or **Premium** (৳499/30 days) via SSLCommerz/bKash to rank higher in search and show a badge; expired promotions auto-revert to Free
 - **KYC verification** — verified landlords carry a trust badge (RoomCard, RoomModal, Roommates, Chat) and rank first; tenants can filter to verified owners only
+- **Verified tenants in chat** — identity-verified tenants carry the ✓ badge in chat, booking requests and roommate matches, so you know who's inquiring
+- **Report & dispute tools** — report problem users/messages and respond to booking disputes with evidence before a resolution is decided
 - Dashboard with revenue stats, ratings, listing analytics, and fraud risk cards with one-click re-scan
 
 **Platform Features**
@@ -335,8 +341,9 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 - JWT authentication (register/login/refresh/logout) with **unique-email enforcement**
 - Paid listing tiers (monetization) with server-side pricing and premium-first search ordering
 - Real-time notifications (booking updates, reviews, roommate requests, fraud flags)
-- Review system with verified stay badges
+- Review system with verified stay badges — reviews and photos are auto-moderated (spam, duplicate-image, contact harvesting) with an admin approval queue
 - 6-detector fraud engine
+- **Trust & Safety Operations Center** — unified admin console (tenant KYC queue, chat-safety feed, report tickets, photo/review moderation, disputes + deposit decisions) with a read-only audit trail
 - Responsive design (mobile, tablet, desktop) + dark mode
 - API documentation (Swagger UI + ReDoc)
 
@@ -480,12 +487,12 @@ Rentora/
 
 Quality is enforced **in CI and at commit time** — style or coverage drift fails the pipeline automatically.
 
-### Automated tests (414 total)
+### Automated tests (785 total)
 
-| Suite             | Count | Gate                                               |
-| ----------------- | ----- | -------------------------------------------------- |
-| Backend (Django)  | 229   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
-| Frontend (Vitest) | 185   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
+| Suite             | Count | Gate                                      |
+| ----------------- | ----- | ----------------------------------------- |
+| Backend (Django)  | 473   | ✅ passing · coverage ≥ 50% lines         |
+| Frontend (Vitest) | 312   | ✅ passing · coverage ≥ 55% lines         |
 
 ```bash
 # Backend
