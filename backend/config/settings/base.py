@@ -83,7 +83,32 @@ INSTALLED_APPS = [
     "fraud",
     "savedsearches",
     "copilot",
+    "moderation",
+    "disputes",
 ]
+
+# ============================================================
+# Security headers (Tier-1 quick win) — see config/security.py
+# ============================================================
+# Content-Security-Policy, one directive per dict entry. The default keeps
+# the Django admin and drf-spectacular docs working (inline styles/scripts +
+# their CDN assets) while blocking third-party frames, objects and base-URI
+# tricks. Override per environment by setting the full dict in prod.py.
+SECURITY_CONTENT_SECURITY_POLICY = {
+    "default-src": "'self'",
+    "script-src": "'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com",
+    "style-src": "'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com",
+    "img-src": "'self' data: blob: https:",
+    "font-src": "'self' data: https://cdn.jsdelivr.net",
+    "connect-src": "'self'",
+    "object-src": "'none'",
+    "base-uri": "'self'",
+    "form-action": "'self'",
+    "frame-ancestors": "'none'",
+}
+# Sent with every response unless overridden.
+SECURITY_REFERRER_POLICY = "strict-origin-when-cross-origin"
+SECURITY_PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=()"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -95,6 +120,7 @@ MIDDLEWARE = [
     "allauth.account.middleware.AccountMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "config.security.SecurityHeadersMiddleware",
     "recommendations.middleware.RoomViewActivityMiddleware",
 ]
 
@@ -207,6 +233,9 @@ REST_FRAMEWORK = {
         "user": "1000/hour",
         "auth": "10/hour",
         "chat_upload": "30/hour",
+        # Reports are moderation actions — a tight dedicated scope stops one
+        # user from flooding the admin queue (see chat.views.ReportRateThrottle).
+        "report": "10/hour",
         # Payment initiation is deliberately much tighter than the general
         # "user" scope — there's no legitimate reason to start dozens of
         # payment sessions an hour, and it's a prime target for abuse/testing
@@ -383,6 +412,27 @@ SAVED_SEARCH_MATCH_WEIGHTS = {
 # requires an external model and never hallucinates listings (every claim
 # comes from retrieved database rows).
 COPILOT_ENABLED = os.getenv("COPILOT_ENABLED", "True") == "True"
+
+# ---- Chat Safety Engine (Phase 12.3) ----
+# Rule-based fraud/safety detection on chat messages (see chat/safety.py).
+# Detection is conservative by design: low/medium risk delivers with a
+# caution warning, high risk flags the message for admin review, and
+# critical risk *blocks* it (the sender's message is replaced with a safety
+# notice and the raw content is never stored).
+CHAT_SAFETY_ENABLED = os.getenv("CHAT_SAFETY_ENABLED", "True") == "True"
+# Messages at or above this risk level are replaced with a blocked notice.
+CHAT_SAFETY_BLOCK_LEVEL = os.getenv("CHAT_SAFETY_BLOCK_LEVEL", "critical")
+# Messages at or above this risk level are flagged for admin review.
+CHAT_SAFETY_FLAG_LEVEL = os.getenv("CHAT_SAFETY_FLAG_LEVEL", "high")
+# Semantic search result cache (Tier-1 quick win): identical smart-search /
+# Copilot queries over the same pool of rooms reuse the last ranking instead
+# of recomputing embeddings on every request. Bypassed for authenticated
+# (personalized) and debug-metadata requests; ordering may lag a listing
+# quality / fraud-score change by at most the TTL.
+SEMANTIC_SEARCH_CACHE_ENABLED = os.getenv("SEMANTIC_SEARCH_CACHE_ENABLED", "True") == "True"
+# How long a cached ranking stays valid (seconds).
+SEMANTIC_SEARCH_CACHE_TTL_SECONDS = int(os.getenv("SEMANTIC_SEARCH_CACHE_TTL_SECONDS", "900"))
+
 # Max listings returned per Copilot turn.
 COPILOT_MAX_RESULTS = int(os.getenv("COPILOT_MAX_RESULTS", "5"))
 # Follow-up conversation context lives in the Django cache under a random
@@ -440,6 +490,17 @@ IMAGE_DUPLICATE_THRESHOLD = int(os.getenv("IMAGE_DUPLICATE_THRESHOLD", "8"))
 # other listings on the platform — with one or two listings there is nothing
 # to compare against and hashing every image is pure waste.
 IMAGE_DUPLICATE_MIN_LISTINGS = int(os.getenv("IMAGE_DUPLICATE_MIN_LISTINGS", "2"))
+
+# ============================================================
+# Content moderation (Phase 12.5 — photo + review moderation)
+# ============================================================
+# Deterministic review-text and photo moderation with an admin queue.
+# Low-risk reviews/photos are auto-approved (published immediately — existing
+# behaviour preserved); high-risk ones land in the admin moderation queue.
+REVIEW_MODERATION_ENABLED = os.getenv("REVIEW_MODERATION_ENABLED", "True") == "True"
+# Reviews scoring at or above this 0-100 risk are held for admin review.
+REVIEW_MODERATION_FLAG_THRESHOLD = int(os.getenv("REVIEW_MODERATION_FLAG_THRESHOLD", "60"))
+PHOTO_MODERATION_ENABLED = os.getenv("PHOTO_MODERATION_ENABLED", "True") == "True"
 
 # ============================================================
 # Alert email throttling (notifications.email_guard)
@@ -554,6 +615,10 @@ CELERY_BEAT_SCHEDULE = {
     "check-saved-searches": {
         "task": "savedsearches.tasks.check_saved_searches",
         "schedule": 86400.0,  # daily
+    },
+    "send-saved-search-digests": {
+        "task": "savedsearches.tasks.send_saved_search_digests",
+        "schedule": 86400.0,  # daily — one branded email per user with matches
     },
     "alert-kyc-sla-breaches": {
         "task": "users.tasks.alert_kyc_sla_breaches",

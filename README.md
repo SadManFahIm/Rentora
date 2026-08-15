@@ -60,12 +60,23 @@ One platform, four surfaces — **browse smarter**, **trust the listings**, **se
 | 🔍 **AI Smart Search** | Bangla/Banglish natural-language search with intent chips + semantic ranking | [`phase11-ai-search.png`](docs/screenshots/phase11-ai-search.png) |
 | 🛡️ **Fraud Operations** | Auto-scanned listings, risk scores, admin review queue + duplicate-image detection | [`fraud-admin.png`](docs/screenshots/fraud-admin.png) |
 | 🧑‍🤝‍🧑 **Roommate Matching** | Compatible flatmates by budget, area & lifestyle | [`roommates-matching.png`](docs/screenshots/roommates-matching.png) |
+| 🛡️ **Trust & Safety** | Two-sided marketplace integrity — tenant KYC + verified-tenant badge, chat safety engine, report/block, photo & review moderation, disputes + deposit protection, admin Trust Center & audit trail | [`trust-center.png`](docs/screenshots/trust-center.png) |
 
-Full gallery (28 screenshots, light + dark, desktop + mobile) in [🖼️ Screenshots](#-screenshots). Live verification notes in [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md).
+Full gallery (38 screenshots, light + dark, desktop + mobile) in [🖼️ Screenshots](#-screenshots). Live verification notes in [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md).
 
 ---
 
 ## 🆕 Changelog
+
+**Phase 12 — Trust & Safety V2 (Marketplace Integrity)**
+
+- **Tenant KYC + verified-tenant badge** — tenants upload a NID/passport (multipart, MIME/size-validated, UUID-renamed private storage); statuses not_started → pending → verified / rejected / needs_review / expired. Landlords only ever see the **✓ Identity Verified badge** — never the document, the NID number, or the file URL. Admin queue (`/admin/trust/tenant-verification`) with approve/reject/resubmission, each decision audited (`tenant_kyc.*`) and notified. Badge renders in chat, booking requests and the tenant profile. See [`docs/TENANT_KYC.md`](docs/TENANT_KYC.md)
+- **Chat safety engine** — the fraud engine now analyses every chat message: suspicious payment requests, payment/bKash redirects, phishing URLs, contact-info harvesting, impersonation, scam phrases and urgency. Outcomes: LOW (allow) / MEDIUM (warn banner) / HIGH (flag + warning) / CRITICAL (blocked message, replaced with a safety notice — never silently deleted). Admin feed `GET /chat/safety/events/` (metadata only, no raw content). See [`docs/CHAT_SAFETY.md`](docs/CHAT_SAFETY.md)
+- **Report / block / dispute** — report a user, message (anchored to the exact message) or listing across 7 categories (scam, harassment, fake listing, payment fraud, impersonation, spam, other); block/unblock a user closes the conversation both ways (server-enforced); structured moderation tickets with admin warn / restrict / suspend / escalate actions — all audited (`report.*`, `user.blocked`) and both parties notified
+- **Photo + review moderation** — the moderation app auto-scores every new review (URLs, phone/email, spam phrasing, all-caps/exclamation, gibberish, cross-user duplicate text, review velocity) and photo (pHash duplicate-image reuse, blank-image guard) — high-risk content is **held** in a moderation queue instead of published; admin approve/reject with notes, audited (`content_moderated`) and the author notified
+- **Dispute resolution + deposit protection** — one structured dispute per approved booking (6 categories: deposit, property condition, cancellation, misrepresentation, payment, other) with participant-only evidence (text/photo/document, IDOR-guarded), a full status lifecycle, and admin resolution (release-to-landlord / refund-to-tenant / partial) that marks the booking deposit released/refunded. Wording is honest — the platform never claims "escrow". See [`docs/phase-12-trust-safety-v2.md`](docs/phase-12-trust-safety-v2.md)
+- **Admin Trust & Safety Operations Center** — one dashboard (`/dashboard?tab=trust`) aggregating KYC pending, chat-safety events, open reports, moderation queues and open disputes with sub-tabs into each queue, plus the generic read-only **audit trail** (`GET /api/v1/audit/`) covering every Phase 12 decision
+- **Engineering** — 3 new backend apps (moderation, disputes + audit endpoint) and 6 new frontend admin/user panels; **473 backend + 312 frontend tests**, tsc/eslint/prettier clean
 
 **Phase 12 P0 — Progressive Web App (installable app)**
 
@@ -131,6 +142,30 @@ Full gallery (28 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 ---
 
 ## 🆕 Changelog — What's New in v2.0
+
+**Tier-1 Quick Wins (polish batch)**
+
+- **Chat: message search + edit/delete (audited)** — search any message in a
+  conversation, edit your own text messages (re-runs the chat-safety engine),
+  and soft-delete messages. Every edit/delete writes an audit entry
+  (`chat.message.edited` / `chat.message.deleted`) and updates all open
+  clients in real time over the WebSocket.
+- **Saved-search daily email digest** — one branded email per day with new
+  listings matching your saved searches (deduped across searches, own
+  listings never emailed, per-account opt-out `digest_emails_enabled`),
+  delivered through the rate-limited alert email guard.
+- **Report/block abuse guard** — the report endpoint is now rate-limited
+  (10/hour) and a duplicate report of the same target while a report is
+  still open returns the existing ticket instead of stacking the queue.
+- **Semantic search cache** — identical smart-search / Copilot queries over
+  the same room pool reuse the cached ranking instead of recomputing
+  embeddings (personalized + debug requests bypass the cache).
+- **Security headers + security.txt** — CSP, `Referrer-Policy`, `nosniff`,
+  `Permissions-Policy` and HSTS (prod) on every response; RFC 9116
+  `/.well-known/security.txt`.
+- **Dependency bump audit** — safe patch/minor bumps applied to backend +
+  frontend deps and documented in `docs/tier1-dependency-audit.md` (majors
+  like React 19 / Vite 8 / Django 6 held for a dedicated upgrade cycle).
 
 **Paid Listing Tiers (first revenue stream)**
 
@@ -290,6 +325,8 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 | **7 v3**   | Map Intelligence v3 — 🌙 dark-map fix + 🌑 layer contrast QA, 👆 interactive university/metro/heatmap/isochrone clicks, 🔗 map↔list sync, 🔗 room deep links, 🏙️ structured Dhaka hierarchy + area boundary polygons, 🏥 expanded landmark layer (hospitals/markets/parks/mosques/bus terminals, clustered) | ✅ Shipped |
 | **12 P0**  | Progressive Web App — 📱 installable manifest + maskable icons, native install CTA, standalone mode, safe SW caching, update + offline UX, shortcuts | ✅ Shipped |
 | **12 P1**  | Offline & polish — 🔌 offline search over cached public listings, background sync (offline action replay), periodic refresh, splash screens, dark icon, iOS install hint, Lighthouse audit | ✅ Shipped |
+| **12**     | Trust & Safety V2 — two-sided marketplace integrity: 🪪 tenant KYC + verified-tenant badge, 🛡️ chat safety engine, 🚩 report/block, 🖼️ photo + review moderation, ⚖️ disputes + deposit protection, 🎛️ admin Trust & Safety Operations Center + audit trail | ✅ Shipped |
+| **12.6**   | Tier-1 Quick Wins — 💬 chat message search + edit/delete (audited), 📧 saved-search email digest, 🚦 report rate-limit + duplicate guard, ⚡ semantic search cache, 🛡️ CSP headers + security.txt + dependency bump audit | ✅ Shipped |
 
 ---
 
@@ -306,6 +343,10 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 - Book rooms with one click
 - Real-time chat with landlords (WebSocket — typing, read receipts, file upload)
 - **Roommate matching** — find compatible flatmates by budget, area, lifestyle, and gender preference
+- **Tenant identity verification** — verify once with a NID/passport and carry the **✓ Identity Verified badge** (identity only — never a behavioral or financial guarantee)
+- **Chat safety** — every message is screened for payment-redirect scams, phishing links and impersonation; risky messages show warnings and blocked ones are replaced with a safety notice
+- **Report & block** — report a user or a specific message (scam, harassment, fake listing, payment fraud…) and block/unblock to close a conversation both ways
+- **Dispute resolution** — open a structured dispute on an approved booking (deposit, property condition, cancellation…) with evidence, admin review and a clear outcome
 - Dashboard with booking stats and notifications
 
 **For Landlords**
@@ -316,6 +357,8 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 - **Fraud protection** — every listing is auto-scanned on creation; flagged listings show an "under review" badge
 - **Paid listing tiers** — promote a listing to **Featured** (৳199/30 days) or **Premium** (৳499/30 days) via SSLCommerz/bKash to rank higher in search and show a badge; expired promotions auto-revert to Free
 - **KYC verification** — verified landlords carry a trust badge (RoomCard, RoomModal, Roommates, Chat) and rank first; tenants can filter to verified owners only
+- **Verified tenants in chat** — identity-verified tenants carry the ✓ badge in chat, booking requests and roommate matches, so you know who's inquiring
+- **Report & dispute tools** — report problem users/messages and respond to booking disputes with evidence before a resolution is decided
 - Dashboard with revenue stats, ratings, listing analytics, and fraud risk cards with one-click re-scan
 
 **Platform Features**
@@ -323,8 +366,9 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 - JWT authentication (register/login/refresh/logout) with **unique-email enforcement**
 - Paid listing tiers (monetization) with server-side pricing and premium-first search ordering
 - Real-time notifications (booking updates, reviews, roommate requests, fraud flags)
-- Review system with verified stay badges
+- Review system with verified stay badges — reviews and photos are auto-moderated (spam, duplicate-image, contact harvesting) with an admin approval queue
 - 6-detector fraud engine
+- **Trust & Safety Operations Center** — unified admin console (tenant KYC queue, chat-safety feed, report tickets, photo/review moderation, disputes + deposit decisions) with a read-only audit trail
 - Responsive design (mobile, tablet, desktop) + dark mode
 - API documentation (Swagger UI + ReDoc)
 
@@ -468,12 +512,12 @@ Rentora/
 
 Quality is enforced **in CI and at commit time** — style or coverage drift fails the pipeline automatically.
 
-### Automated tests (414 total)
+### Automated tests (785 total)
 
-| Suite             | Count | Gate                                               |
-| ----------------- | ----- | -------------------------------------------------- |
-| Backend (Django)  | 229   | ✅ passing · coverage ≥ 50% lines (currently ~61%) |
-| Frontend (Vitest) | 185   | ✅ passing · coverage ≥ 55% lines (currently ~99%) |
+| Suite             | Count | Gate                                      |
+| ----------------- | ----- | ----------------------------------------- |
+| Backend (Django)  | 473   | ✅ passing · coverage ≥ 50% lines         |
+| Frontend (Vitest) | 312   | ✅ passing · coverage ≥ 55% lines         |
 
 ```bash
 # Backend
@@ -735,6 +779,8 @@ Frontend runs at `http://localhost:3000`
 | POST     | `/api/v1/saved-searches/:id/check/` | Auth | Manual "check now" for new matches |
 
 > A daily Celery beat task (`check_saved_searches`) notifies you when a **new** matching listing appears.
+> A second daily beat task (`send_saved_search_digests`) emails you one branded summary when your saved
+> searches matched new listings (opt out with `digest_emails_enabled`).
 
 ### Users / Referral
 
@@ -753,8 +799,10 @@ Frontend runs at `http://localhost:3000`
 | Method   | Endpoint                           | Auth | Description                                   |
 | -------- | ---------------------------------- | ---- | --------------------------------------------- |
 | GET/POST | `/api/v1/chat/rooms/`              | Auth | List / create chat rooms                      |
-| GET      | `/api/v1/chat/rooms/:id/messages/` | Auth | Messages in a room                            |
+| GET      | `/api/v1/chat/rooms/:id/messages/` | Auth | Messages in a room (`?search=` filters content; deleted messages excluded) |
 | POST     | `/api/v1/chat/rooms/:id/messages/` | Auth | Send a message                                |
+| PATCH    | `/api/v1/chat/rooms/:id/messages/:mid/` | Auth | Edit your own text message (audited)      |
+| DELETE   | `/api/v1/chat/rooms/:id/messages/:mid/` | Auth | Soft-delete your own message (audited)    |
 | GET      | `/api/v1/chat/online-status/`      | Auth | Online status of users                        |
 | POST     | `/api/v1/chat/upload/`             | Auth | Upload a chat attachment                      |
 | WS       | `/ws/chat/:room_id/`               | Auth | Real-time chat socket (typing, read receipts) |
@@ -833,6 +881,33 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 | GET    | `/api/v1/users/kyc/audit/`                                    | Admin       | Full KYC decision trail (who/when/note from the audit log)           |
 | GET    | `/api/v1/users/kyc/sla/`                                      | Admin       | Review-queue health: pending count, avg review hours, 7-day trend, **breach flags** (`oldest_pending` / `trend_negative`) and 30-day daily trend (`trend_30d`) |
 | GET    | `/api/v1/rooms/?verified=true`                                | Public      | Only rooms owned by KYC-approved landlords                           |
+| GET    | `/api/v1/users/tenant-kyc/`                                  | Tenant      | My tenant verification status                                       |
+| POST   | `/api/v1/users/tenant-kyc/`                                  | Tenant      | Submit tenant identity document (multipart)                         |
+| GET    | `/api/v1/users/tenant-kyc/pending/`                          | Admin       | Pending tenant-verification queue                                   |
+| POST   | `/api/v1/users/tenant-kyc/:user_id/review/`                  | Admin       | Approve / reject / request resubmission (audited + notified)        |
+
+### Trust & Safety V2 (Moderation, Disputes, Audit)
+
+| Method | Endpoint                                                | Auth   | Description                                                          |
+| ------ | ------------------------------------------------------- | ------ | -------------------------------------------------------------------- |
+| GET    | `/api/v1/chat/safety/events/`                           | Admin  | Chat-safety assessments feed (metadata only, no raw content)         |
+| POST   | `/api/v1/chat/reports/`                                 | Auth   | Report a user or message (7 categories)                              |
+| GET    | `/api/v1/chat/reports/admin/`                           | Admin  | Moderation tickets queue (`?status=`)                                |
+| POST   | `/api/v1/chat/reports/:report_id/action/`               | Admin  | Dismiss / warn / restrict / suspend / escalate (audited)             |
+| POST   | `/api/v1/chat/block/`                                   | Auth   | Block a user (closes the conversation both ways)                     |
+| GET    | `/api/v1/chat/blocked/`                                 | Auth   | My blocked users                                                     |
+| DELETE | `/api/v1/chat/block/:user_id/`                          | Auth   | Unblock                                                              |
+| GET    | `/api/v1/moderation/overview/`                          | Admin  | Moderation queue counts (reviews + photos)                           |
+| GET    | `/api/v1/moderation/reviews/`                           | Admin  | Review-moderation queue (`?status=`)                                 |
+| POST   | `/api/v1/moderation/reviews/:id/action/`                | Admin  | Approve / reject a review (audited + notified)                       |
+| GET    | `/api/v1/moderation/photos/`                            | Admin  | Photo-moderation queue (`?status=`)                                  |
+| POST   | `/api/v1/moderation/photos/:id/action/`                 | Admin  | Approve / reject a photo (audited + notified)                        |
+| GET/POST | `/api/v1/disputes/`                                    | Auth   | My disputes / open one on an approved booking                        |
+| GET    | `/api/v1/disputes/:id/`                                 | Participant | Dispute detail (participants only — IDOR-guarded)                    |
+| POST   | `/api/v1/disputes/:id/evidence/`                        | Participant | Add evidence (text / photo / document)                               |
+| GET    | `/api/v1/disputes/admin/`                               | Admin  | All disputes (`?status=`)                                            |
+| POST   | `/api/v1/disputes/admin/:id/action/`                    | Admin  | Transition / resolve / reject + deposit decision (release/refund)    |
+| GET    | `/api/v1/audit/`                                        | Admin  | Read-only audit trail (`?prefix=` filters by domain)                 |
 
 ### Documentation
 
@@ -842,7 +917,7 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 | `/api/v1/redoc/`  | ReDoc                 |
 | `/api/v1/schema/` | OpenAPI schema (YAML) |
 
-> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook) · [`docs/RENTORA_COPILOT.md`](docs/RENTORA_COPILOT.md) (Copilot architecture, API, config) · [`docs/AI_PRICING_V2.md`](docs/AI_PRICING_V2.md) (pricing suggestion v2) · [`docs/DUPLICATE_IMAGE_FRAUD.md`](docs/DUPLICATE_IMAGE_FRAUD.md) (duplicate-image detector) · [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) + [`docs/MAP_API.md`](docs/MAP_API.md) + [`docs/MAP_SCORING.md`](docs/MAP_SCORING.md) (intelligent map v2) · [`docs/VOICE_SEARCH_PLAYBOOK.md`](docs/VOICE_SEARCH_PLAYBOOK.md) (voice search) · [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md) (verified feature matrix) · [`docs/PWA.md`](docs/PWA.md) (PWA architecture, manifest, SW strategy, install/update/offline behavior)
+> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook) · [`docs/RENTORA_COPILOT.md`](docs/RENTORA_COPILOT.md) (Copilot architecture, API, config) · [`docs/AI_PRICING_V2.md`](docs/AI_PRICING_V2.md) (pricing suggestion v2) · [`docs/DUPLICATE_IMAGE_FRAUD.md`](docs/DUPLICATE_IMAGE_FRAUD.md) (duplicate-image detector) · [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) + [`docs/MAP_API.md`](docs/MAP_API.md) + [`docs/MAP_SCORING.md`](docs/MAP_SCORING.md) (intelligent map v2) · [`docs/VOICE_SEARCH_PLAYBOOK.md`](docs/VOICE_SEARCH_PLAYBOOK.md) (voice search) · [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md) (verified feature matrix) · [`docs/PWA.md`](docs/PWA.md) (PWA architecture, manifest, SW strategy, install/update/offline behavior) · [`docs/phase-12-trust-safety-v2.md`](docs/phase-12-trust-safety-v2.md) (Phase 12 Trust & Safety V2) · [`docs/TENANT_KYC.md`](docs/TENANT_KYC.md) + [`docs/CHAT_SAFETY.md`](docs/CHAT_SAFETY.md) (tenant KYC + chat safety)
 
 ---
 
@@ -1022,6 +1097,49 @@ See [`docs/PWA.md`](docs/PWA.md) for the manifest, icon system, service-worker s
 **KYC on mobile** — the identity card + verified state on a phone-sized screen:
 
 <img width="390" alt="KYC Mobile" src="docs/screenshots/kyc-mobile.png" />
+
+**Phase 12 — Trust & Safety V2** — two-sided marketplace integrity:
+
+**Tenant KYC** — the tenant-facing identity-verification card (Start Verification state) and the Reviewing state once a document is submitted:
+
+<img width="1440" alt="Tenant KYC Upload" src="docs/screenshots/tenant-kyc-upload.png" />
+<img width="1440" alt="Tenant KYC Pending" src="docs/screenshots/tenant-kyc-pending.png" />
+
+**Verified tenant badge** — the ✓ Identity Verified mark next to an identity-verified tenant's name in the chat header (landlords never see the NID or document):
+
+<img width="1440" alt="Verified Tenant Badge" src="docs/screenshots/verified-tenant-badge.png" />
+
+**Report / block** — the conversation header ⋮ menu with Report user and Block user:
+
+<img width="1440" alt="Report Block" src="docs/screenshots/report-block.png" />
+
+**Chat safety feed** — the admin feed of chat-safety assessments (MEDIUM / HIGH / CRITICAL, metadata only):
+
+<img width="1440" alt="Chat Safety Feed" src="docs/screenshots/chat-safety-feed.png" />
+
+**Review moderation queue** — a held review (spam-ish contact info) with risk signals and approve/reject actions:
+
+<img width="1440" alt="Moderation Reviews" src="docs/screenshots/moderation-reviews.png" />
+
+**Photo moderation queue** — a flagged duplicate-image listing photo with its matched-listing evidence:
+
+<img width="1440" alt="Moderation Photos" src="docs/screenshots/moderation-photos.png" />
+
+**Dispute resolution (admin)** — the dispute list with evidence and the deposit decision (release / refund / partial):
+
+<img width="1440" alt="Dispute Admin" src="docs/screenshots/dispute-admin.png" />
+
+**Deposit protection (participant)** — a tenant's dispute on the approved booking that carries the paid security deposit:
+
+<img width="1440" alt="Deposit Protection" src="docs/screenshots/deposit-protection.png" />
+
+**Admin Trust & Safety Operations Center** — overview cards aggregating every queue (KYC, chat safety, reports, moderation, disputes):
+
+<img width="1440" alt="Trust Center" src="docs/screenshots/trust-center.png" />
+
+**Audit trail** — the read-only trail of every Phase 12 decision (who / when / what / why):
+
+<img width="1440" alt="Audit Trail" src="docs/screenshots/audit-trail.png" />
 
 **Home & Listing Pages:**
 

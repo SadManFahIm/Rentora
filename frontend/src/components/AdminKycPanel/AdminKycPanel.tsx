@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import {
   AlertTriangle,
   BadgeCheck,
@@ -18,11 +18,13 @@ import {
   useKycAuditTrail,
   useKycSla,
   usePendingKycApplications,
+  usePendingTenantKycApplications,
   useReviewKycApplication,
+  useReviewTenantKycApplication,
 } from "../../hooks/useKyc";
 import { kycService } from "../../services/kycService";
 import { getApiErrorMessage } from "../../services/errors";
-import type { KycSla } from "../../types";
+import type { KycSla, TenantKycApplication, TenantKycDecision } from "../../types";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { cn } from "../../lib/utils";
@@ -339,11 +341,173 @@ function HistoryView() {
   );
 }
 
+/** Tenant-verification review queue (Phase 12 — two-sided trust). */
+function TenantKycQueue() {
+  const { data: applications = [], isLoading } = usePendingTenantKycApplications();
+  const review = useReviewTenantKycApplication();
+  const [notes, setNotes] = useState<Record<number, string>>({});
+
+  const decide = async (userId: number, decision: TenantKycDecision) => {
+    try {
+      await review.mutateAsync({ userId, decision, note: notes[userId] ?? "" });
+      toast.success(
+        decision === "approved"
+          ? "Tenant approved — the verified-tenant badge is now visible."
+          : decision === "needs_review"
+            ? "Re-submission requested — the tenant was notified."
+            : "Application rejected — the tenant was notified."
+      );
+      setNotes((n) => ({ ...n, [userId]: "" }));
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Could not update this application."));
+    }
+  };
+
+  const preview = async (fileUrl: string) => {
+    try {
+      const blob = await kycService.fetchDocumentFile(fileUrl);
+      window.open(URL.createObjectURL(blob), "_blank");
+    } catch {
+      toast.error("Could not preview the document — check permissions.");
+    }
+  };
+
+  return isLoading ? (
+    <div className="flex items-center gap-2 py-15 text-gray-600 dark:text-gray-400">
+      <Loader2 className="size-4 animate-spin" /> Loading tenant applications…
+    </div>
+  ) : applications.length === 0 ? (
+    <div className="flex flex-col items-center px-5 py-15 text-center text-gray-600 dark:text-gray-400">
+      <Users className="mb-4 size-12" />
+      <h3 className="mb-2 font-display text-lg font-bold text-foreground">
+        No pending tenant verifications
+      </h3>
+      <p>Tenant identity document uploads will show up here.</p>
+    </div>
+  ) : (
+    <div className="flex flex-col gap-4">
+      {applications.map((app) => (
+        <TenantKycCard
+          key={app.id}
+          app={app}
+          notes={notes}
+          setNotes={setNotes}
+          onDecide={decide}
+          onPreview={preview}
+          busy={review.isPending}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** One pending tenant application with its review actions. */
+function TenantKycCard({
+  app,
+  notes,
+  setNotes,
+  onDecide,
+  onPreview,
+  busy,
+}: {
+  app: TenantKycApplication;
+  notes: Record<number, string>;
+  setNotes: Dispatch<SetStateAction<Record<number, string>>>;
+  onDecide: (userId: number, decision: TenantKycDecision) => void;
+  onPreview: (fileUrl: string) => void;
+  busy: boolean;
+}) {
+  // Hoisted so the closure below keeps the non-null narrowing.
+  const verification = app.verification;
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-card p-5 dark:border-gray-800">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 font-display text-sm font-bold text-foreground">
+            {app.name || app.username}
+            {app.tenantVerified ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[0.65rem] font-semibold text-emerald-500">
+                <BadgeCheck className="size-3" /> Identity Verified
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[0.65rem] font-semibold text-gray-500 dark:bg-gray-800">
+                <ShieldOff className="size-3" /> Unverified
+              </span>
+            )}
+          </div>
+          <div className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
+            {app.email} • {app.phone || "no phone"} • tenant
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            className="bg-emerald-600 text-white hover:bg-emerald-700"
+            onClick={() => onDecide(app.id, "approved")}
+            disabled={busy}
+          >
+            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+            Approve
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-amber-300 text-amber-600 hover:bg-amber-50 dark:border-amber-500/40 dark:text-amber-400"
+            onClick={() => onDecide(app.id, "needs_review")}
+            disabled={busy}
+          >
+            Needs review
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-red-300 text-red-600 hover:bg-red-50 dark:border-red-500/40 dark:text-red-400"
+            onClick={() => onDecide(app.id, "rejected")}
+            disabled={busy}
+          >
+            <X className="size-3.5" /> Reject
+          </Button>
+        </div>
+      </div>
+
+      {verification && (
+        <div className="mt-4 flex items-center justify-between gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm dark:border-gray-800 dark:bg-gray-800/50">
+          <span className="font-medium text-gray-700 dark:text-gray-300">
+            {verification.docTypeDisplay}
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+              <Clock className="size-3" /> Submitted{" "}
+              {new Date(verification.createdAt).toLocaleDateString()}
+            </span>
+            {verification.fileUrl && (
+              <button
+                type="button"
+                onClick={() => onPreview(verification.fileUrl!)}
+                className="inline-flex items-center gap-1 text-xs font-medium text-orange-600 hover:underline dark:text-orange-400"
+              >
+                Preview <ExternalLink className="size-3" />
+              </button>
+            )}
+          </span>
+        </div>
+      )}
+
+      <Input
+        className="mt-3"
+        placeholder="Review note (required for rejection / needs-review, shown to the tenant)"
+        value={notes[app.id] ?? ""}
+        onChange={(e) => setNotes((n) => ({ ...n, [app.id]: e.target.value }))}
+      />
+    </div>
+  );
+}
+
 export default function AdminKycPanel() {
   const { data: applications = [], isLoading } = usePendingKycApplications();
   const review = useReviewKycApplication();
   const [notes, setNotes] = useState<Record<number, string>>({});
-  const [view, setView] = useState<"applications" | "history">("applications");
+  const [view, setView] = useState<"applications" | "history" | "tenant">("applications");
 
   const decide = async (userId: number, approved: boolean) => {
     try {
@@ -407,12 +571,25 @@ export default function AdminKycPanel() {
         >
           <History className="size-3.5" /> History
         </button>
+        <button
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-medium transition-colors",
+            view === "tenant"
+              ? "bg-card text-foreground shadow-sm"
+              : "text-gray-600 hover:text-foreground dark:text-gray-400"
+          )}
+          onClick={() => setView("tenant")}
+        >
+          <ShieldCheck className="size-3.5" /> Tenant KYC
+        </button>
       </div>
 
       {view === "applications" && <SlaStats />}
 
       {view === "history" ? (
         <HistoryView />
+      ) : view === "tenant" ? (
+        <TenantKycQueue />
       ) : isLoading ? (
         <div className="flex items-center gap-2 py-15 text-gray-600 dark:text-gray-400">
           <Loader2 className="size-4 animate-spin" /> Loading applications…

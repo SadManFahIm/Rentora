@@ -24,6 +24,11 @@ class User(AbstractUser):
     role = models.CharField(max_length=10, choices=Role.choices, default=Role.TENANT)
     gender = models.CharField(max_length=10, choices=Gender.choices, blank=True)
     nid_verified = models.BooleanField(default=False)
+    # Two-sided trust (Phase 12): identity verification for *tenants*. The
+    # full lifecycle lives on ``TenantVerification``; this cached boolean is
+    # what public serializers (chat, profiles, bookings) expose so landlords
+    # see only "Verified Tenant" — never the document itself.
+    tenant_verified = models.BooleanField(default=False)
     bio = models.TextField(blank=True)
     date_of_birth = models.DateField(null=True, blank=True)
 
@@ -47,6 +52,12 @@ class User(AbstractUser):
     )
     # Public token for sharing a wishlist — random, unguessable, revocable.
     wishlist_share_token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+
+    # Daily saved-search digest email (Tier-1 quick win): the user opts in to
+    # receive one summary email per day when their saved searches matched new
+    # listings. Default on; off silences the digest without touching in-app
+    # or push alerts.
+    digest_emails_enabled = models.BooleanField(default=True)
 
     def save(self, *args, **kwargs):
         if not self.referral_code:
@@ -105,6 +116,54 @@ class KycDocument(models.Model):
 
     def __str__(self):
         return f"{self.get_doc_type_display()} for {self.user_id} ({self.status})"
+
+
+class TenantVerification(models.Model):
+    """A tenant's identity verification — the tenant side of two-sided trust.
+
+    Privacy contract (mirrors ``KycDocument``): the identity document is only
+    ever exposed to the tenant themselves and to staff/admins via the
+    auth-gated review endpoints. Landlords never see the document or any raw
+    NID data — public serializers expose only ``User.tenant_verified`` (the
+    cached boolean this record drives), so a landlord sees at most
+    "Verified Tenant" / "Verification Pending" / "Not Verified".
+
+    Lifecycle: not_started → pending (document submitted) → verified | rejected
+    | needs_review (admin decision, recorded on ``review_note``). A rejected
+    or expired record can be re-submitted (back to pending); a verified record
+    carries an ``expires_at`` so identity verification doesn't last forever.
+    Every transition is written to the append-only audit log (``tenant_kyc.*``)
+    and the tenant is notified, so the trail is complete.
+    """
+
+    class Status(models.TextChoices):
+        NOT_STARTED = "not_started", "Not Started"
+        PENDING = "pending", "Pending"
+        VERIFIED = "verified", "Verified"
+        REJECTED = "rejected", "Rejected"
+        EXPIRED = "expired", "Expired"
+        NEEDS_REVIEW = "needs_review", "Needs Review"
+
+    user = models.OneToOneField(
+        "users.User", on_delete=models.CASCADE, related_name="tenant_verification"
+    )
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.NOT_STARTED)
+    doc_type = models.CharField(max_length=10, choices=KycDocument.DocType.choices, blank=True)
+    # FileField (not ImageField) so PDF scans are accepted too. Files are
+    # renamed to a UUID on upload so an original filename containing an NID
+    # number never reaches storage, logs, or error reports.
+    file = models.FileField(upload_to="tenant_kyc/%Y/%m/", blank=True)
+    review_note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Tenant verification for {self.user_id} ({self.status})"
 
 
 class OTPChallenge(models.Model):

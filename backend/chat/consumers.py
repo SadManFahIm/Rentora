@@ -27,8 +27,9 @@ from config.sanitizers import sanitize_text
 
 from . import presence
 from .models import ChatRoom, ChatRoomMembership, Message
+from .safety import record_safety_event, run_chat_safety, safety_payload
 from .serializers import MessageSerializer
-from .utils import room_group_name
+from .utils import blocked_with_any, room_group_name
 
 # Application-defined WebSocket close codes.
 WS_CLOSE_UNAUTHENTICATED = 4401
@@ -104,6 +105,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self._send_error("Message content cannot be empty.")
             return
 
+        # Block enforcement (Phase 12.4): same rule as the REST path — a
+        # conversation closed by a block is closed for both sides.
+        if await self._is_blocked_in_room():
+            await self._send_error("You can't send messages in this conversation.")
+            return
+
         message_type = data.get("message_type", Message.MessageType.TEXT)
         file_url = data.get("file_url", "")
 
@@ -138,6 +145,20 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def chat_message(self, event: dict[str, Any]) -> None:
         """Group handler → forward a broadcast message to this client."""
         await self.send(text_data=json.dumps({"type": "chat_message", "message": event["message"]}))
+
+    async def chat_message_updated(self, event: dict[str, Any]) -> None:
+        """An existing message was edited (REST edit path) — forward the new
+        serialized message so clients replace it in place."""
+        await self.send(
+            text_data=json.dumps({"type": "chat_message_updated", "message": event["message"]})
+        )
+
+    async def chat_message_deleted(self, event: dict[str, Any]) -> None:
+        """An existing message was deleted (soft-delete, REST path) — forward
+        its deleted state so clients update it in place."""
+        await self.send(
+            text_data=json.dumps({"type": "chat_message_deleted", "message": event["message"]})
+        )
 
     async def typing_indicator(self, event: dict[str, Any]) -> None:
         if event.get("sender_channel") == self.channel_name:
@@ -200,19 +221,34 @@ class ChatConsumer(AsyncWebsocketConsumer):
         return now
 
     @database_sync_to_async
+    def _is_blocked_in_room(self) -> bool:
+        room = ChatRoom.objects.prefetch_related("members").filter(pk=self.room_id).first()
+        return room is not None and blocked_with_any(self.user, room)
+
+    @database_sync_to_async
     def _save_message(self, content: str, message_type: str, file_url: str) -> dict:
         """Persist the message, bump the room, and return the serialized dict."""
         valid_types = {c[0] for c in Message.MessageType.choices}
         if message_type not in valid_types:
             message_type = Message.MessageType.TEXT
 
+        # Chat Safety Engine (Phase 12.3): same pipeline as the REST path —
+        # assess, apply policy, and store the safety notice when blocked.
+        room = ChatRoom.objects.filter(pk=self.room_id).first()
+        final_content, assessment, outcome = run_chat_safety(content, room, self.user)
+
         message = Message.objects.create(
             chat_room_id=self.room_id,
             sender=self.user,
-            content=content,
+            content=final_content,
             message_type=message_type,
             file_url=file_url,
         )
+        if room is not None:
+            record_safety_event(room, self.user, message, assessment, outcome)
+
         # Bump the room so it sorts to the top of the caller's room list.
         ChatRoom.objects.filter(pk=self.room_id).update(updated_at=timezone.now())
-        return MessageSerializer(message).data
+        data = MessageSerializer(message).data
+        data["safety"] = safety_payload(assessment, outcome)
+        return data

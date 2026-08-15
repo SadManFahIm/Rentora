@@ -12,6 +12,38 @@ from typing import Any
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.db.models import Q
+
+
+def is_blocked_between(user_a, user_b) -> bool:
+    """True if either user has blocked the other (Phase 12.4).
+
+    Blocking is mutual for messaging: if A blocked B, neither A nor B can
+    message the other. This prevents the blocked party from simply creating a
+    fresh account-side bypass and keeps the guarantee simple to reason about.
+    """
+    if user_a is None or user_b is None or user_a.pk == user_b.pk:
+        return False
+    from .models import UserBlock
+
+    return UserBlock.objects.filter(
+        Q(blocker=user_a, blocked=user_b) | Q(blocker=user_b, blocked=user_a)
+    ).exists()
+
+
+def blocked_with_any(user, chat_room) -> bool:
+    """True if the user is blocked by — or has blocked — any room member.
+
+    Used to enforce blocks on message send: a blocked conversation is
+    closed in both directions (see ``is_blocked_between``)."""
+    member_ids = list(chat_room.members.exclude(pk=user.pk).values_list("pk", flat=True))
+    if not member_ids:
+        return False
+    from .models import UserBlock
+
+    return UserBlock.objects.filter(
+        Q(blocker=user, blocked_id__in=member_ids) | Q(blocker_id__in=member_ids, blocked=user)
+    ).exists()
 
 
 def room_group_name(room_id: int | str) -> str:
@@ -32,6 +64,37 @@ def broadcast_message(room_id: int | str, message: dict[str, Any]) -> None:
     async_to_sync(channel_layer.group_send)(
         room_group_name(room_id),
         {"type": "chat_message", "message": message},
+    )
+
+
+def broadcast_message_update(room_id: int | str, message: dict[str, Any]) -> None:
+    """Tell sockets subscribed to the room that an existing message changed.
+
+    Sent by the REST edit path; consumers forward it as
+    ``chat_message_updated`` so clients can replace the message in place.
+    """
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        return
+    async_to_sync(channel_layer.group_send)(
+        room_group_name(room_id),
+        {"type": "chat_message_updated", "message": message},
+    )
+
+
+def broadcast_message_delete(room_id: int | str, message: dict[str, Any]) -> None:
+    """Tell sockets subscribed to the room that a message was deleted.
+
+    ``message`` is the serialized message in its deleted state (content
+    replaced, ``is_deleted=True``) — clients update it in place rather than
+    removing it, so the thread keeps its shape.
+    """
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        return
+    async_to_sync(channel_layer.group_send)(
+        room_group_name(room_id),
+        {"type": "chat_message_deleted", "message": message},
     )
 
 

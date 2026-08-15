@@ -17,6 +17,15 @@ import type {
   ChatMessageStatus,
   ChatRoom,
   ChatRoomType,
+  ChatSafetyInfo,
+  Dispute,
+  DisputeEvidence,
+  ModerationOverview,
+  PhotoModerationItem,
+  Report,
+  ReportCategory,
+  ReportStatus,
+  ReviewModerationItem,
 } from "../types";
 
 // ---- DRF wire shapes (only the fields we consume) ----
@@ -124,6 +133,7 @@ export interface ApiChatUser {
   last_name?: string;
   avatar?: string | null;
   nid_verified?: boolean;
+  tenant_verified?: boolean;
 }
 
 export interface ApiChatMessage {
@@ -135,7 +145,113 @@ export interface ApiChatMessage {
   file_url: string;
   is_read: boolean;
   status: string;
+  /** Sender edited the message (null when never edited). */
+  edited_at?: string | null;
+  /** Soft-delete flag — content is a generic notice when true. */
+  is_deleted?: boolean;
   created_at: string;
+  /** Chat safety engine (Phase 12.3) — attached to warned/flagged/blocked. */
+  safety?: {
+    risk_level: string;
+    outcome: string;
+    blocked: boolean;
+    warning?: string;
+    detectors?: { key: string; label: string }[];
+  };
+}
+
+export interface ApiReport {
+  id: number;
+  reporter_username: string;
+  reporter_name: string;
+  target_user: number;
+  target_username: string;
+  target_name: string;
+  message: number | null;
+  category: string;
+  category_display: string;
+  description: string;
+  status: string;
+  status_display: string;
+  action_taken: string;
+  action_taken_display: string;
+  admin_note: string;
+  created_at: string;
+  resolved_at: string | null;
+}
+
+export interface ApiReviewModeration {
+  id: number;
+  review: number;
+  room_id: number;
+  room_title: string;
+  author_username: string;
+  author_name: string;
+  rating: number;
+  comment_preview: string;
+  status: string;
+  status_display: string;
+  risk_score: number;
+  signals: { key: string; label: string }[];
+  admin_note: string;
+  reviewed_by_username: string;
+  created_at: string;
+  reviewed_at: string | null;
+}
+
+export interface ApiPhotoModeration {
+  id: number;
+  target_type: string;
+  target_type_display: string;
+  room: number | null;
+  room_title: string;
+  review: number | null;
+  image_url: string;
+  phash: string;
+  status: string;
+  status_display: string;
+  risk_score: number;
+  signals: { key: string; label: string }[];
+  admin_note: string;
+  uploaded_by_username: string;
+  reviewed_by_username: string;
+  created_at: string;
+  reviewed_at: string | null;
+}
+
+export interface ApiDisputeEvidence {
+  id: number;
+  dispute: number;
+  uploaded_by: number;
+  uploaded_by_username: string;
+  kind: string;
+  kind_display: string;
+  content: string;
+  file: string | null;
+  created_at: string;
+}
+
+export interface ApiDispute {
+  id: number;
+  booking: number;
+  room_id: number;
+  room_title: string;
+  opened_by: number;
+  opened_by_username: string;
+  other_party_username: string;
+  category: string;
+  category_display: string;
+  description: string;
+  status: string;
+  status_display: string;
+  decision: string;
+  decision_display: string;
+  decision_amount: string | number | null;
+  resolution: string;
+  evidence: ApiDisputeEvidence[];
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
 }
 
 export interface ApiChatRoom {
@@ -166,6 +282,7 @@ export interface ApiUser {
   is_staff?: boolean;
   gender?: string;
   nid_verified?: boolean;
+  tenant_verified?: boolean;
   bio?: string;
   date_of_birth?: string | null;
   otp_enabled?: boolean;
@@ -320,6 +437,7 @@ export function mapChatUser(api: ApiChatUser): ChatUser {
     lastName: api.last_name ?? "",
     avatar: api.avatar ?? null,
     nidVerified: api.nid_verified,
+    tenantVerified: api.tenant_verified,
   };
 }
 
@@ -333,6 +451,136 @@ export function mapChatMessage(api: ApiChatMessage): ChatMessage {
     fileUrl: api.file_url,
     status: api.status as ChatMessageStatus,
     createdAt: api.created_at,
+    editedAt: api.edited_at ?? null,
+    isDeleted: api.is_deleted ?? false,
+    safety: api.safety
+      ? {
+          riskLevel: api.safety.risk_level as ChatSafetyInfo["riskLevel"],
+          outcome: api.safety.outcome as ChatSafetyInfo["outcome"],
+          blocked: api.safety.blocked,
+          warning: api.safety.warning,
+          detectors: api.safety.detectors,
+        }
+      : undefined,
+  };
+}
+
+export function mapReport(api: ApiReport): Report {
+  return {
+    id: api.id,
+    reporterUsername: api.reporter_username,
+    reporterName: api.reporter_name,
+    targetUserId: api.target_user,
+    targetUsername: api.target_username,
+    targetName: api.target_name,
+    messageId: api.message,
+    category: api.category as ReportCategory,
+    categoryDisplay: api.category_display,
+    description: api.description,
+    status: api.status as ReportStatus,
+    statusDisplay: api.status_display,
+    actionTaken: api.action_taken,
+    actionTakenDisplay: api.action_taken_display,
+    adminNote: api.admin_note,
+    createdAt: api.created_at,
+    resolvedAt: api.resolved_at,
+  };
+}
+
+export function mapReviewModeration(api: ApiReviewModeration): ReviewModerationItem {
+  return {
+    id: api.id,
+    review: api.review,
+    roomId: api.room_id,
+    roomTitle: api.room_title,
+    authorUsername: api.author_username,
+    authorName: api.author_name,
+    rating: api.rating,
+    commentPreview: api.comment_preview,
+    status: api.status as ReviewModerationItem["status"],
+    statusDisplay: api.status_display,
+    riskScore: api.risk_score,
+    signals: api.signals,
+    adminNote: api.admin_note,
+    reviewedByUsername: api.reviewed_by_username,
+    createdAt: api.created_at,
+    reviewedAt: api.reviewed_at,
+  };
+}
+
+export function mapPhotoModeration(api: ApiPhotoModeration): PhotoModerationItem {
+  return {
+    id: api.id,
+    targetType: api.target_type as PhotoModerationItem["targetType"],
+    targetTypeDisplay: api.target_type_display,
+    room: api.room,
+    roomTitle: api.room_title,
+    review: api.review,
+    imageUrl: api.image_url,
+    phash: api.phash,
+    status: api.status as PhotoModerationItem["status"],
+    statusDisplay: api.status_display,
+    riskScore: api.risk_score,
+    signals: api.signals,
+    adminNote: api.admin_note,
+    uploadedByUsername: api.uploaded_by_username,
+    reviewedByUsername: api.reviewed_by_username,
+    createdAt: api.created_at,
+    reviewedAt: api.reviewed_at,
+  };
+}
+
+export function mapModerationOverview(api: Record<string, number>): ModerationOverview {
+  return {
+    reviews: api.reviews ?? 0,
+    reviewsPending: api.reviews_pending ?? 0,
+    reviewsFlagged: api.reviews_flagged ?? 0,
+    reviewsApproved: api.reviews_approved ?? 0,
+    reviewsRejected: api.reviews_rejected ?? 0,
+    photos: api.photos ?? 0,
+    photosPending: api.photos_pending ?? 0,
+    photosFlagged: api.photos_flagged ?? 0,
+    photosApproved: api.photos_approved ?? 0,
+    photosRejected: api.photos_rejected ?? 0,
+  };
+}
+
+export function mapDisputeEvidence(api: ApiDisputeEvidence): DisputeEvidence {
+  return {
+    id: api.id,
+    dispute: api.dispute,
+    uploadedBy: api.uploaded_by,
+    uploadedByUsername: api.uploaded_by_username,
+    kind: api.kind as DisputeEvidence["kind"],
+    kindDisplay: api.kind_display,
+    content: api.content,
+    file: api.file,
+    createdAt: api.created_at,
+  };
+}
+
+export function mapDispute(api: ApiDispute): Dispute {
+  return {
+    id: api.id,
+    booking: api.booking,
+    roomId: api.room_id,
+    roomTitle: api.room_title,
+    openedBy: api.opened_by,
+    openedByUsername: api.opened_by_username,
+    otherPartyUsername: api.other_party_username,
+    category: api.category as Dispute["category"],
+    categoryDisplay: api.category_display,
+    description: api.description,
+    status: api.status as Dispute["status"],
+    statusDisplay: api.status_display,
+    decision: api.decision as Dispute["decision"],
+    decisionDisplay: api.decision_display,
+    decisionAmount: api.decision_amount != null ? Number(api.decision_amount) : null,
+    resolution: api.resolution,
+    evidence: (api.evidence ?? []).map(mapDisputeEvidence),
+    createdAt: api.created_at,
+    updatedAt: api.updated_at,
+    resolvedAt: api.resolved_at,
   };
 }
 
@@ -367,6 +615,7 @@ export function mapUser(api: ApiUser): User {
     phone: api.phone,
     bio: api.bio,
     nidVerified: api.nid_verified,
+    tenantVerified: api.tenant_verified,
     otpEnabled: api.otp_enabled ?? false,
     passkeys: api.passkeys,
   };

@@ -16,11 +16,17 @@ import roomService from "../../services/roomService";
 import { useApp } from "../../context/AppContext";
 import FraudTab from "../../components/FraudTab/FraudTab";
 import AdminFraudPanel from "../../components/AdminFraudPanel/AdminFraudPanel";
+import AdminReportsPanel from "../../components/AdminReportsPanel/AdminReportsPanel";
+import AdminModerationPanel from "../../components/AdminModerationPanel/AdminModerationPanel";
+import AdminDisputesPanel from "../../components/AdminDisputesPanel/AdminDisputesPanel";
+import DisputesTab from "../../components/DisputesTab/DisputesTab";
+import AdminTrustCenter from "../../components/AdminTrustCenter/AdminTrustCenter";
 import LandlordInsights from "../../components/LandlordInsights/LandlordInsights";
 import PushNotificationCard from "../../components/PushNotificationCard/PushNotificationCard";
 import ReferralCard from "../../components/ReferralCard/ReferralCard";
 import WishlistShareButton from "../../components/WishlistShareButton/WishlistShareButton";
 import KycCard from "../../components/KycCard/KycCard";
+import TenantKycCard from "../../components/TenantKycCard/TenantKycCard";
 import AdminKycPanel from "../../components/AdminKycPanel/AdminKycPanel";
 import RoomCard from "../../components/RoomCard/RoomCard";
 import RoomModal from "../../components/RoomModal/RoomModal";
@@ -49,7 +55,18 @@ import type { Booking, PaymentStatus, Room } from "../../types";
 import { cn } from "../../lib/utils";
 
 type DashboardTab =
-  "overview" | "listings" | "bookings" | "payments" | "wishlist" | "fraud" | "kyc" | "insights";
+  | "overview"
+  | "listings"
+  | "bookings"
+  | "payments"
+  | "wishlist"
+  | "fraud"
+  | "kyc"
+  | "reports"
+  | "moderation"
+  | "disputes"
+  | "trust"
+  | "insights";
 const TABS: DashboardTab[] = [
   "overview",
   "listings",
@@ -58,6 +75,10 @@ const TABS: DashboardTab[] = [
   "wishlist",
   "fraud",
   "kyc",
+  "reports",
+  "moderation",
+  "disputes",
+  "trust",
   "insights",
 ];
 
@@ -211,7 +232,7 @@ export default function Dashboard() {
   const isAdmin = user?.role === "admin" || user?.isStaff === true;
   const isLandlord = isAdmin || user?.role === "landlord";
   const visibleTabs = TABS.filter((t) => {
-    if (t === "kyc") return isAdmin;
+    if (t === "kyc" || t === "reports" || t === "moderation" || t === "trust") return isAdmin;
     if (t === "insights") return isLandlord;
     return true;
   });
@@ -434,7 +455,10 @@ export default function Dashboard() {
 
           {!isAdmin && (
             <div className="mb-6">
-              <KycCard />
+              {/* Two-sided trust (Phase 12): landlords verify identity to get
+                  the listing badge; tenants verify to get the verified-tenant
+                  badge landlords see when they inquire or book. */}
+              {user?.role === "tenant" ? <TenantKycCard /> : <KycCard />}
             </div>
           )}
 
@@ -650,6 +674,14 @@ export default function Dashboard() {
       {activeTab === "fraud" && (isAdmin ? <AdminFraudPanel /> : <FraudTab />)}
 
       {activeTab === "kyc" && isAdmin && <AdminKycPanel />}
+
+      {activeTab === "reports" && isAdmin && <AdminReportsPanel />}
+
+      {activeTab === "moderation" && isAdmin && <AdminModerationPanel />}
+
+      {activeTab === "disputes" && (isAdmin ? <AdminDisputesPanel /> : <DisputesTab />)}
+
+      {activeTab === "trust" && isAdmin && <AdminTrustCenter />}
 
       {activeTab === "insights" && isLandlord && <LandlordInsights />}
 

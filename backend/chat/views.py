@@ -16,14 +16,27 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
-from .models import ChatRoom, ChatRoomMembership, Message
+from .models import ChatRoom, ChatRoomMembership, ChatSafetyEvent, Message, Report, UserBlock
 from .presence import bulk_online_status
+from .safety import record_safety_event, run_chat_safety, safety_payload
 from .serializers import (
     ChatRoomSerializer,
+    ChatSafetyEventSerializer,
     MessageCreateSerializer,
+    MessageEditSerializer,
     MessageSerializer,
+    ReportActionSerializer,
+    ReportCreateSerializer,
+    ReportSerializer,
 )
-from .utils import broadcast_message, broadcast_read_receipt
+from .utils import (
+    blocked_with_any,
+    broadcast_message,
+    broadcast_message_delete,
+    broadcast_message_update,
+    broadcast_read_receipt,
+    is_blocked_between,
+)
 
 User = get_user_model()
 
@@ -84,6 +97,13 @@ class ChatRoomViewSet(
 
         other = get_object_or_404(User, pk=user_id)
 
+        # Block enforcement (Phase 12.4): blocked pairs can't open new chats.
+        if is_blocked_between(request.user, other):
+            return Response(
+                {"detail": "You can't start a conversation with this user."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         listing = None
         listing_id = request.data.get("listing_id")
         if listing_id is not None:
@@ -134,10 +154,33 @@ class ChatRoomViewSet(
         summary="Send a message (REST fallback)",
         description="Persist a message and broadcast it to the room's WebSocket group.",
     ),
+    partial_update=extend_schema(
+        tags=["Chat"],
+        summary="Edit a message",
+        description=(
+            "Sender only. Replaces the content of one of your own text "
+            "messages; the edit runs through the chat-safety engine again and "
+            "is written to the audit log. The other participant sees the "
+            "updated message in real time via WebSocket."
+        ),
+        request=MessageEditSerializer,
+        responses=MessageSerializer,
+    ),
+    destroy=extend_schema(
+        tags=["Chat"],
+        summary="Delete a message",
+        description=(
+            "Sender only. Soft-delete: the content is replaced with a generic "
+            "notice and the message is excluded from search, but the thread "
+            "keeps its shape. Audited as `chat.message.deleted`."
+        ),
+    ),
 )
 class MessageViewSet(
     mixins.ListModelMixin,
     mixins.CreateModelMixin,
+    mixins.DestroyModelMixin,
+    mixins.UpdateModelMixin,
     viewsets.GenericViewSet,
 ):
     """Messages for a single chat room (nested under /chat/rooms/:room_id/)."""
@@ -157,12 +200,18 @@ class MessageViewSet(
         if getattr(self, "swagger_fake_view", False):
             return Message.objects.none()
         room = self.get_chat_room()
-        return (
+        queryset = (
             Message.objects.filter(chat_room=room)
             .select_related("sender")
             .prefetch_related("chat_room__memberships")
             .order_by("-created_at")
         )
+        # Deleted messages stay in the thread (the row keeps its slot) but
+        # are excluded from search — their content is a generic notice, so
+        # matching it would only surface noise.
+        if self.request.query_params.get("search"):
+            queryset = queryset.filter(is_deleted=False)
+        return queryset
 
     def list(self, request: Request, *args, **kwargs) -> Response:
         response = super().list(request, *args, **kwargs)
@@ -179,16 +228,120 @@ class MessageViewSet(
 
     def create(self, request: Request, *args, **kwargs) -> Response:
         room = self.get_chat_room()
+
+        # Block enforcement (Phase 12.4): a conversation closed by a block is
+        # closed for both sides — no messages either way.
+        if blocked_with_any(request.user, room):
+            return Response(
+                {"detail": "You can't send messages in this conversation."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        message = serializer.save(chat_room=room, sender=request.user)
+
+        # Chat Safety Engine (Phase 12.3): assess the outgoing message and
+        # apply the configured policy before anything is stored. A blocked
+        # message is stored as the safety notice — the sender's raw text is
+        # never persisted or broadcast.
+        content = serializer.validated_data.get("content", "")
+        final_content, assessment, outcome = run_chat_safety(content, room, request.user)
+        message = serializer.save(chat_room=room, sender=request.user, content=final_content)
+        record_safety_event(room, request.user, message, assessment, outcome)
 
         # Bump room ordering and broadcast to any connected sockets.
         room.save(update_fields=["updated_at"])
         payload = MessageSerializer(message, context=self.get_serializer_context()).data
+        payload["safety"] = safety_payload(assessment, outcome)
         broadcast_message(room.pk, payload)
 
         return Response(payload, status=status.HTTP_201_CREATED)
+
+    def _get_editable_message(self, request: Request, pk: int) -> Message:
+        """Resolve a message in the caller's room and enforce sender-only
+        edit/delete. Shared by ``partial_update`` and ``destroy``."""
+        room = self.get_chat_room()
+        message = get_object_or_404(Message, pk=pk, chat_room=room)
+        if message.sender_id != request.user.pk:
+            raise PermissionError("You can only modify your own messages.")
+        return message
+
+    def partial_update(self, request: Request, *args, **kwargs) -> Response:
+        """Sender-only edit. The new text re-runs through the chat-safety
+        engine (an edit is still a new message), the change is audited, and
+        connected sockets get the updated message in place."""
+        try:
+            message = self._get_editable_message(request, kwargs["pk"])
+        except PermissionError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
+
+        if message.message_type != Message.MessageType.TEXT:
+            return Response(
+                {"detail": "Only text messages can be edited."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if message.is_deleted:
+            return Response(
+                {"detail": "This message was deleted and cannot be edited."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = MessageEditSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        room = self.get_chat_room()
+        new_content = serializer.validated_data["content"]
+        final_content, assessment, outcome = run_chat_safety(new_content, room, request.user)
+        message.content = final_content
+        message.edited_at = timezone.now()
+        message.save(update_fields=["content", "edited_at"])
+        record_safety_event(room, request.user, message, assessment, outcome)
+
+        from audit.services import log_action
+
+        log_action(
+            actor=request.user,
+            action="chat.message.edited",
+            target=message,
+            request=request,
+            detail={"message_id": message.pk, "room_id": room.pk},
+        )
+
+        payload = MessageSerializer(message, context=self.get_serializer_context()).data
+        payload["safety"] = safety_payload(assessment, outcome)
+        broadcast_message_update(room.pk, payload)
+        return Response(payload)
+
+    def destroy(self, request: Request, *args, **kwargs) -> Response:
+        """Sender-only soft-delete: content is replaced with a generic notice,
+        ``is_deleted`` flips, the change is audited, and connected sockets see
+        the deleted state. Idempotent — deleting twice is a no-op."""
+        try:
+            message = self._get_editable_message(request, kwargs["pk"])
+        except PermissionError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
+
+        if message.is_deleted:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        message.content = "[Message deleted]"
+        message.is_deleted = True
+        message.edited_at = timezone.now()
+        message.save(update_fields=["content", "is_deleted", "edited_at"])
+
+        from audit.services import log_action
+
+        log_action(
+            actor=request.user,
+            action="chat.message.deleted",
+            target=message,
+            request=request,
+            detail={"message_id": message.pk, "room_id": message.chat_room_id},
+        )
+
+        payload = MessageSerializer(message, context=self.get_serializer_context()).data
+        broadcast_message_delete(message.chat_room_id, payload)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @extend_schema(
@@ -309,3 +462,301 @@ class ChatUploadView(APIView):
             {"file_url": file_url, "message_type": message_type},
             status=status.HTTP_201_CREATED,
         )
+
+
+class ChatSafetyEventsView(APIView):
+    """Admin-only feed of chat-safety events (Phase 12.3).
+
+    Every warned/flagged/blocked message assessment, newest first, with the
+    metadata the engine recorded (detector keys, risk, outcome) — never the
+    message content. Powers the trust & safety moderation queue.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Chat"],
+        summary="List chat safety events",
+        description="Admin only. Recent chat-safety assessments (metadata only — "
+        "never message content), newest first, at most 100.",
+        responses=ChatSafetyEventSerializer(many=True),
+    )
+    def get(self, request: Request) -> Response:
+        if not (request.user.is_staff or request.user.role == "admin"):
+            return Response(
+                {"detail": "Admin access required."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        events = ChatSafetyEvent.objects.select_related("sender", "chat_room").order_by(
+            "-created_at"
+        )[:100]
+        return Response(ChatSafetyEventSerializer(events, many=True).data)
+
+
+# ============================================================
+# Report / block (Phase 12.4)
+# ============================================================
+
+
+def _is_admin_user(user) -> bool:
+    return user.is_staff or user.role == "admin"
+
+
+class ReportRateThrottle(UserRateThrottle):
+    """Reports are moderation actions — a dedicated scope stops one user from
+    flooding the admin queue with reports (of the same or many targets). Rate
+    lives in ``DEFAULT_THROTTLE_RATES['report']``; ``get_rate`` reads the live
+    ``api_settings`` so tests can override it without a stale import-time
+    snapshot (same pattern as config.throttling.AuthRateThrottle)."""
+
+    scope = "report"
+
+    def get_rate(self):
+        from rest_framework.settings import api_settings
+
+        return api_settings.DEFAULT_THROTTLE_RATES[self.scope]
+
+
+class ReportCreateView(APIView):
+    """Report a user and/or a specific message (Phase 12.4).
+
+    Categories cover the marketplace's trust risks: scam, harassment, fake
+    listing, payment fraud (a suspicious payment request), impersonation,
+    spam, other. Reports land in the admin moderation queue.
+
+    Abuse guard (Tier-1 quick win): reports are rate-limited per user, and a
+    duplicate report of the same target (same message, while an earlier
+    report is still open/under-review/escalated) returns the existing report
+    instead of creating a new one — so a user can't stack the queue with
+    repeats, while a fresh report after a resolution is still allowed.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ReportRateThrottle]
+
+    @extend_schema(
+        tags=["Chat"],
+        summary="Report a user or message",
+        description=(
+            "Authenticated. Reports another user (and optionally a specific "
+            "message, e.g. a suspicious payment request) for moderation."
+        ),
+        request=ReportCreateSerializer,
+        responses=ReportSerializer,
+    )
+    def post(self, request: Request) -> Response:
+        serializer = ReportCreateSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+
+        target_user = get_object_or_404(User, pk=serializer.validated_data["target_user_id"])
+        message = None
+        message_id = serializer.validated_data.get("message_id")
+        if message_id is not None:
+            message = get_object_or_404(Message, pk=message_id)
+            if message.sender_id != target_user.pk:
+                return Response(
+                    {"detail": "The reported message is not from the reported user."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Duplicate-report guard: while an earlier report of the same target
+        # (and same message, when one was given) is still open or under
+        # review, a repeat returns the existing ticket instead of stacking a
+        # duplicate on the queue. A resolved/dismissed report does not block
+        # a new report — the user may legitimately report again.
+        active = [Report.Status.OPEN, Report.Status.UNDER_REVIEW, Report.Status.ESCALATED]
+        existing = (
+            Report.objects.filter(
+                reporter=request.user,
+                target_user=target_user,
+                status__in=active,
+            )
+            .filter(message=message if message is not None else None)
+            .first()
+        )
+        if existing is not None:
+            data = ReportSerializer(existing).data
+            data["duplicate"] = True
+            return Response(data, status=status.HTTP_200_OK)
+
+        report = Report.objects.create(
+            reporter=request.user,
+            target_user=target_user,
+            message=message,
+            category=serializer.validated_data["category"],
+            description=serializer.validated_data.get("description", ""),
+        )
+        return Response(ReportSerializer(report).data, status=status.HTTP_201_CREATED)
+
+
+class ReportListView(APIView):
+    """Admin moderation queue for user/message reports."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Chat"],
+        summary="List reports",
+        description="Admin only. Reports, newest first. `?status=open` filters to "
+        "unresolved reports (default).",
+        responses=ReportSerializer(many=True),
+    )
+    def get(self, request: Request) -> Response:
+        if not _is_admin_user(request.user):
+            return Response(
+                {"detail": "Admin access required."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        status_filter = request.query_params.get("status", "open")
+        queryset = Report.objects.select_related("reporter", "target_user", "message")
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        return Response(ReportSerializer(queryset[:100], many=True).data)
+
+
+class ReportActionView(APIView):
+    """Admin decision on a report. Every action is audited (``report.*``);
+    warn/suspend also notify the reported user, and the reporter is notified
+    of the outcome either way."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Chat"],
+        summary="Act on a report",
+        description="Admin only. `action`: dismiss | warn | suspend | escalate.",
+        request=ReportActionSerializer,
+        responses=ReportSerializer,
+    )
+    def post(self, request: Request, report_id: int) -> Response:
+        if not _is_admin_user(request.user):
+            return Response(
+                {"detail": "Admin access required."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        serializer = ReportActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        report = get_object_or_404(Report, pk=report_id)
+        action = serializer.validated_data["action"]
+        note = serializer.validated_data.get("note", "")
+
+        from django.db import transaction
+
+        from audit.services import log_action
+        from notifications.models import Notification
+        from notifications.utils import create_notification
+
+        with transaction.atomic():
+            if action == "dismiss":
+                report.status = Report.Status.DISMISSED
+                report.action_taken = Report.Action.DISMISS
+            elif action == "escalate":
+                report.status = Report.Status.ESCALATED
+                report.action_taken = Report.Action.ESCALATE
+            elif action == "warn":
+                report.status = Report.Status.RESOLVED
+                report.action_taken = Report.Action.WARN
+                create_notification(
+                    user=report.target_user,
+                    notification_type=Notification.Type.ACCOUNT_WARNING,
+                    title="⚠️ You received a warning",
+                    message=note or "A report against you was reviewed and a warning was issued.",
+                    action_url="/dashboard",
+                )
+            elif action == "suspend":
+                report.status = Report.Status.RESOLVED
+                report.action_taken = Report.Action.SUSPEND
+                report.target_user.is_active = False
+                report.target_user.save(update_fields=["is_active"])
+                create_notification(
+                    user=report.target_user,
+                    notification_type=Notification.Type.ACCOUNT_SUSPENDED,
+                    title="🚫 Account suspended",
+                    message=note or "Your account was suspended following a review.",
+                    action_url="/auth",
+                )
+
+            report.admin_note = note
+            report.resolved_at = timezone.now()
+            report.save()
+
+            log_action(
+                actor=request.user,
+                action=f"report.{action}",
+                target=report,
+                request=request,
+                detail={
+                    "note": note,
+                    "report_id": report.pk,
+                    "category": report.category,
+                    "target_user_id": report.target_user_id,
+                    "reporter_id": report.reporter_id,
+                },
+            )
+
+            # The reporter always learns the outcome of their report.
+            create_notification(
+                user=report.reporter,
+                notification_type=Notification.Type.REPORT_RESOLVED,
+                title="Report resolved",
+                message=(
+                    f"Your {report.get_category_display()} report was {action}d."
+                    if action != "suspend"
+                    else f"Your {report.get_category_display()} report was actioned."
+                ),
+                action_url="/dashboard",
+            )
+        return Response(ReportSerializer(report).data)
+
+
+class BlockUserView(APIView):
+    """Block another user (Phase 12.4). Idempotent — blocking someone already
+    blocked is a no-op that returns the existing block."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Chat"],
+        summary="Block a user",
+        description="Authenticated. `user_id`: the user to block. Idempotent.",
+    )
+    def post(self, request: Request) -> Response:
+        user_id = request.data.get("user_id")
+        if user_id is None:
+            return Response({"detail": "user_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if str(user_id) == str(request.user.pk):
+            return Response(
+                {"detail": "You cannot block yourself."}, status=status.HTTP_400_BAD_REQUEST
+            )
+        target = get_object_or_404(User, pk=user_id)
+        UserBlock.objects.get_or_create(blocker=request.user, blocked=target)
+        return Response({"detail": f"{target.username} is now blocked."}, status=status.HTTP_200_OK)
+
+
+class UnblockUserView(APIView):
+    """Unblock a user (Phase 12.4). Only the blocker can unblock; the blocked
+    user cannot re-open the channel themselves."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(tags=["Chat"], summary="Unblock a user", description="Authenticated.")
+    def delete(self, request: Request, user_id: int) -> Response:
+        deleted, _ = UserBlock.objects.filter(blocker=request.user, blocked_id=user_id).delete()
+        if not deleted:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class BlockedUsersView(APIView):
+    """The caller's list of blocked users (Phase 12.4)."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Chat"],
+        summary="List blocked users",
+        description="Authenticated. The caller's blocked users, with usernames.",
+    )
+    def get(self, request: Request) -> Response:
+        blocks = UserBlock.objects.filter(blocker=request.user).select_related("blocked")
+        return Response([{"id": b.blocked_id, "username": b.blocked.username} for b in blocks])

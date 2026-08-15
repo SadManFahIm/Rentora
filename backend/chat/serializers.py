@@ -4,7 +4,7 @@ from rest_framework import serializers
 
 from config.sanitizers import sanitize_text
 
-from .models import ChatRoom, Message
+from .models import ChatRoom, ChatSafetyEvent, Message, Report
 from .presence import is_online
 
 User = get_user_model()
@@ -13,13 +13,22 @@ User = get_user_model()
 class ChatUserSerializer(serializers.ModelSerializer):
     """Public-safe user subset embedded in chat payloads.
 
-    ``nid_verified`` is exposed so chat participants can show a verified
-    badge next to the other person's name — same trust signal as rooms.
+    ``nid_verified`` (landlord) and ``tenant_verified`` (tenant) are exposed so
+    chat participants can show the right trust badge next to the other person's
+    name — same trust signal as rooms.
     """
 
     class Meta:
         model = User
-        fields = ["id", "username", "first_name", "last_name", "avatar", "nid_verified"]
+        fields = [
+            "id",
+            "username",
+            "first_name",
+            "last_name",
+            "avatar",
+            "nid_verified",
+            "tenant_verified",
+        ]
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -27,6 +36,8 @@ class MessageSerializer(serializers.ModelSerializer):
 
     ``status`` is derived, not stored: it's "delivered"/"read" per the other
     room member(s)' online state and ``last_read_at`` — see ``get_status``.
+    ``is_deleted``/``edited_at`` surface the edit/delete lifecycle (Tier-1
+    quick win) so clients can render "deleted" styling and an "edited" hint.
     """
 
     sender = ChatUserSerializer(read_only=True)
@@ -43,6 +54,8 @@ class MessageSerializer(serializers.ModelSerializer):
             "file_url",
             "is_read",
             "status",
+            "is_deleted",
+            "edited_at",
             "created_at",
         ]
         read_only_fields = fields
@@ -77,6 +90,21 @@ class MessageCreateSerializer(serializers.ModelSerializer):
         if not cleaned.strip():
             raise serializers.ValidationError("Message content cannot be empty.")
         return cleaned
+
+
+class MessageEditSerializer(serializers.ModelSerializer):
+    """Write serializer for editing a message: only the new ``content``.
+
+    Same sanitization as sending — HTML is stripped (stored-XSS guard) and
+    empty edits are rejected. ``sender``/``chat_room`` come from the view.
+    """
+
+    class Meta:
+        model = Message
+        fields = ["content"]
+
+    def validate_content(self, value: str) -> str:
+        return MessageCreateSerializer().validate_content(value)
 
 
 class ChatRoomSerializer(serializers.ModelSerializer):
@@ -145,3 +173,106 @@ class ChatRoomSerializer(serializers.ModelSerializer):
         if membership.last_read_at is not None:
             qs = qs.filter(created_at__gt=membership.last_read_at)
         return qs.count()
+
+
+class ChatSafetyEventSerializer(serializers.ModelSerializer):
+    """Admin-only view of one chat-safety event — metadata only.
+
+    Deliberately excludes the message content: admins see who, where, what
+    tripped (detector keys + risk) and what the engine did, but not the
+    conversation text.
+    """
+
+    sender_username = serializers.CharField(source="sender.username", read_only=True)
+    sender_name = serializers.SerializerMethodField()
+    risk_level_display = serializers.CharField(source="get_risk_level_display", read_only=True)
+    outcome_display = serializers.CharField(source="get_outcome_display", read_only=True)
+
+    class Meta:
+        model = ChatSafetyEvent
+        fields = [
+            "id",
+            "chat_room",
+            "sender_username",
+            "sender_name",
+            "risk_level",
+            "risk_level_display",
+            "outcome",
+            "outcome_display",
+            "detectors",
+            "detail",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_sender_name(self, obj: ChatSafetyEvent) -> str:
+        return obj.sender.get_full_name() or obj.sender.username
+
+
+class ReportCreateSerializer(serializers.Serializer):
+    """Input for reporting a user and/or a specific message (Phase 12.4).
+
+    ``message_id`` is optional — a report can be about a user's general
+    behaviour (harassment, impersonation) or a concrete message (payment
+    fraud / suspicious payment request).
+    """
+
+    target_user_id = serializers.IntegerField()
+    message_id = serializers.IntegerField(required=False, allow_null=True)
+    category = serializers.ChoiceField(choices=Report.Category.choices)
+    description = serializers.CharField(
+        required=False, allow_blank=True, default="", max_length=2000
+    )
+
+    def validate_target_user_id(self, value):
+        if value == self.context["request"].user.pk:
+            raise serializers.ValidationError("You cannot report yourself.")
+        return value
+
+
+class ReportSerializer(serializers.ModelSerializer):
+    """One report in the admin moderation queue."""
+
+    reporter_username = serializers.CharField(source="reporter.username", read_only=True)
+    reporter_name = serializers.SerializerMethodField()
+    target_username = serializers.CharField(source="target_user.username", read_only=True)
+    target_name = serializers.SerializerMethodField()
+    category_display = serializers.CharField(source="get_category_display", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    action_taken_display = serializers.CharField(source="get_action_taken_display", read_only=True)
+
+    class Meta:
+        model = Report
+        fields = [
+            "id",
+            "reporter_username",
+            "reporter_name",
+            "target_user",
+            "target_username",
+            "target_name",
+            "message",
+            "category",
+            "category_display",
+            "description",
+            "status",
+            "status_display",
+            "action_taken",
+            "action_taken_display",
+            "admin_note",
+            "created_at",
+            "resolved_at",
+        ]
+        read_only_fields = fields
+
+    def get_reporter_name(self, obj: Report) -> str:
+        return obj.reporter.get_full_name() or obj.reporter.username
+
+    def get_target_name(self, obj: Report) -> str:
+        return obj.target_user.get_full_name() or obj.target_user.username
+
+
+class ReportActionSerializer(serializers.Serializer):
+    """Admin decision on a report: dismiss | warn | suspend | escalate."""
+
+    action = serializers.ChoiceField(choices=["dismiss", "warn", "suspend", "escalate"])
+    note = serializers.CharField(required=False, allow_blank=True, default="")
