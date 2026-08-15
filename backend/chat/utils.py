@@ -67,6 +67,37 @@ def broadcast_message(room_id: int | str, message: dict[str, Any]) -> None:
     )
 
 
+def broadcast_message_update(room_id: int | str, message: dict[str, Any]) -> None:
+    """Tell sockets subscribed to the room that an existing message changed.
+
+    Sent by the REST edit path; consumers forward it as
+    ``chat_message_updated`` so clients can replace the message in place.
+    """
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        return
+    async_to_sync(channel_layer.group_send)(
+        room_group_name(room_id),
+        {"type": "chat_message_updated", "message": message},
+    )
+
+
+def broadcast_message_delete(room_id: int | str, message: dict[str, Any]) -> None:
+    """Tell sockets subscribed to the room that a message was deleted.
+
+    ``message`` is the serialized message in its deleted state (content
+    replaced, ``is_deleted=True``) — clients update it in place rather than
+    removing it, so the thread keeps its shape.
+    """
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        return
+    async_to_sync(channel_layer.group_send)(
+        room_group_name(room_id),
+        {"type": "chat_message_deleted", "message": message},
+    )
+
+
 def broadcast_read_receipt(
     room_id: int | str, user_id: int, last_read_at: datetime.datetime
 ) -> None:

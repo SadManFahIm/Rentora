@@ -9,9 +9,12 @@ import {
   Loader2,
   MoreVertical,
   Paperclip,
+  Pencil,
+  Search,
   Send,
   ShieldAlert,
   ShieldCheck,
+  Trash2,
   UserCheck,
   X,
 } from "lucide-react";
@@ -22,6 +25,8 @@ import {
   useBlockUser,
   useChatMessages,
   useChatRooms,
+  useDeleteMessage,
+  useEditMessage,
   useReportUser,
   useUnblockUser,
   useUploadChatFile,
@@ -47,6 +52,8 @@ import { cn } from "../../lib/utils";
 // ============================================================
 type ChatWsEvent =
   | { type: "chat_message"; message: ApiChatMessage }
+  | { type: "chat_message_updated"; message: ApiChatMessage }
+  | { type: "chat_message_deleted"; message: ApiChatMessage }
   | { type: "typing_indicator"; user_id: number; user_name: string; is_typing: boolean }
   | { type: "read_receipt"; user_id: number; last_read_at: string }
   | { type: "error"; detail: string };
@@ -295,6 +302,14 @@ export default function ChatWindow() {
   // as a dismissible caution banner above the conversation.
   const [safetyNotice, setSafetyNotice] = useState<ChatSafetyInfo | null>(null);
   const [input, setInput] = useState("");
+  // Message search (Tier-1 quick win): filters the loaded history via the
+  // backend's `?search=` — deleted messages are excluded server-side.
+  const [search, setSearch] = useState("");
+  // Message editing (Tier-1 quick win): which message is being edited in
+  // place, and the in-progress text.
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<ChatMessage | null>(null);
   // Report / block (Phase 12.4): the header menu, who we're reporting (with
   // an optional message anchor), and whether the confirm-block sheet is open.
   const [menuOpen, setMenuOpen] = useState(false);
@@ -312,8 +327,10 @@ export default function ChatWindow() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const roomsQuery = useChatRooms();
-  const messagesQuery = useChatMessages(selectedRoomId);
+  const messagesQuery = useChatMessages(selectedRoomId, search);
   const uploadFile = useUploadChatFile();
+  const editMutation = useEditMessage();
+  const deleteMutation = useDeleteMessage();
   const blockedQuery = useBlockedUsers();
   const blockMutation = useBlockUser();
   const unblockMutation = useUnblockUser();
@@ -345,6 +362,8 @@ export default function ChatWindow() {
   useEffect(() => {
     setTypingUserName(null);
     setSafetyNotice(null);
+    setEditingId(null);
+    setSearch("");
   }, [selectedRoomId]);
 
   const wsPath = selectedRoomId != null ? `/ws/chat/${selectedRoomId}/` : null;
@@ -370,6 +389,18 @@ export default function ChatWindow() {
         setTypingUserName(null);
         sendMessage({ type: "mark_read" });
       }
+    } else if (lastMessage.type === "chat_message_updated") {
+      // The sender edited a message — replace it in place (also covers our
+      // own edits, which come back over the same socket).
+      const updated = mapChatMessage(lastMessage.message);
+      setMessages((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+      if (editingId === updated.id) setEditingId(null);
+    } else if (lastMessage.type === "chat_message_deleted") {
+      // Soft-delete — update the message to its deleted state in place so the
+      // thread keeps its shape.
+      const deleted = mapChatMessage(lastMessage.message);
+      setMessages((prev) => prev.map((m) => (m.id === deleted.id ? deleted : m)));
+      if (editingId === deleted.id) setEditingId(null);
     } else if (lastMessage.type === "typing_indicator") {
       if (typingClearTimer.current) clearTimeout(typingClearTimer.current);
       if (lastMessage.is_typing) {
@@ -386,7 +417,7 @@ export default function ChatWindow() {
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastMessage]);
+  }, [lastMessage, editingId]);
 
   useEffect(() => {
     // `block: "nearest"` keeps the scroll contained to the messages panel's
@@ -418,6 +449,67 @@ export default function ChatWindow() {
     sendMessage({ type: "typing", is_typing: false });
     sendMessage({ type: "message", content });
     setInput("");
+  };
+
+  // ---- Message edit / delete (Tier-1 quick win) ----
+
+  const startEdit = (message: ChatMessage) => {
+    setEditingId(message.id);
+    setEditDraft(message.content);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditDraft("");
+  };
+
+  const saveEdit = async (message: ChatMessage) => {
+    const content = editDraft.trim();
+    if (!content || content === message.content || !selectedRoomId) {
+      cancelEdit();
+      return;
+    }
+    try {
+      const updated = await editMutation.mutateAsync({
+        roomId: selectedRoomId,
+        messageId: message.id,
+        content,
+      });
+      setMessages((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+      setEditingId(null);
+      setEditDraft("");
+      toast.success("Message updated.");
+    } catch {
+      toast.error("Could not edit the message. Please try again.");
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget || !selectedRoomId) return;
+    try {
+      await deleteMutation.mutateAsync({
+        roomId: selectedRoomId,
+        messageId: deleteTarget.id,
+      });
+      // The REST delete returns 204; build the deleted state locally (the
+      // WebSocket also delivers it to other participants).
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === deleteTarget.id
+            ? {
+                ...m,
+                content: "[Message deleted]",
+                isDeleted: true,
+                editedAt: new Date().toISOString(),
+              }
+            : m
+        )
+      );
+      setDeleteTarget(null);
+      toast.success("Message deleted.");
+    } catch {
+      toast.error("Could not delete the message. Please try again.");
+    }
   };
 
   const handleFilePicked = async (file: File | undefined) => {
@@ -560,6 +652,28 @@ export default function ChatWindow() {
                 </div>
               </div>
 
+              {/* Message search (Tier-1 quick win) */}
+              <div className="relative hidden sm:block">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-gray-400" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search…"
+                  aria-label="Search messages"
+                  className="h-8 w-32 rounded-lg pl-8 text-xs transition-all focus:w-44 focus:ring-2 focus:ring-orange-500/40"
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    aria-label="Clear message search"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-foreground"
+                  >
+                    <X className="size-3" />
+                  </button>
+                )}
+              </div>
+
               {/* Report / block menu (Phase 12.4) */}
               <div className="relative">
                 <Button
@@ -630,44 +744,95 @@ export default function ChatWindow() {
 
               {messagesQuery.isLoading ? (
                 <div className="text-sm text-gray-600 dark:text-gray-400">Loading messages…</div>
+              ) : messages.length === 0 && search ? (
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  No messages match “{search}”.
+                </div>
               ) : (
                 messages.map((m) => {
                   const mine = m.sender.id === user?.id;
                   const blocked = m.safety?.blocked === true;
+                  const deleted = m.isDeleted === true;
+                  const editing = editingId === m.id;
                   return (
                     <div key={m.id} className={cn("group max-w-[70%]", mine && "self-end")}>
-                      <div
-                        className={cn(
-                          "rounded-2xl rounded-bl-sm px-3.5 py-2.5 text-sm leading-relaxed",
-                          blocked
-                            ? "flex items-center gap-1.5 border border-red-200 bg-red-50 text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400"
-                            : mine
-                              ? "rounded-bl-2xl rounded-br-sm bg-orange-600 text-white"
-                              : "bg-gray-100 text-foreground dark:bg-gray-800"
-                        )}
-                      >
-                        {m.messageType === "image" && m.fileUrl ? (
-                          <a href={m.fileUrl} target="_blank" rel="noreferrer">
-                            <img src={m.fileUrl} alt={m.content} className="max-w-60 rounded-lg" />
-                          </a>
-                        ) : m.messageType === "file" && m.fileUrl ? (
-                          <a
-                            href={m.fileUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex items-center gap-2 underline"
-                          >
-                            <Paperclip className="size-4 shrink-0" /> {m.content}
-                          </a>
-                        ) : blocked ? (
-                          <span className="flex items-center gap-1.5">
-                            <ShieldAlert className="size-4 shrink-0" />
-                            {m.content}
-                          </span>
-                        ) : (
-                          m.content
-                        )}
-                      </div>
+                      {editing ? (
+                        <div className="rounded-2xl rounded-bl-sm border border-orange-300 bg-card p-2 dark:border-orange-500/40">
+                          <textarea
+                            value={editDraft}
+                            onChange={(e) => setEditDraft(e.target.value)}
+                            rows={2}
+                            autoFocus
+                            aria-label="Edit message"
+                            className="w-full resize-none rounded-lg bg-transparent px-1 text-sm text-foreground focus:outline-none"
+                          />
+                          <div className="mt-1 flex justify-end gap-1.5">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                              onClick={cancelEdit}
+                              disabled={editMutation.isPending}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-7 gap-1 bg-orange-600 px-2 text-xs text-white hover:bg-orange-700"
+                              onClick={() => saveEdit(m)}
+                              disabled={editMutation.isPending || !editDraft.trim()}
+                            >
+                              {editMutation.isPending ? (
+                                <Loader2 className="size-3 animate-spin" />
+                              ) : (
+                                <Check className="size-3" />
+                              )}
+                              Save
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          className={cn(
+                            "rounded-2xl rounded-bl-sm px-3.5 py-2.5 text-sm leading-relaxed",
+                            deleted && !blocked
+                              ? "border border-gray-200 bg-gray-50 italic text-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-500"
+                              : blocked
+                                ? "flex items-center gap-1.5 border border-red-200 bg-red-50 text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400"
+                                : mine
+                                  ? "rounded-bl-2xl rounded-br-sm bg-orange-600 text-white"
+                                  : "bg-gray-100 text-foreground dark:bg-gray-800"
+                          )}
+                        >
+                          {m.messageType === "image" && m.fileUrl && !deleted ? (
+                            <a href={m.fileUrl} target="_blank" rel="noreferrer">
+                              <img
+                                src={m.fileUrl}
+                                alt={m.content}
+                                className="max-w-60 rounded-lg"
+                              />
+                            </a>
+                          ) : m.messageType === "file" && m.fileUrl && !deleted ? (
+                            <a
+                              href={m.fileUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-2 underline"
+                            >
+                              <Paperclip className="size-4 shrink-0" /> {m.content}
+                            </a>
+                          ) : blocked ? (
+                            <span className="flex items-center gap-1.5">
+                              <ShieldAlert className="size-4 shrink-0" />
+                              {m.content}
+                            </span>
+                          ) : (
+                            m.content
+                          )}
+                        </div>
+                      )}
                       <div
                         className={cn(
                           "mt-1 flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400",
@@ -678,8 +843,35 @@ export default function ChatWindow() {
                           hour: "numeric",
                           minute: "2-digit",
                         })}
-                        {mine ? (
-                          <MessageStatusIcon status={m.status} />
+                        {m.editedAt && !deleted && <span className="italic">(edited)</span>}
+                        {mine && !deleted ? (
+                          <>
+                            <MessageStatusIcon status={m.status} />
+                            {/* Edit / delete (Tier-1 quick win) — own text
+                                messages only, on hover. */}
+                            {m.messageType === "text" && !blocked && (
+                              <span className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                                <button
+                                  type="button"
+                                  onClick={() => startEdit(m)}
+                                  aria-label="Edit message"
+                                  title="Edit message"
+                                  className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-foreground dark:hover:bg-gray-800"
+                                >
+                                  <Pencil className="size-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteTarget(m)}
+                                  aria-label="Delete message"
+                                  title="Delete message"
+                                  className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-red-500 dark:hover:bg-gray-800 dark:hover:text-red-400"
+                                >
+                                  <Trash2 className="size-3" />
+                                </button>
+                              </span>
+                            )}
+                          </>
                         ) : (
                           // Report this specific message (e.g. a suspicious
                           // payment request) — Phase 12.4. Appears on hover.
@@ -829,6 +1021,41 @@ export default function ChatWindow() {
         messageId={reportTarget?.messageId}
         messagePreview={reportTarget?.messagePreview}
       />
+
+      {/* Delete-message confirm (Tier-1 quick win) */}
+      <Dialog open={deleteTarget != null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="size-4 text-red-500" /> Delete this message?
+            </DialogTitle>
+            <DialogDescription>
+              This removes the message for both of you. It can't be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleteMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-red-600 text-white hover:bg-red-700"
+              onClick={confirmDelete}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Trash2 className="size-4" />
+              )}
+              Delete message
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
