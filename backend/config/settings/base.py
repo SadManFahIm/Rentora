@@ -84,6 +84,7 @@ INSTALLED_APPS = [
     "savedsearches",
     "copilot",
     "moderation",
+    "disputes",
 ]
 
 MIDDLEWARE = [

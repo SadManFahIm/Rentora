@@ -36,4 +36,12 @@ if (typeof window !== "undefined" && !window.matchMedia) {
 if (typeof Element !== "undefined" && !Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
+
+// jsdom lacks pointer-capture APIs that Radix (e.g. Select's trigger) calls
+// on pointerdown — without these the dropdown never opens under test.
+if (typeof Element !== "undefined") {
+  Element.prototype.hasPointerCapture ??= () => false;
+  Element.prototype.setPointerCapture ??= () => {};
+  Element.prototype.releasePointerCapture ??= () => {};
+}
 /* eslint-enable @typescript-eslint/no-empty-function */

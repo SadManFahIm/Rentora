@@ -18,6 +18,8 @@ import FraudTab from "../../components/FraudTab/FraudTab";
 import AdminFraudPanel from "../../components/AdminFraudPanel/AdminFraudPanel";
 import AdminReportsPanel from "../../components/AdminReportsPanel/AdminReportsPanel";
 import AdminModerationPanel from "../../components/AdminModerationPanel/AdminModerationPanel";
+import AdminDisputesPanel from "../../components/AdminDisputesPanel/AdminDisputesPanel";
+import DisputesTab from "../../components/DisputesTab/DisputesTab";
 import LandlordInsights from "../../components/LandlordInsights/LandlordInsights";
 import PushNotificationCard from "../../components/PushNotificationCard/PushNotificationCard";
 import ReferralCard from "../../components/ReferralCard/ReferralCard";
@@ -61,6 +63,7 @@ type DashboardTab =
   | "kyc"
   | "reports"
   | "moderation"
+  | "disputes"
   | "insights";
 const TABS: DashboardTab[] = [
   "overview",
@@ -72,6 +75,7 @@ const TABS: DashboardTab[] = [
   "kyc",
   "reports",
   "moderation",
+  "disputes",
   "insights",
 ];
 
@@ -671,6 +675,8 @@ export default function Dashboard() {
       {activeTab === "reports" && isAdmin && <AdminReportsPanel />}
 
       {activeTab === "moderation" && isAdmin && <AdminModerationPanel />}
+
+      {activeTab === "disputes" && (isAdmin ? <AdminDisputesPanel /> : <DisputesTab />)}
 
       {activeTab === "insights" && isLandlord && <LandlordInsights />}
 

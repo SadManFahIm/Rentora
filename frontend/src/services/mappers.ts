@@ -18,6 +18,8 @@ import type {
   ChatRoom,
   ChatRoomType,
   ChatSafetyInfo,
+  Dispute,
+  DisputeEvidence,
   ModerationOverview,
   PhotoModerationItem,
   Report,
@@ -211,6 +213,41 @@ export interface ApiPhotoModeration {
   reviewed_by_username: string;
   created_at: string;
   reviewed_at: string | null;
+}
+
+export interface ApiDisputeEvidence {
+  id: number;
+  dispute: number;
+  uploaded_by: number;
+  uploaded_by_username: string;
+  kind: string;
+  kind_display: string;
+  content: string;
+  file: string | null;
+  created_at: string;
+}
+
+export interface ApiDispute {
+  id: number;
+  booking: number;
+  room_id: number;
+  room_title: string;
+  opened_by: number;
+  opened_by_username: string;
+  other_party_username: string;
+  category: string;
+  category_display: string;
+  description: string;
+  status: string;
+  status_display: string;
+  decision: string;
+  decision_display: string;
+  decision_amount: string | number | null;
+  resolution: string;
+  evidence: ApiDisputeEvidence[];
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
 }
 
 export interface ApiChatRoom {
@@ -499,6 +536,45 @@ export function mapModerationOverview(api: Record<string, number>): ModerationOv
     photosFlagged: api.photos_flagged ?? 0,
     photosApproved: api.photos_approved ?? 0,
     photosRejected: api.photos_rejected ?? 0,
+  };
+}
+
+export function mapDisputeEvidence(api: ApiDisputeEvidence): DisputeEvidence {
+  return {
+    id: api.id,
+    dispute: api.dispute,
+    uploadedBy: api.uploaded_by,
+    uploadedByUsername: api.uploaded_by_username,
+    kind: api.kind as DisputeEvidence["kind"],
+    kindDisplay: api.kind_display,
+    content: api.content,
+    file: api.file,
+    createdAt: api.created_at,
+  };
+}
+
+export function mapDispute(api: ApiDispute): Dispute {
+  return {
+    id: api.id,
+    booking: api.booking,
+    roomId: api.room_id,
+    roomTitle: api.room_title,
+    openedBy: api.opened_by,
+    openedByUsername: api.opened_by_username,
+    otherPartyUsername: api.other_party_username,
+    category: api.category as Dispute["category"],
+    categoryDisplay: api.category_display,
+    description: api.description,
+    status: api.status as Dispute["status"],
+    statusDisplay: api.status_display,
+    decision: api.decision as Dispute["decision"],
+    decisionDisplay: api.decision_display,
+    decisionAmount: api.decision_amount != null ? Number(api.decision_amount) : null,
+    resolution: api.resolution,
+    evidence: (api.evidence ?? []).map(mapDisputeEvidence),
+    createdAt: api.created_at,
+    updatedAt: api.updated_at,
+    resolvedAt: api.resolved_at,
   };
 }
 
