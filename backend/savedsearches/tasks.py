@@ -123,3 +123,80 @@ def check_saved_searches() -> dict:
 
     logger.info("Saved-search digest: checked %d search(es), %d alert(s)", checked, alerted)
     return {"checked": checked, "alerted": alerted}
+
+
+@shared_task
+def send_saved_search_digests() -> dict:
+    """Daily **email** digest (Tier-1 quick win).
+
+    One branded summary email per user when any of their saved searches
+    matched new listings since the last digest — complementary to the in-app
+    notifications above. It tracks its own cursor (``SavedSearch.digest_sent_at``)
+    so the email and in-app channels each surface the same new rooms without
+    one stealing the other's matches.
+
+    Delivery goes through ``send_alert_email``, so the existing daily budget +
+    failure backoff guards apply and every send is recorded in the delivery
+    ledger. Users can opt out per-account (``User.digest_emails_enabled``).
+    """
+    from django.conf import settings
+    from django.utils import timezone
+
+    from notifications.email_guard import send_alert_email
+    from notifications.models import EmailDeliveryLog
+
+    from .models import SavedSearch
+    from .services import find_new_matches
+
+    if not getattr(settings, "SAVED_SEARCH_AI_MATCHING_ENABLED", True):
+        return {"users": 0, "emailed": 0}
+
+    now = timezone.now()
+    # user_id -> {"user": ..., "rooms": {room_id: Room}} — one email per user,
+    # matches deduped across all of their saved searches.
+    per_user: dict[int, dict] = {}
+
+    searches = (
+        SavedSearch.objects.select_related("user")
+        .filter(
+            user__is_active=True,
+            user__digest_emails_enabled=True,
+        )
+        .exclude(user__email="")
+        .order_by("user_id")
+    )
+    for saved_search in searches:
+        matches = find_new_matches(saved_search, since=saved_search.digest_sent_at)
+        saved_search.digest_sent_at = now
+        saved_search.save(update_fields=["digest_sent_at"])
+        if not matches:
+            continue
+        entry = per_user.setdefault(saved_search.user_id, {"user": saved_search.user, "rooms": {}})
+        for room in matches:
+            if room.owner_id != saved_search.user_id:
+                entry["rooms"][room.id] = room
+
+    emailed = 0
+    for entry in per_user.values():
+        rooms = list(entry["rooms"].values())[:8]
+        if not rooms:
+            continue
+        log = send_alert_email(
+            subject=f"{len(rooms)} new listing(s) match your saved searches",
+            to_email=entry["user"].email,
+            template_name="saved_search_digest",
+            context={
+                "user": entry["user"],
+                "rooms": rooms,
+                "frontend_url": getattr(settings, "FRONTEND_URL", "http://localhost:3000"),
+            },
+        )
+        if log.status == EmailDeliveryLog.Status.SENT:
+            emailed += 1
+
+    logger.info(
+        "Saved-search email digest: %d user(s) with matches, %d email(s) sent",
+        len(per_user),
+        emailed,
+    )
+    return {"users": len(per_user), "emailed": emailed}
