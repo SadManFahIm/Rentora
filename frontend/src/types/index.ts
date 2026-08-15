@@ -181,6 +181,65 @@ export interface BlockedUser {
   username: string;
 }
 
+// ---- Content moderation (Phase 12.5 — reviews + photos) ----
+
+export type ModerationStatus = "pending" | "approved" | "rejected" | "flagged";
+
+/** One review in the admin moderation queue. */
+export interface ReviewModerationItem {
+  id: number;
+  review: number;
+  roomId: number;
+  roomTitle: string;
+  authorUsername: string;
+  authorName: string;
+  rating: number;
+  commentPreview: string;
+  status: ModerationStatus;
+  statusDisplay: string;
+  riskScore: number;
+  signals: { key: string; label: string }[];
+  adminNote: string;
+  reviewedByUsername: string;
+  createdAt: string;
+  reviewedAt: string | null;
+}
+
+/** One photo in the admin moderation queue (listing or review photo). */
+export interface PhotoModerationItem {
+  id: number;
+  targetType: "listing" | "review";
+  targetTypeDisplay: string;
+  room: number | null;
+  roomTitle: string;
+  review: number | null;
+  imageUrl: string;
+  phash: string;
+  status: ModerationStatus;
+  statusDisplay: string;
+  riskScore: number;
+  signals: { key: string; label: string }[];
+  adminNote: string;
+  uploadedByUsername: string;
+  reviewedByUsername: string;
+  createdAt: string;
+  reviewedAt: string | null;
+}
+
+/** Queue-health counts for the moderation overview. */
+export interface ModerationOverview {
+  reviews: number;
+  reviewsPending: number;
+  reviewsFlagged: number;
+  reviewsApproved: number;
+  reviewsRejected: number;
+  photos: number;
+  photosPending: number;
+  photosFlagged: number;
+  photosApproved: number;
+  photosRejected: number;
+}
+
 export type ChatRoomType = "direct" | "group";
 
 export interface ChatRoom {
