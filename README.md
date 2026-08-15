@@ -143,6 +143,30 @@ Full gallery (38 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 
 ## 🆕 Changelog — What's New in v2.0
 
+**Tier-1 Quick Wins (polish batch)**
+
+- **Chat: message search + edit/delete (audited)** — search any message in a
+  conversation, edit your own text messages (re-runs the chat-safety engine),
+  and soft-delete messages. Every edit/delete writes an audit entry
+  (`chat.message.edited` / `chat.message.deleted`) and updates all open
+  clients in real time over the WebSocket.
+- **Saved-search daily email digest** — one branded email per day with new
+  listings matching your saved searches (deduped across searches, own
+  listings never emailed, per-account opt-out `digest_emails_enabled`),
+  delivered through the rate-limited alert email guard.
+- **Report/block abuse guard** — the report endpoint is now rate-limited
+  (10/hour) and a duplicate report of the same target while a report is
+  still open returns the existing ticket instead of stacking the queue.
+- **Semantic search cache** — identical smart-search / Copilot queries over
+  the same room pool reuse the cached ranking instead of recomputing
+  embeddings (personalized + debug requests bypass the cache).
+- **Security headers + security.txt** — CSP, `Referrer-Policy`, `nosniff`,
+  `Permissions-Policy` and HSTS (prod) on every response; RFC 9116
+  `/.well-known/security.txt`.
+- **Dependency bump audit** — safe patch/minor bumps applied to backend +
+  frontend deps and documented in `docs/tier1-dependency-audit.md` (majors
+  like React 19 / Vite 8 / Django 6 held for a dedicated upgrade cycle).
+
 **Paid Listing Tiers (first revenue stream)**
 
 - Free → **Featured** (৳199/30d) → **Premium** (৳499/30d) promotion payments via SSLCommerz/bKash
@@ -302,6 +326,7 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 | **12 P0**  | Progressive Web App — 📱 installable manifest + maskable icons, native install CTA, standalone mode, safe SW caching, update + offline UX, shortcuts | ✅ Shipped |
 | **12 P1**  | Offline & polish — 🔌 offline search over cached public listings, background sync (offline action replay), periodic refresh, splash screens, dark icon, iOS install hint, Lighthouse audit | ✅ Shipped |
 | **12**     | Trust & Safety V2 — two-sided marketplace integrity: 🪪 tenant KYC + verified-tenant badge, 🛡️ chat safety engine, 🚩 report/block, 🖼️ photo + review moderation, ⚖️ disputes + deposit protection, 🎛️ admin Trust & Safety Operations Center + audit trail | ✅ Shipped |
+| **12.6**   | Tier-1 Quick Wins — 💬 chat message search + edit/delete (audited), 📧 saved-search email digest, 🚦 report rate-limit + duplicate guard, ⚡ semantic search cache, 🛡️ CSP headers + security.txt + dependency bump audit | ✅ Shipped |
 
 ---
 
@@ -754,6 +779,8 @@ Frontend runs at `http://localhost:3000`
 | POST     | `/api/v1/saved-searches/:id/check/` | Auth | Manual "check now" for new matches |
 
 > A daily Celery beat task (`check_saved_searches`) notifies you when a **new** matching listing appears.
+> A second daily beat task (`send_saved_search_digests`) emails you one branded summary when your saved
+> searches matched new listings (opt out with `digest_emails_enabled`).
 
 ### Users / Referral
 
@@ -772,8 +799,10 @@ Frontend runs at `http://localhost:3000`
 | Method   | Endpoint                           | Auth | Description                                   |
 | -------- | ---------------------------------- | ---- | --------------------------------------------- |
 | GET/POST | `/api/v1/chat/rooms/`              | Auth | List / create chat rooms                      |
-| GET      | `/api/v1/chat/rooms/:id/messages/` | Auth | Messages in a room                            |
+| GET      | `/api/v1/chat/rooms/:id/messages/` | Auth | Messages in a room (`?search=` filters content; deleted messages excluded) |
 | POST     | `/api/v1/chat/rooms/:id/messages/` | Auth | Send a message                                |
+| PATCH    | `/api/v1/chat/rooms/:id/messages/:mid/` | Auth | Edit your own text message (audited)      |
+| DELETE   | `/api/v1/chat/rooms/:id/messages/:mid/` | Auth | Soft-delete your own message (audited)    |
 | GET      | `/api/v1/chat/online-status/`      | Auth | Online status of users                        |
 | POST     | `/api/v1/chat/upload/`             | Auth | Upload a chat attachment                      |
 | WS       | `/ws/chat/:room_id/`               | Auth | Real-time chat socket (typing, read receipts) |

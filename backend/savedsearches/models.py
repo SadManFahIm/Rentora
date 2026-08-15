@@ -20,6 +20,11 @@ class SavedSearch(models.Model):
     # Set to now() each time a check runs (whether or not matches were found),
     # so rooms are never alerted about twice.
     last_checked_at = models.DateTimeField(null=True, blank=True)
+    # Set by the daily email digest (``send_saved_search_digests``) so a room
+    # is emailed only once per saved search — independent of the in-app
+    # ``last_checked_at`` cursor so the two channels never steal each other's
+    # matches.
+    digest_sent_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

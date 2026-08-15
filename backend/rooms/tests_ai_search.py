@@ -282,9 +282,11 @@ class FallbackTests(APITestCase):
 
     def test_all_ranking_legs_fail_falls_back_to_default_order(self):
         # Both the TF-IDF and embedding legs unavailable -> the smart path
-        # keeps default ordering instead of 500ing.
+        # keeps default ordering instead of 500ing. The view now goes
+        # through cached_hybrid_rank, so the fallback is patched where the
+        # cache module calls it (rooms.semantic_cache.hybrid_rank).
         with (
-            patch("rooms.views.hybrid_rank", return_value=None),
+            patch("rooms.semantic_cache.hybrid_rank", return_value=None),
             patch("rooms.views.semantic_candidates", return_value=None),
         ):
             res = self.client.get("/api/v1/rooms/?q=gulshan&smart=1")
