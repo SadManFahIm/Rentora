@@ -141,22 +141,25 @@ def main():
     )
 
     # ---- Flagged listing photo (duplicate-image evidence) --------------
-    image = RoomImage.objects.filter(room=room).first()
+    # The landlord's demo room may have no images, so fall back to any real
+    # seeded listing photo — the moderation queue needs a real record whose
+    # thumbnail URL actually resolves.
+    image = RoomImage.objects.filter(room=room).first() or RoomImage.objects.order_by("id").first()
     if image is not None:
         PhotoModeration.objects.get_or_create(
             image=image,
             defaults={
                 "target_type": PhotoModeration.TargetType.LISTING,
-                "room": room,
+                "room": image.room,
                 "image_url": image.image.url,
-                "uploaded_by": landlord,
+                "uploaded_by": image.room.owner,
                 "status": ModerationStatus.PENDING,
                 "risk_score": 40,
                 "signals": [
                     {
                         "key": "duplicate_image",
                         "label": "Visually similar to another listing's photo",
-                        "matches": [{"room_id": 1, "title": "Modern Studio, Dhanmondi"}],
+                        "matches": [{"room_id": image.room_id, "title": image.room.title}],
                     }
                 ],
             },
