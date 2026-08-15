@@ -38,6 +38,7 @@ class UserSerializer(serializers.ModelSerializer):
             "bio",
             "date_of_birth",
             "otp_enabled",
+            "digest_emails_enabled",
             "date_joined",
         ]
         read_only_fields = ["id", "date_joined", "nid_verified", "tenant_verified"]
@@ -66,6 +67,7 @@ class CustomUserDetailsSerializer(UserDetailsSerializer):
             "bio",
             "date_of_birth",
             "otp_enabled",
+            "digest_emails_enabled",
             "passkeys",
         )
         read_only_fields = ("email", "nid_verified", "tenant_verified")

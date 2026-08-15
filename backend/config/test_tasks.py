@@ -23,6 +23,7 @@ class CeleryWiringTests(TestCase):
             "payments.tasks.send_payment_reminders",
             "users.tasks.alert_kyc_sla_breaches",
             "savedsearches.tasks.check_saved_searches",
+            "savedsearches.tasks.send_saved_search_digests",
         ]:
             with self.subTest(task=task_name):
                 self.assertIn(task_name, app.tasks)
@@ -41,6 +42,7 @@ class CeleryWiringTests(TestCase):
                 "send-payment-reminders",
                 "alert-kyc-sla-breaches",
                 "check-saved-searches",
+                "send-saved-search-digests",
             },
         )
 

@@ -66,6 +66,22 @@ export const chatService = {
     return mapChatMessage(data);
   },
 
+  /** PATCH /chat/rooms/:id/messages/:message_id/ — sender-only edit of their
+   * own text message (re-runs chat safety server-side; audited). */
+  async editMessage(roomId: number, messageId: number, content: string): Promise<ChatMessage> {
+    const { data } = await api.patch<ApiChatMessage>(
+      `/chat/rooms/${roomId}/messages/${messageId}/`,
+      { content }
+    );
+    return mapChatMessage(data);
+  },
+
+  /** DELETE /chat/rooms/:id/messages/:message_id/ — sender-only soft delete
+   * (content becomes a generic notice; audited). */
+  async deleteMessage(roomId: number, messageId: number): Promise<void> {
+    await api.delete(`/chat/rooms/${roomId}/messages/${messageId}/`);
+  },
+
   /** POST /chat/upload/ — multipart upload, returns the stored file's URL
    * and inferred message type ("image" or "file"). */
   async uploadFile(file: File): Promise<UploadedChatFile> {

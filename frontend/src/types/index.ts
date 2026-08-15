@@ -127,6 +127,11 @@ export interface ChatMessage {
   fileUrl: string;
   status: ChatMessageStatus;
   createdAt: string;
+  /** Sender edited the message — shows an "edited" hint next to the time. */
+  editedAt?: string | null;
+  /** Soft-deleted by the sender — content is a generic notice, excluded from
+   * search, but the message stays in the thread. */
+  isDeleted?: boolean;
   /** Chat safety engine (Phase 12.3) — present only on messages that tripped
    * a rule: warned/flagged carry a caution warning, blocked messages were
    * replaced with a safety notice server-side. */

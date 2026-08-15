@@ -85,12 +85,23 @@ class Message(models.Model):
     )
     file_url = models.URLField(blank=True)
     is_read = models.BooleanField(default=False)
+    # Message editing (Tier-1 quick win): the sender may edit their own text
+    # message; ``edited_at`` distinguishes an edit from the original and is
+    # surfaced to both parties ("edited" chip). Never null for a deleted
+    # message (deletion is a soft-delete that also stamps the time).
+    edited_at = models.DateTimeField(null=True, blank=True)
+    # Soft delete: the row stays so the conversation thread keeps its shape,
+    # but the content is replaced with a generic notice and the message is
+    # excluded from search results. The original content is never recovered
+    # through the API (it's gone from this row once replaced).
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["created_at"]
         indexes = [
             models.Index(fields=["chat_room", "created_at"]),
+            models.Index(fields=["chat_room", "is_deleted"]),
         ]
 
     def __str__(self) -> str:

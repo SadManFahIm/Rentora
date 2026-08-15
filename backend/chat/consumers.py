@@ -146,6 +146,20 @@ class ChatConsumer(AsyncWebsocketConsumer):
         """Group handler → forward a broadcast message to this client."""
         await self.send(text_data=json.dumps({"type": "chat_message", "message": event["message"]}))
 
+    async def chat_message_updated(self, event: dict[str, Any]) -> None:
+        """An existing message was edited (REST edit path) — forward the new
+        serialized message so clients replace it in place."""
+        await self.send(
+            text_data=json.dumps({"type": "chat_message_updated", "message": event["message"]})
+        )
+
+    async def chat_message_deleted(self, event: dict[str, Any]) -> None:
+        """An existing message was deleted (soft-delete, REST path) — forward
+        its deleted state so clients update it in place."""
+        await self.send(
+            text_data=json.dumps({"type": "chat_message_deleted", "message": event["message"]})
+        )
+
     async def typing_indicator(self, event: dict[str, Any]) -> None:
         if event.get("sender_channel") == self.channel_name:
             return  # Don't echo the typing state back to whoever sent it.

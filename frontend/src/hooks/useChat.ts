@@ -63,6 +63,32 @@ export function useUploadChatFile() {
   });
 }
 
+// ---- Message edit / delete (Tier-1 quick win) ----
+
+/** Edit one of the caller's own text messages (audited server-side).
+ * ChatWindow owns the message list locally, so it wires onSuccess itself. */
+export function useEditMessage() {
+  return useMutation({
+    mutationFn: ({
+      roomId,
+      messageId,
+      content,
+    }: {
+      roomId: number;
+      messageId: number;
+      content: string;
+    }) => chatService.editMessage(roomId, messageId, content),
+  });
+}
+
+/** Soft-delete one of the caller's own messages (audited server-side). */
+export function useDeleteMessage() {
+  return useMutation({
+    mutationFn: ({ roomId, messageId }: { roomId: number; messageId: number }) =>
+      chatService.deleteMessage(roomId, messageId),
+  });
+}
+
 // ---- Report / block (Phase 12.4) ----
 
 /** The caller's list of blocked users (used by ChatWindow to lock a

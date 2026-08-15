@@ -36,6 +36,8 @@ class MessageSerializer(serializers.ModelSerializer):
 
     ``status`` is derived, not stored: it's "delivered"/"read" per the other
     room member(s)' online state and ``last_read_at`` — see ``get_status``.
+    ``is_deleted``/``edited_at`` surface the edit/delete lifecycle (Tier-1
+    quick win) so clients can render "deleted" styling and an "edited" hint.
     """
 
     sender = ChatUserSerializer(read_only=True)
@@ -52,6 +54,8 @@ class MessageSerializer(serializers.ModelSerializer):
             "file_url",
             "is_read",
             "status",
+            "is_deleted",
+            "edited_at",
             "created_at",
         ]
         read_only_fields = fields
@@ -86,6 +90,21 @@ class MessageCreateSerializer(serializers.ModelSerializer):
         if not cleaned.strip():
             raise serializers.ValidationError("Message content cannot be empty.")
         return cleaned
+
+
+class MessageEditSerializer(serializers.ModelSerializer):
+    """Write serializer for editing a message: only the new ``content``.
+
+    Same sanitization as sending — HTML is stripped (stored-XSS guard) and
+    empty edits are rejected. ``sender``/``chat_room`` come from the view.
+    """
+
+    class Meta:
+        model = Message
+        fields = ["content"]
+
+    def validate_content(self, value: str) -> str:
+        return MessageCreateSerializer().validate_content(value)
 
 
 class ChatRoomSerializer(serializers.ModelSerializer):

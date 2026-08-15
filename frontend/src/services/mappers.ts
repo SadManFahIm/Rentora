@@ -145,6 +145,10 @@ export interface ApiChatMessage {
   file_url: string;
   is_read: boolean;
   status: string;
+  /** Sender edited the message (null when never edited). */
+  edited_at?: string | null;
+  /** Soft-delete flag — content is a generic notice when true. */
+  is_deleted?: boolean;
   created_at: string;
   /** Chat safety engine (Phase 12.3) — attached to warned/flagged/blocked. */
   safety?: {
@@ -447,6 +451,8 @@ export function mapChatMessage(api: ApiChatMessage): ChatMessage {
     fileUrl: api.file_url,
     status: api.status as ChatMessageStatus,
     createdAt: api.created_at,
+    editedAt: api.edited_at ?? null,
+    isDeleted: api.is_deleted ?? false,
     safety: api.safety
       ? {
           riskLevel: api.safety.risk_level as ChatSafetyInfo["riskLevel"],

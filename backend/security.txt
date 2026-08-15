@@ -1,0 +1,10 @@
+# Rentora — Security Disclosure Policy
+# https://rentora.example.com/.well-known/security.txt
+
+Contact: mailto:security@rentora.example.com
+Contact: https://github.com/SadmaFaahiim/Rentora/security/advisories/new
+Encryption: https://rentora.example.com/.well-known/pgp-key.txt
+Preferred-Languages: en, bn
+Policy: https://rentora.example.com/security-policy
+Canonical: https://rentora.example.com/.well-known/security.txt
+Expires: 2027-08-15T00:00:00.000Z
