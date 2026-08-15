@@ -240,6 +240,62 @@ export interface ModerationOverview {
   photosRejected: number;
 }
 
+// ---- Dispute resolution (Phase 12) ----
+
+export type DisputeCategory =
+  | "deposit"
+  | "property_condition"
+  | "booking_cancellation"
+  | "misrepresentation"
+  | "payment"
+  | "other";
+
+export type DisputeStatus =
+  | "open"
+  | "under_review"
+  | "waiting_for_tenant"
+  | "waiting_for_landlord"
+  | "escalated"
+  | "resolved"
+  | "rejected";
+
+export type DisputeDecision = "none" | "release_to_landlord" | "refund_to_tenant" | "partial";
+
+export interface DisputeEvidence {
+  id: number;
+  dispute: number;
+  uploadedBy: number;
+  uploadedByUsername: string;
+  kind: "text" | "photo" | "document";
+  kindDisplay: string;
+  content: string;
+  file: string | null;
+  createdAt: string;
+}
+
+export interface Dispute {
+  id: number;
+  booking: number;
+  roomId: number;
+  roomTitle: string;
+  openedBy: number;
+  openedByUsername: string;
+  otherPartyUsername: string;
+  category: DisputeCategory;
+  categoryDisplay: string;
+  description: string;
+  status: DisputeStatus;
+  statusDisplay: string;
+  decision: DisputeDecision;
+  decisionDisplay: string;
+  decisionAmount: number | null;
+  resolution: string;
+  evidence: DisputeEvidence[];
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+}
+
 export type ChatRoomType = "direct" | "group";
 
 export interface ChatRoom {

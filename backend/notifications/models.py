@@ -34,6 +34,9 @@ class Notification(models.Model):
         REPORT_RESOLVED = "report_resolved", "Report Resolved"
         # Content moderation decisions (Phase 12.5) — review/photo approved or rejected.
         CONTENT_MODERATED = "content_moderated", "Content Moderated"
+        # Dispute resolution (Phase 12) — a dispute was opened / updated.
+        DISPUTE_OPENED = "dispute_opened", "Dispute Opened"
+        DISPUTE_UPDATE = "dispute_update", "Dispute Update"
         SAVED_SEARCH_MATCH = "saved_search_match", "Saved Search Match"
         SYSTEM = "system", "System"
 
