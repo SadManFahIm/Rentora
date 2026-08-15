@@ -25,6 +25,12 @@ urlpatterns = [
         MessageViewSet.as_view({"get": "list", "post": "create"}),
         name="chatroom-messages",
     ),
+    # Sender-only edit (PATCH) / soft-delete (DELETE) of a single message.
+    path(
+        "rooms/<int:room_id>/messages/<int:pk>/",
+        MessageViewSet.as_view({"patch": "partial_update", "delete": "destroy"}),
+        name="chatroom-message-detail",
+    ),
     path("online-status/", OnlineStatusView.as_view(), name="chat-online-status"),
     path("upload/", ChatUploadView.as_view(), name="chat-upload"),
     path("safety/events/", ChatSafetyEventsView.as_view(), name="chat-safety-events"),

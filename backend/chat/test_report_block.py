@@ -13,6 +13,7 @@ Covers the spec's report/block matrix:
 """
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -26,6 +27,11 @@ User = get_user_model()
 
 class ReportBlockBase(APITestCase):
     def setUp(self):
+        # The report endpoint is throttled (Tier-1 quick win). Tests create
+        # fresh users per test but SQLite rolls the pk sequence back, so the
+        # throttle bucket (keyed by user id) would leak across tests — clear
+        # it like copilot/tests.py does.
+        cache.clear()
         self.reporter = User.objects.create_user(
             username="report_reporter", email="reporter@example.com", password="test12345"
         )
