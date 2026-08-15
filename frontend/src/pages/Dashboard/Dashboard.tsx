@@ -16,6 +16,7 @@ import roomService from "../../services/roomService";
 import { useApp } from "../../context/AppContext";
 import FraudTab from "../../components/FraudTab/FraudTab";
 import AdminFraudPanel from "../../components/AdminFraudPanel/AdminFraudPanel";
+import AdminReportsPanel from "../../components/AdminReportsPanel/AdminReportsPanel";
 import LandlordInsights from "../../components/LandlordInsights/LandlordInsights";
 import PushNotificationCard from "../../components/PushNotificationCard/PushNotificationCard";
 import ReferralCard from "../../components/ReferralCard/ReferralCard";
@@ -50,7 +51,15 @@ import type { Booking, PaymentStatus, Room } from "../../types";
 import { cn } from "../../lib/utils";
 
 type DashboardTab =
-  "overview" | "listings" | "bookings" | "payments" | "wishlist" | "fraud" | "kyc" | "insights";
+  | "overview"
+  | "listings"
+  | "bookings"
+  | "payments"
+  | "wishlist"
+  | "fraud"
+  | "kyc"
+  | "reports"
+  | "insights";
 const TABS: DashboardTab[] = [
   "overview",
   "listings",
@@ -59,6 +68,7 @@ const TABS: DashboardTab[] = [
   "wishlist",
   "fraud",
   "kyc",
+  "reports",
   "insights",
 ];
 
@@ -212,7 +222,7 @@ export default function Dashboard() {
   const isAdmin = user?.role === "admin" || user?.isStaff === true;
   const isLandlord = isAdmin || user?.role === "landlord";
   const visibleTabs = TABS.filter((t) => {
-    if (t === "kyc") return isAdmin;
+    if (t === "kyc" || t === "reports") return isAdmin;
     if (t === "insights") return isLandlord;
     return true;
   });
@@ -654,6 +664,8 @@ export default function Dashboard() {
       {activeTab === "fraud" && (isAdmin ? <AdminFraudPanel /> : <FraudTab />)}
 
       {activeTab === "kyc" && isAdmin && <AdminKycPanel />}
+
+      {activeTab === "reports" && isAdmin && <AdminReportsPanel />}
 
       {activeTab === "insights" && isLandlord && <LandlordInsights />}
 

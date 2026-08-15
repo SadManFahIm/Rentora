@@ -4,7 +4,7 @@ from rest_framework import serializers
 
 from config.sanitizers import sanitize_text
 
-from .models import ChatRoom, ChatSafetyEvent, Message
+from .models import ChatRoom, ChatSafetyEvent, Message, Report
 from .presence import is_online
 
 User = get_user_model()
@@ -188,3 +188,72 @@ class ChatSafetyEventSerializer(serializers.ModelSerializer):
 
     def get_sender_name(self, obj: ChatSafetyEvent) -> str:
         return obj.sender.get_full_name() or obj.sender.username
+
+
+class ReportCreateSerializer(serializers.Serializer):
+    """Input for reporting a user and/or a specific message (Phase 12.4).
+
+    ``message_id`` is optional — a report can be about a user's general
+    behaviour (harassment, impersonation) or a concrete message (payment
+    fraud / suspicious payment request).
+    """
+
+    target_user_id = serializers.IntegerField()
+    message_id = serializers.IntegerField(required=False, allow_null=True)
+    category = serializers.ChoiceField(choices=Report.Category.choices)
+    description = serializers.CharField(
+        required=False, allow_blank=True, default="", max_length=2000
+    )
+
+    def validate_target_user_id(self, value):
+        if value == self.context["request"].user.pk:
+            raise serializers.ValidationError("You cannot report yourself.")
+        return value
+
+
+class ReportSerializer(serializers.ModelSerializer):
+    """One report in the admin moderation queue."""
+
+    reporter_username = serializers.CharField(source="reporter.username", read_only=True)
+    reporter_name = serializers.SerializerMethodField()
+    target_username = serializers.CharField(source="target_user.username", read_only=True)
+    target_name = serializers.SerializerMethodField()
+    category_display = serializers.CharField(source="get_category_display", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    action_taken_display = serializers.CharField(source="get_action_taken_display", read_only=True)
+
+    class Meta:
+        model = Report
+        fields = [
+            "id",
+            "reporter_username",
+            "reporter_name",
+            "target_user",
+            "target_username",
+            "target_name",
+            "message",
+            "category",
+            "category_display",
+            "description",
+            "status",
+            "status_display",
+            "action_taken",
+            "action_taken_display",
+            "admin_note",
+            "created_at",
+            "resolved_at",
+        ]
+        read_only_fields = fields
+
+    def get_reporter_name(self, obj: Report) -> str:
+        return obj.reporter.get_full_name() or obj.reporter.username
+
+    def get_target_name(self, obj: Report) -> str:
+        return obj.target_user.get_full_name() or obj.target_user.username
+
+
+class ReportActionSerializer(serializers.Serializer):
+    """Admin decision on a report: dismiss | warn | suspend | escalate."""
+
+    action = serializers.ChoiceField(choices=["dismiss", "warn", "suspend", "escalate"])
+    note = serializers.CharField(required=False, allow_blank=True, default="")

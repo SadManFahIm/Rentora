@@ -6,6 +6,7 @@ import {
   mapChatUser,
   mapChatMessage,
   mapChatRoom,
+  mapReport,
   mapUser,
   relativeTime,
   type ApiBooking,
@@ -327,6 +328,56 @@ describe("chat mappers", () => {
     expect(r.otherParticipant).toBeNull();
     expect(r.lastMessage).toBeNull();
     expect(r.participants).toEqual([]);
+  });
+});
+
+describe("mapReport (Phase 12.4)", () => {
+  const apiReport = {
+    id: 31,
+    reporter_username: "nadia.islam",
+    reporter_name: "Nadia Islam",
+    target_user: 5,
+    target_username: "sabbir.rahman",
+    target_name: "Sabbir Rahman",
+    message: 88,
+    category: "payment_fraud",
+    category_display: "Payment fraud",
+    description: "Asked me to send rent to a bKash number outside the app.",
+    status: "open",
+    status_display: "Open",
+    action_taken: "",
+    action_taken_display: "—",
+    admin_note: "",
+    created_at: "2025-01-05T10:00:00Z",
+    resolved_at: null,
+  };
+
+  it("maps every field from the DRF shape", () => {
+    const r = mapReport(apiReport);
+    expect(r).toMatchObject({
+      id: 31,
+      reporterUsername: "nadia.islam",
+      reporterName: "Nadia Islam",
+      targetUserId: 5,
+      targetUsername: "sabbir.rahman",
+      targetName: "Sabbir Rahman",
+      messageId: 88,
+      category: "payment_fraud",
+      categoryDisplay: "Payment fraud",
+      description: "Asked me to send rent to a bKash number outside the app.",
+      status: "open",
+      statusDisplay: "Open",
+      actionTaken: "",
+      actionTakenDisplay: "—",
+      adminNote: "",
+      createdAt: "2025-01-05T10:00:00Z",
+      resolvedAt: null,
+    });
+  });
+
+  it("tolerates a report without a message anchor", () => {
+    const r = mapReport({ ...apiReport, message: null });
+    expect(r.messageId).toBeNull();
   });
 });
 
