@@ -296,6 +296,37 @@ export interface Dispute {
   resolvedAt: string | null;
 }
 
+// ---- Chat safety admin feed (Phase 12.3) + audit trail ----
+
+/** One chat-safety assessment in the admin feed — metadata only, never the
+ * message content (mirrors the backend's ChatSafetyEventSerializer). */
+export interface ChatSafetyEvent {
+  id: number;
+  chat_room: number;
+  sender_username: string;
+  sender_name: string;
+  risk_level: string;
+  risk_level_display: string;
+  outcome: string;
+  outcome_display: string;
+  detectors: { key: string; label: string }[];
+  detail: Record<string, unknown>;
+  created_at: string;
+}
+
+/** One entry in the append-only admin audit trail. */
+export interface AuditEntry {
+  id: number;
+  actor: number | null;
+  actorUsername: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  detail: Record<string, unknown>;
+  ipAddress: string | null;
+  createdAt: string;
+}
+
 export type ChatRoomType = "direct" | "group";
 
 export interface ChatRoom {

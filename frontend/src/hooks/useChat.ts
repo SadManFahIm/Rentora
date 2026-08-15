@@ -4,6 +4,7 @@ import type {
   BlockedUser,
   ChatMessage,
   ChatRoom,
+  ChatSafetyEvent,
   Report,
   ReportAdminAction,
   ReportCategory,
@@ -102,6 +103,14 @@ export function useReportUser() {
       description?: string;
       messageId?: number | null;
     }) => chatService.reportUser(payload),
+  });
+}
+
+/** Admin feed of chat-safety assessments (metadata only). */
+export function useChatSafetyEvents() {
+  return useQuery<ChatSafetyEvent[]>({
+    queryKey: [...chatKeys.all, "safety-events"] as const,
+    queryFn: () => chatService.getSafetyEvents(),
   });
 }
 
