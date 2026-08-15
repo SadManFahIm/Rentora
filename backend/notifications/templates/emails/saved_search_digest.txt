@@ -1,0 +1,13 @@
+Hi {{ user.first_name|default:user.username }},
+
+{{ rooms|length }} new listing(s) match your saved searches:
+
+{% for room in rooms %}- {{ room.title }} — {{ room.get_area_display }} — ৳{{ room.price|floatformat:0 }}/mo
+  {{ frontend_url }}/rooms/{{ room.id }}
+{% endfor %}
+Browse new rooms: {{ frontend_url }}/rooms?smart=1
+
+You're getting this because you saved searches on Rentora. Turn it off any
+time from your account settings (daily email digest).
+
+— The {{ site_name }} Team

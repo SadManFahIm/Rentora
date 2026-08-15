@@ -53,6 +53,12 @@ class User(AbstractUser):
     # Public token for sharing a wishlist — random, unguessable, revocable.
     wishlist_share_token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
 
+    # Daily saved-search digest email (Tier-1 quick win): the user opts in to
+    # receive one summary email per day when their saved searches matched new
+    # listings. Default on; off silences the digest without touching in-app
+    # or push alerts.
+    digest_emails_enabled = models.BooleanField(default=True)
+
     def save(self, *args, **kwargs):
         if not self.referral_code:
             import secrets

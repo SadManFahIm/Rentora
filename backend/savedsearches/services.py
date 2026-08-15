@@ -61,16 +61,23 @@ def apply_saved_filters(queryset, filters: dict[str, Any]):
     return queryset
 
 
-def find_new_matches(saved_search, queryset=None) -> list[Room]:
-    """Rooms matching the saved search that arrived since the last check."""
+def find_new_matches(saved_search, queryset=None, *, since=None) -> list[Room]:
+    """Rooms matching the saved search that arrived since the last check.
+
+    ``since`` overrides the cursor for callers that track their own (the
+    daily email digest uses ``digest_sent_at`` so the email and in-app
+    channels never steal each other's matches). First run: only brand-new
+    rooms (created within the last day) alert.
+    """
     queryset = queryset if queryset is not None else Room.objects.filter(is_available=True)
     queryset = apply_saved_filters(queryset, saved_search.filters)
-    since = saved_search.last_checked_at or (timezone.now())
-    if saved_search.last_checked_at is None:
-        # First run: only brand-new rooms (created within the last day) alert.
-        from datetime import timedelta
+    if since is None:
+        since = saved_search.last_checked_at or (timezone.now())
+        if saved_search.last_checked_at is None:
+            # First run: only brand-new rooms (created within the last day) alert.
+            from datetime import timedelta
 
-        since = timezone.now() - timedelta(days=1)
+            since = timezone.now() - timedelta(days=1)
     return list(queryset.filter(created_at__gt=since).order_by("-created_at")[:10])
 
 
