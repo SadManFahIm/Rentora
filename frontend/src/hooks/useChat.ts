@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { chatService } from "../services/chatService";
-import type { ChatMessage, ChatRoom } from "../types";
+import type {
+  BlockedUser,
+  ChatMessage,
+  ChatRoom,
+  Report,
+  ReportAdminAction,
+  ReportCategory,
+} from "../types";
 
 // ============================================================
 // CHAT QUERY/MUTATION HOOKS
@@ -11,6 +18,8 @@ export const chatKeys = {
   rooms: () => [...chatKeys.all, "rooms"] as const,
   messages: (roomId: number, search: string) =>
     [...chatKeys.all, "messages", roomId, search] as const,
+  blocked: () => [...chatKeys.all, "blocked"] as const,
+  reports: (status: string) => [...chatKeys.all, "reports", status] as const,
 };
 
 /** The current user's chat rooms. Polled lightly so unread counts / online
@@ -50,5 +59,76 @@ export function useStartDirectChat() {
 export function useUploadChatFile() {
   return useMutation({
     mutationFn: (file: File) => chatService.uploadFile(file),
+  });
+}
+
+// ---- Report / block (Phase 12.4) ----
+
+/** The caller's list of blocked users (used by ChatWindow to lock a
+ * conversation and offer an Unblock action). */
+export function useBlockedUsers() {
+  return useQuery<BlockedUser[]>({
+    queryKey: chatKeys.blocked(),
+    queryFn: () => chatService.getBlockedUsers(),
+    staleTime: 30_000,
+  });
+}
+
+export function useBlockUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: number) => chatService.blockUser(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: chatKeys.blocked() });
+    },
+  });
+}
+
+export function useUnblockUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: number) => chatService.unblockUser(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: chatKeys.blocked() });
+    },
+  });
+}
+
+export function useReportUser() {
+  return useMutation({
+    mutationFn: (payload: {
+      targetUserId: number;
+      category: ReportCategory;
+      description?: string;
+      messageId?: number | null;
+    }) => chatService.reportUser(payload),
+  });
+}
+
+/** Admin moderation queue for user/message reports. `status` may be "all" to
+ * see every report regardless of state (defaults to open/unresolved). */
+export function useAdminReports(status = "open") {
+  return useQuery<Report[]>({
+    queryKey: chatKeys.reports(status),
+    queryFn: () => chatService.getReports(status),
+  });
+}
+
+export function useActOnReport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      reportId,
+      action,
+      note,
+    }: {
+      reportId: number;
+      action: ReportAdminAction;
+      note?: string;
+    }) => chatService.actOnReport(reportId, action, note),
+    onSuccess: () => {
+      // Refresh both the open queue and the full list after a decision.
+      queryClient.invalidateQueries({ queryKey: chatKeys.all });
+    },
   });
 }

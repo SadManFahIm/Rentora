@@ -29,7 +29,7 @@ from . import presence
 from .models import ChatRoom, ChatRoomMembership, Message
 from .safety import record_safety_event, run_chat_safety, safety_payload
 from .serializers import MessageSerializer
-from .utils import room_group_name
+from .utils import blocked_with_any, room_group_name
 
 # Application-defined WebSocket close codes.
 WS_CLOSE_UNAUTHENTICATED = 4401
@@ -103,6 +103,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
         content = sanitize_text(data.get("content", "")) or ""
         if not content.strip():
             await self._send_error("Message content cannot be empty.")
+            return
+
+        # Block enforcement (Phase 12.4): same rule as the REST path — a
+        # conversation closed by a block is closed for both sides.
+        if await self._is_blocked_in_room():
+            await self._send_error("You can't send messages in this conversation.")
             return
 
         message_type = data.get("message_type", Message.MessageType.TEXT)
@@ -199,6 +205,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
             last_read_at=now
         )
         return now
+
+    @database_sync_to_async
+    def _is_blocked_in_room(self) -> bool:
+        room = ChatRoom.objects.prefetch_related("members").filter(pk=self.room_id).first()
+        return room is not None and blocked_with_any(self.user, room)
 
     @database_sync_to_async
     def _save_message(self, content: str, message_type: str, file_url: str) -> dict:

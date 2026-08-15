@@ -159,3 +159,103 @@ class ChatSafetyEvent(models.Model):
 
     def __str__(self) -> str:
         return f"{self.risk_level}/{self.outcome} from {self.sender_id} in room {self.chat_room_id}"
+
+
+class UserBlock(models.Model):
+    """A user blocking another user (Phase 12.4).
+
+    Blocking is enforced for *both* directions: if either member of a pair
+    blocks the other, neither can message the other (or start a new direct
+    chat). The blocker can unblock at any time — unblocking is one-way, so a
+    blocked user cannot re-open the channel themselves.
+    """
+
+    blocker = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="blocked_users",
+    )
+    blocked = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="blocked_by",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("blocker", "blocked")
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.blocker_id} blocked {self.blocked_id}"
+
+
+class Report(models.Model):
+    """A user's report of another user and/or a specific message (Phase 12.4).
+
+    The moderation queue admins review lives here: a report carries its
+    category, the reporter's description, and — when a specific message was
+    flagged — a reference to it (e.g. a suspicious payment request). Admins
+    act on it (dismiss / warn / suspend / escalate); every action is written
+    to the append-only audit log (``report.*``) and the reporter is notified
+    of the outcome.
+    """
+
+    class Category(models.TextChoices):
+        SCAM = "scam", "Scam"
+        HARASSMENT = "harassment", "Harassment"
+        FAKE_LISTING = "fake_listing", "Fake listing"
+        PAYMENT_FRAUD = "payment_fraud", "Payment fraud"
+        IMPERSONATION = "impersonation", "Impersonation"
+        SPAM = "spam", "Spam"
+        OTHER = "other", "Other"
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        UNDER_REVIEW = "under_review", "Under review"
+        RESOLVED = "resolved", "Resolved"
+        DISMISSED = "dismissed", "Dismissed"
+        ESCALATED = "escalated", "Escalated"
+
+    class Action(models.TextChoices):
+        NONE = "", "—"
+        WARN = "warn", "Warned"
+        SUSPEND = "suspend", "Suspended"
+        ESCALATE = "escalate", "Escalated"
+        DISMISS = "dismiss", "Dismissed"
+
+    reporter = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="reports_made",
+    )
+    target_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="reports_received",
+    )
+    message = models.ForeignKey(
+        Message,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reports",
+        help_text="The specific message being reported (e.g. a suspicious payment request).",
+    )
+    category = models.CharField(max_length=16, choices=Category.choices)
+    description = models.TextField(blank=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.OPEN)
+    action_taken = models.CharField(max_length=10, choices=Action.choices, default=Action.NONE)
+    admin_note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status", "created_at"]),
+            models.Index(fields=["target_user", "created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.get_category_display()} by {self.reporter_id} → {self.target_user_id} ({self.status})"

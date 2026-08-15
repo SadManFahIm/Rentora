@@ -28,6 +28,10 @@ class Notification(models.Model):
         TENANT_KYC_APPROVED = "tenant_kyc_approved", "Tenant KYC Approved"
         TENANT_KYC_REJECTED = "tenant_kyc_rejected", "Tenant KYC Rejected"
         TENANT_KYC_NEEDS_REVIEW = "tenant_kyc_needs_review", "Tenant KYC Needs Review"
+        # Moderation actions from report reviews (Phase 12.4).
+        ACCOUNT_WARNING = "account_warning", "Account Warning"
+        ACCOUNT_SUSPENDED = "account_suspended", "Account Suspended"
+        REPORT_RESOLVED = "report_resolved", "Report Resolved"
         SAVED_SEARCH_MATCH = "saved_search_match", "Saved Search Match"
         SYSTEM = "system", "System"
 

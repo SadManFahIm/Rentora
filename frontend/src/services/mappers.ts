@@ -18,6 +18,9 @@ import type {
   ChatRoom,
   ChatRoomType,
   ChatSafetyInfo,
+  Report,
+  ReportCategory,
+  ReportStatus,
 } from "../types";
 
 // ---- DRF wire shapes (only the fields we consume) ----
@@ -146,6 +149,26 @@ export interface ApiChatMessage {
     warning?: string;
     detectors?: { key: string; label: string }[];
   };
+}
+
+export interface ApiReport {
+  id: number;
+  reporter_username: string;
+  reporter_name: string;
+  target_user: number;
+  target_username: string;
+  target_name: string;
+  message: number | null;
+  category: string;
+  category_display: string;
+  description: string;
+  status: string;
+  status_display: string;
+  action_taken: string;
+  action_taken_display: string;
+  admin_note: string;
+  created_at: string;
+  resolved_at: string | null;
 }
 
 export interface ApiChatRoom {
@@ -354,6 +377,28 @@ export function mapChatMessage(api: ApiChatMessage): ChatMessage {
           detectors: api.safety.detectors,
         }
       : undefined,
+  };
+}
+
+export function mapReport(api: ApiReport): Report {
+  return {
+    id: api.id,
+    reporterUsername: api.reporter_username,
+    reporterName: api.reporter_name,
+    targetUserId: api.target_user,
+    targetUsername: api.target_username,
+    targetName: api.target_name,
+    messageId: api.message,
+    category: api.category as ReportCategory,
+    categoryDisplay: api.category_display,
+    description: api.description,
+    status: api.status as ReportStatus,
+    statusDisplay: api.status_display,
+    actionTaken: api.action_taken,
+    actionTakenDisplay: api.action_taken_display,
+    adminNote: api.admin_note,
+    createdAt: api.created_at,
+    resolvedAt: api.resolved_at,
   };
 }
 

@@ -142,6 +142,45 @@ export interface ChatSafetyInfo {
   detectors?: { key: string; label: string }[];
 }
 
+// ---- Report / Block (Phase 12.4 — marketplace integrity) ----
+
+/** Categories a user can report another user / message under. */
+export type ReportCategory =
+  "scam" | "harassment" | "fake_listing" | "payment_fraud" | "impersonation" | "spam" | "other";
+
+export type ReportStatus = "open" | "under_review" | "resolved" | "dismissed" | "escalated";
+
+/** Admin decision on a report: dismiss | warn | suspend | escalate. */
+export type ReportAdminAction = "dismiss" | "warn" | "suspend" | "escalate";
+
+/** A moderation report of a user and/or a specific message. */
+export interface Report {
+  id: number;
+  reporterUsername: string;
+  reporterName: string;
+  targetUserId: number;
+  targetUsername: string;
+  targetName: string;
+  /** The specific message reported (e.g. a suspicious payment request), if any. */
+  messageId: number | null;
+  category: ReportCategory;
+  categoryDisplay: string;
+  description: string;
+  status: ReportStatus;
+  statusDisplay: string;
+  actionTaken: string;
+  actionTakenDisplay: string;
+  adminNote: string;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+/** A user the caller has blocked. */
+export interface BlockedUser {
+  id: number;
+  username: string;
+}
+
 export type ChatRoomType = "direct" | "group";
 
 export interface ChatRoom {

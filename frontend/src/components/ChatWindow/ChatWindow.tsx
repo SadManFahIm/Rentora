@@ -2,21 +2,44 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   BadgeCheck,
+  Ban,
   Check,
   CheckCheck,
+  Flag,
+  Loader2,
+  MoreVertical,
   Paperclip,
   Send,
   ShieldAlert,
   ShieldCheck,
+  UserCheck,
   X,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useApp } from "../../context/AppContext";
-import { useChatMessages, useChatRooms, useUploadChatFile } from "../../hooks/useChat";
+import {
+  useBlockedUsers,
+  useBlockUser,
+  useChatMessages,
+  useChatRooms,
+  useReportUser,
+  useUnblockUser,
+  useUploadChatFile,
+} from "../../hooks/useChat";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { mapChatMessage, type ApiChatMessage } from "../../services/mappers";
-import type { ChatMessage, ChatRoom, ChatSafetyInfo, ChatUser } from "../../types";
+import type { ChatMessage, ChatRoom, ChatSafetyInfo, ChatUser, ReportCategory } from "../../types";
 import { Button } from "../ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
 import { Input } from "../ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { cn } from "../../lib/utils";
 
 // ============================================================
@@ -108,6 +131,156 @@ function MessageStatusIcon({ status }: { status: ChatMessage["status"] }) {
   return <Check className="size-3.5 text-white/70" />;
 }
 
+/** Report categories offered to a chat user (mirrors the backend choices). */
+const REPORT_CATEGORIES: { value: ReportCategory; label: string; hint: string }[] = [
+  { value: "scam", label: "Scam", hint: "Suspicious behaviour or a fraudulent offer" },
+  { value: "harassment", label: "Harassment", hint: "Abusive or threatening messages" },
+  {
+    value: "fake_listing",
+    label: "Fake listing",
+    hint: "The listing may not exist or is misleading",
+  },
+  {
+    value: "payment_fraud",
+    label: "Payment fraud",
+    hint: "Suspicious payment requests or links",
+  },
+  {
+    value: "impersonation",
+    label: "Impersonation",
+    hint: "Pretending to be someone else",
+  },
+  { value: "spam", label: "Spam", hint: "Unsolicited or repetitive messages" },
+  { value: "other", label: "Other", hint: "Something else" },
+];
+
+/** Report a user (optionally anchored to one of their messages) — Phase 12.4.
+ * Reports land in the admin moderation queue; the reporter is notified of the
+ * outcome. The category picker + description give admins the context they need
+ * without exposing private message history. */
+function ReportUserDialog({
+  open,
+  onOpenChange,
+  userId,
+  userName,
+  messageId,
+  messagePreview,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  userId?: number;
+  userName: string;
+  messageId?: number;
+  messagePreview?: string;
+}) {
+  const report = useReportUser();
+  const [category, setCategory] = useState<ReportCategory | "">("");
+  const [description, setDescription] = useState("");
+
+  // Reset the form each time the dialog opens (it may target a new message).
+  useEffect(() => {
+    if (open) {
+      setCategory("");
+      setDescription("");
+    }
+  }, [open]);
+
+  const submit = async () => {
+    if (!category || userId == null) return;
+    try {
+      await report.mutateAsync({
+        targetUserId: userId,
+        category,
+        description: description.trim() || undefined,
+        messageId,
+      });
+      toast.success("Thanks — our moderation team will review this report.");
+      onOpenChange(false);
+    } catch {
+      toast.error("Could not submit the report. Please try again.");
+    }
+  };
+
+  const preview =
+    messagePreview && messagePreview.length > 120
+      ? `${messagePreview.slice(0, 120)}…`
+      : messagePreview;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Flag className="size-4 text-red-500" /> Report {userName}
+          </DialogTitle>
+          <DialogDescription>
+            {messageId != null
+              ? "This report is anchored to one of their messages. Our moderation team will review it and you'll be notified of the outcome."
+              : "Tell us what happened — our moderation team will review it and you'll be notified of the outcome."}
+          </DialogDescription>
+        </DialogHeader>
+
+        {preview && (
+          <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:bg-gray-800/60 dark:text-gray-400">
+            “{preview}”
+          </p>
+        )}
+
+        <div className="flex flex-col gap-3">
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+              Reason
+            </label>
+            <Select value={category} onValueChange={(v) => setCategory(v as ReportCategory)}>
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder="Select a reason…" />
+              </SelectTrigger>
+              <SelectContent>
+                {REPORT_CATEGORIES.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>
+                    {c.label} — {c.hint}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400">
+              Details (optional)
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              maxLength={2000}
+              rows={3}
+              placeholder="Add anything that helps our team understand…"
+              className="w-full resize-none rounded-lg border border-gray-200 bg-transparent px-3 py-2 text-sm text-foreground placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/40 dark:border-gray-700"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={report.isPending}>
+            Cancel
+          </Button>
+          <Button
+            className="bg-red-600 text-white hover:bg-red-700"
+            onClick={submit}
+            disabled={report.isPending || !category}
+          >
+            {report.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Flag className="size-4" />
+            )}
+            Submit report
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function ChatWindow() {
   const { user } = useApp();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -122,6 +295,16 @@ export default function ChatWindow() {
   // as a dismissible caution banner above the conversation.
   const [safetyNotice, setSafetyNotice] = useState<ChatSafetyInfo | null>(null);
   const [input, setInput] = useState("");
+  // Report / block (Phase 12.4): the header menu, who we're reporting (with
+  // an optional message anchor), and whether the confirm-block sheet is open.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [reportTarget, setReportTarget] = useState<{
+    userId: number;
+    userName: string;
+    messageId?: number;
+    messagePreview?: string;
+  } | null>(null);
+  const [confirmBlockOpen, setConfirmBlockOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const typingClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -131,9 +314,19 @@ export default function ChatWindow() {
   const roomsQuery = useChatRooms();
   const messagesQuery = useChatMessages(selectedRoomId);
   const uploadFile = useUploadChatFile();
+  const blockedQuery = useBlockedUsers();
+  const blockMutation = useBlockUser();
+  const unblockMutation = useUnblockUser();
 
   const rooms = roomsQuery.data ?? [];
   const selectedRoom: ChatRoom | null = rooms.find((r) => r.id === selectedRoomId) ?? null;
+
+  // Phase 12.4: a conversation is closed (both directions, enforced server-
+  // side too) if either side blocked the other. We know our own blocks here;
+  // the other side's block surfaces as a send refusal from the API/WS.
+  const otherParticipant = selectedRoom?.otherParticipant ?? null;
+  const isOtherBlocked =
+    otherParticipant != null && (blockedQuery.data ?? []).some((b) => b.id === otherParticipant.id);
 
   // A room opened via a deep link (?room=5, e.g. from "Message Owner" on a
   // listing) should take effect even before the rooms list has loaded.
@@ -242,6 +435,40 @@ export default function ChatWindow() {
     }
   };
 
+  const handleBlock = async () => {
+    if (!otherParticipant) return;
+    try {
+      await blockMutation.mutateAsync(otherParticipant.id);
+      toast.success(
+        `${displayName(otherParticipant)} is now blocked — you won't receive their messages.`
+      );
+      setConfirmBlockOpen(false);
+      setMenuOpen(false);
+    } catch {
+      toast.error("Could not block this user right now.");
+    }
+  };
+
+  const handleUnblock = async () => {
+    if (!otherParticipant) return;
+    try {
+      await unblockMutation.mutateAsync(otherParticipant.id);
+      toast.success(`You unblocked ${displayName(otherParticipant)}.`);
+      setMenuOpen(false);
+    } catch {
+      toast.error("Could not unblock this user right now.");
+    }
+  };
+
+  const openReportUser = () => {
+    if (!otherParticipant) return;
+    setMenuOpen(false);
+    setReportTarget({
+      userId: otherParticipant.id,
+      userName: displayName(otherParticipant),
+    });
+  };
+
   return (
     <div className="mx-auto grid max-w-7xl gap-5 px-4 py-12 md:grid-cols-[300px_1fr] md:px-6 md:py-16 lg:px-8">
       {/* Room list */}
@@ -332,6 +559,55 @@ export default function ChatWindow() {
                   {!isConnected && " · Reconnecting…"}
                 </div>
               </div>
+
+              {/* Report / block menu (Phase 12.4) */}
+              <div className="relative">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-9 shrink-0 rounded-xl text-gray-500 hover:text-foreground dark:text-gray-400"
+                  aria-label="Conversation options"
+                  aria-expanded={menuOpen}
+                  onClick={() => setMenuOpen((v) => !v)}
+                >
+                  <MoreVertical className="size-4" />
+                </Button>
+                {menuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                    <div className="absolute right-0 z-20 mt-1 w-52 overflow-hidden rounded-xl border border-gray-200 bg-card shadow-lg dark:border-gray-800">
+                      <button
+                        type="button"
+                        onClick={openReportUser}
+                        className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/60"
+                      >
+                        <Flag className="size-4 text-red-500" /> Report user
+                      </button>
+                      {isOtherBlocked ? (
+                        <button
+                          type="button"
+                          onClick={handleUnblock}
+                          className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/60"
+                        >
+                          <UserCheck className="size-4 text-emerald-500" /> Unblock user
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            setConfirmBlockOpen(true);
+                          }}
+                          className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                        >
+                          <Ban className="size-4" /> Block user
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
 
             <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-5">
@@ -359,7 +635,7 @@ export default function ChatWindow() {
                   const mine = m.sender.id === user?.id;
                   const blocked = m.safety?.blocked === true;
                   return (
-                    <div key={m.id} className={cn("max-w-[70%]", mine && "self-end")}>
+                    <div key={m.id} className={cn("group max-w-[70%]", mine && "self-end")}>
                       <div
                         className={cn(
                           "rounded-2xl rounded-bl-sm px-3.5 py-2.5 text-sm leading-relaxed",
@@ -402,7 +678,28 @@ export default function ChatWindow() {
                           hour: "numeric",
                           minute: "2-digit",
                         })}
-                        {mine && <MessageStatusIcon status={m.status} />}
+                        {mine ? (
+                          <MessageStatusIcon status={m.status} />
+                        ) : (
+                          // Report this specific message (e.g. a suspicious
+                          // payment request) — Phase 12.4. Appears on hover.
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setReportTarget({
+                                userId: m.sender.id,
+                                userName: displayName(m.sender),
+                                messageId: m.id,
+                                messagePreview: m.content,
+                              })
+                            }
+                            aria-label="Report this message"
+                            title="Report this message"
+                            className="rounded p-0.5 text-gray-400 opacity-0 transition-opacity hover:bg-gray-100 hover:text-red-500 group-hover:opacity-100 dark:hover:bg-gray-800 dark:hover:text-red-400"
+                          >
+                            <Flag className="size-3" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -425,42 +722,113 @@ export default function ChatWindow() {
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="flex gap-2.5 border-t border-gray-200 p-4 dark:border-gray-800">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/gif,image/webp,.pdf,.doc,.docx,.txt,.zip"
-                className="hidden"
-                onChange={(e) => handleFilePicked(e.target.files?.[0])}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="shrink-0 rounded-xl"
-                title="Attach a file"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploadFile.isPending}
-              >
-                <Paperclip className={cn("size-4", uploadFile.isPending && "animate-pulse")} />
-              </Button>
-              <Input
-                placeholder="Type a message..."
-                value={input}
-                onChange={(e) => handleInputChange(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              />
-              <Button
-                className="h-11 w-11 shrink-0 rounded-xl bg-orange-600 text-white hover:bg-orange-700"
-                size="icon"
-                onClick={handleSend}
-              >
-                <Send className="size-4" />
-              </Button>
-            </div>
+            {isOtherBlocked ? (
+              <div className="flex items-center justify-between gap-3 border-t border-gray-200 px-5 py-4 dark:border-gray-800">
+                <p className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                  <Ban className="size-4 shrink-0 text-red-500" />
+                  You blocked {displayName(otherParticipant)} — this conversation is closed.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleUnblock}
+                  disabled={unblockMutation.isPending}
+                  className="shrink-0"
+                >
+                  {unblockMutation.isPending ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <UserCheck className="size-3.5" />
+                  )}
+                  Unblock
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-2.5 border-t border-gray-200 p-4 dark:border-gray-800">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp,.pdf,.doc,.docx,.txt,.zip"
+                  className="hidden"
+                  onChange={(e) => handleFilePicked(e.target.files?.[0])}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0 rounded-xl"
+                  title="Attach a file"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadFile.isPending}
+                >
+                  <Paperclip className={cn("size-4", uploadFile.isPending && "animate-pulse")} />
+                </Button>
+                <Input
+                  placeholder="Type a message..."
+                  value={input}
+                  onChange={(e) => handleInputChange(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                />
+                <Button
+                  className="h-11 w-11 shrink-0 rounded-xl bg-orange-600 text-white hover:bg-orange-700"
+                  size="icon"
+                  onClick={handleSend}
+                >
+                  <Send className="size-4" />
+                </Button>
+              </div>
+            )}
           </>
         )}
       </div>
+
+      {/* Confirm-block dialog (Phase 12.4) */}
+      <Dialog open={confirmBlockOpen} onOpenChange={setConfirmBlockOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Ban className="size-4 text-red-500" /> Block {displayName(otherParticipant)}?
+            </DialogTitle>
+            <DialogDescription>
+              They won't be able to message you, and this conversation will be closed for both
+              sides. You can unblock them any time from this chat.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmBlockOpen(false)}
+              disabled={blockMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-red-600 text-white hover:bg-red-700"
+              onClick={handleBlock}
+              disabled={blockMutation.isPending}
+            >
+              {blockMutation.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Ban className="size-4" />
+              )}
+              Block user
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Report user / message dialog (Phase 12.4) */}
+      <ReportUserDialog
+        open={reportTarget != null}
+        onOpenChange={(open) => {
+          if (!open) setReportTarget(null);
+        }}
+        userId={reportTarget?.userId}
+        userName={reportTarget?.userName ?? ""}
+        messageId={reportTarget?.messageId}
+        messagePreview={reportTarget?.messagePreview}
+      />
     </div>
   );
 }
