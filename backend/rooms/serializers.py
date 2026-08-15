@@ -130,7 +130,16 @@ class RoomOwnerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "username", "first_name", "last_name", "avatar", "phone", "nid_verified"]
+        fields = [
+            "id",
+            "username",
+            "first_name",
+            "last_name",
+            "avatar",
+            "phone",
+            "nid_verified",
+            "tenant_verified",
+        ]
 
 
 class _EffectiveTierMixin(serializers.Serializer):

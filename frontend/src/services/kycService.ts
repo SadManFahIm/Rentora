@@ -1,5 +1,14 @@
 import { api } from "./api";
-import type { KycApplication, KycAuditEntry, KycDocType, KycDocument, KycSla } from "../types";
+import type {
+  KycApplication,
+  KycAuditEntry,
+  KycDocType,
+  KycDocument,
+  KycSla,
+  TenantKycApplication,
+  TenantKycDecision,
+  TenantVerification,
+} from "../types";
 
 // ============================================================
 // KYC SERVICE — document upload + admin review panel
@@ -38,6 +47,56 @@ interface ApiKycApplication {
   nid_verified: boolean;
   documents: ApiKycDocument[];
 }
+
+interface ApiTenantVerification {
+  id: number;
+  status: TenantVerification["status"];
+  status_display: string;
+  doc_type: KycDocType;
+  doc_type_display: string;
+  file: string | null;
+  review_note: string;
+  created_at: string;
+  updated_at: string;
+  reviewed_at: string | null;
+  expires_at: string | null;
+}
+
+interface ApiTenantKycApplication {
+  id: number;
+  username: string;
+  email: string;
+  name: string;
+  phone: string;
+  role: string;
+  tenant_verified: boolean;
+  verification: ApiTenantVerification | null;
+}
+
+const mapTenantVerification = (v: ApiTenantVerification): TenantVerification => ({
+  id: v.id,
+  status: v.status,
+  statusDisplay: v.status_display,
+  docType: v.doc_type,
+  docTypeDisplay: v.doc_type_display,
+  fileUrl: v.file,
+  reviewNote: v.review_note,
+  createdAt: v.created_at,
+  updatedAt: v.updated_at,
+  reviewedAt: v.reviewed_at,
+  expiresAt: v.expires_at,
+});
+
+const mapTenantKycApplication = (a: ApiTenantKycApplication): TenantKycApplication => ({
+  id: a.id,
+  username: a.username,
+  email: a.email,
+  name: a.name,
+  phone: a.phone,
+  role: a.role,
+  tenantVerified: a.tenant_verified,
+  verification: a.verification ? mapTenantVerification(a.verification) : null,
+});
 
 const mapDocument = (d: ApiKycDocument): KycDocument => ({
   id: d.id,
@@ -156,6 +215,47 @@ export const kycService = {
       note: e.note,
       createdAt: e.created_at,
     }));
+  },
+
+  // ============================================================
+  // Tenant KYC (Phase 12 — two-sided trust)
+  // ============================================================
+
+  /** GET /users/tenant-kyc/ — the caller's own verification record (null when
+   * never started). Landlords never receive this payload. */
+  async myTenantVerification(): Promise<TenantVerification | null> {
+    const { data } = await api.get<ApiTenantVerification | null>("/users/tenant-kyc/");
+    return data ? mapTenantVerification(data) : null;
+  },
+
+  /** POST /users/tenant-kyc/ — submit (or re-submit) a tenant identity doc. */
+  async submitTenantVerification(docType: KycDocType, file: File): Promise<TenantVerification> {
+    const form = new FormData();
+    form.append("doc_type", docType);
+    form.append("file", file);
+    const { data } = await api.post<ApiTenantVerification>("/users/tenant-kyc/", form, {
+      headers: { "Content-Type": undefined },
+    });
+    return mapTenantVerification(data);
+  },
+
+  /** GET /users/tenant-kyc/pending/ — admin tenant-verification queue. */
+  async pendingTenantApplications(): Promise<TenantKycApplication[]> {
+    const { data } = await api.get<ApiTenantKycApplication[]>("/users/tenant-kyc/pending/");
+    return data.map(mapTenantKycApplication);
+  },
+
+  /** POST /users/tenant-kyc/{userId}/review/ — admin decision. */
+  async reviewTenantApplication(
+    userId: number,
+    decision: TenantKycDecision,
+    note = ""
+  ): Promise<TenantKycApplication> {
+    const { data } = await api.post<ApiTenantKycApplication>(
+      `/users/tenant-kyc/${userId}/review/`,
+      { decision, note }
+    );
+    return mapTenantKycApplication(data);
   },
 };
 

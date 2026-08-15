@@ -2,11 +2,22 @@ import { api } from "./api";
 import {
   mapChatMessage,
   mapChatRoom,
+  mapReport,
   type ApiChatMessage,
   type ApiChatRoom,
+  type ApiReport,
   type Paginated,
 } from "./mappers";
-import type { ChatMessage, ChatMessageType, ChatRoom } from "../types";
+import type {
+  BlockedUser,
+  ChatMessage,
+  ChatMessageType,
+  ChatRoom,
+  ChatSafetyEvent,
+  Report,
+  ReportAdminAction,
+  ReportCategory,
+} from "../types";
 
 // ============================================================
 // CHAT SERVICE — real /chat/ endpoints (REST fallback; the
@@ -68,6 +79,13 @@ export const chatService = {
     return { fileUrl: data.file_url, messageType: data.message_type as ChatMessageType };
   },
 
+  /** GET /chat/safety/events/ — admin feed of chat-safety assessments
+   * (metadata only — never message content). */
+  async getSafetyEvents(): Promise<ChatSafetyEvent[]> {
+    const { data } = await api.get<ChatSafetyEvent[]>("/chat/safety/events/");
+    return data;
+  },
+
   /** GET /chat/online-status/ — split `userIds` into online/offline. */
   async getOnlineStatus(userIds: number[]): Promise<{ online: number[]; offline: number[] }> {
     const { data } = await api.get<{ online: number[]; offline: number[] }>(
@@ -75,6 +93,58 @@ export const chatService = {
       { params: { user_ids: userIds.join(",") } }
     );
     return data;
+  },
+
+  // ---- Report / block (Phase 12.4) ----
+
+  /** POST /chat/reports/ — report another user (optionally a specific message,
+   * e.g. a suspicious payment request). */
+  async reportUser(payload: {
+    targetUserId: number;
+    category: ReportCategory;
+    description?: string;
+    messageId?: number | null;
+  }): Promise<Report> {
+    const { data } = await api.post<ApiReport>("/chat/reports/", {
+      target_user_id: payload.targetUserId,
+      category: payload.category,
+      description: payload.description ?? "",
+      message_id: payload.messageId ?? null,
+    });
+    return mapReport(data);
+  },
+
+  /** POST /chat/block/ — block another user (idempotent server-side). */
+  async blockUser(userId: number): Promise<void> {
+    await api.post("/chat/block/", { user_id: userId });
+  },
+
+  /** DELETE /chat/block/:user_id/ — unblock a user (only the blocker can). */
+  async unblockUser(userId: number): Promise<void> {
+    await api.delete(`/chat/block/${userId}/`);
+  },
+
+  /** GET /chat/blocked/ — the caller's list of blocked users. */
+  async getBlockedUsers(): Promise<BlockedUser[]> {
+    const { data } = await api.get<BlockedUser[]>("/chat/blocked/");
+    return data;
+  },
+
+  /** GET /chat/reports/admin/ — admin moderation queue (admin only). */
+  async getReports(status?: string): Promise<Report[]> {
+    const { data } = await api.get<ApiReport[]>("/chat/reports/admin/", {
+      params: status && status !== "all" ? { status } : undefined,
+    });
+    return data.map(mapReport);
+  },
+
+  /** POST /chat/reports/:id/action/ — admin decision on a report. */
+  async actOnReport(reportId: number, action: ReportAdminAction, note = ""): Promise<Report> {
+    const { data } = await api.post<ApiReport>(`/chat/reports/${reportId}/action/`, {
+      action,
+      note,
+    });
+    return mapReport(data);
   },
 };
 

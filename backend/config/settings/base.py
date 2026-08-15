@@ -83,6 +83,8 @@ INSTALLED_APPS = [
     "fraud",
     "savedsearches",
     "copilot",
+    "moderation",
+    "disputes",
 ]
 
 MIDDLEWARE = [
@@ -383,6 +385,18 @@ SAVED_SEARCH_MATCH_WEIGHTS = {
 # requires an external model and never hallucinates listings (every claim
 # comes from retrieved database rows).
 COPILOT_ENABLED = os.getenv("COPILOT_ENABLED", "True") == "True"
+
+# ---- Chat Safety Engine (Phase 12.3) ----
+# Rule-based fraud/safety detection on chat messages (see chat/safety.py).
+# Detection is conservative by design: low/medium risk delivers with a
+# caution warning, high risk flags the message for admin review, and
+# critical risk *blocks* it (the sender's message is replaced with a safety
+# notice and the raw content is never stored).
+CHAT_SAFETY_ENABLED = os.getenv("CHAT_SAFETY_ENABLED", "True") == "True"
+# Messages at or above this risk level are replaced with a blocked notice.
+CHAT_SAFETY_BLOCK_LEVEL = os.getenv("CHAT_SAFETY_BLOCK_LEVEL", "critical")
+# Messages at or above this risk level are flagged for admin review.
+CHAT_SAFETY_FLAG_LEVEL = os.getenv("CHAT_SAFETY_FLAG_LEVEL", "high")
 # Max listings returned per Copilot turn.
 COPILOT_MAX_RESULTS = int(os.getenv("COPILOT_MAX_RESULTS", "5"))
 # Follow-up conversation context lives in the Django cache under a random
@@ -440,6 +454,17 @@ IMAGE_DUPLICATE_THRESHOLD = int(os.getenv("IMAGE_DUPLICATE_THRESHOLD", "8"))
 # other listings on the platform — with one or two listings there is nothing
 # to compare against and hashing every image is pure waste.
 IMAGE_DUPLICATE_MIN_LISTINGS = int(os.getenv("IMAGE_DUPLICATE_MIN_LISTINGS", "2"))
+
+# ============================================================
+# Content moderation (Phase 12.5 — photo + review moderation)
+# ============================================================
+# Deterministic review-text and photo moderation with an admin queue.
+# Low-risk reviews/photos are auto-approved (published immediately — existing
+# behaviour preserved); high-risk ones land in the admin moderation queue.
+REVIEW_MODERATION_ENABLED = os.getenv("REVIEW_MODERATION_ENABLED", "True") == "True"
+# Reviews scoring at or above this 0-100 risk are held for admin review.
+REVIEW_MODERATION_FLAG_THRESHOLD = int(os.getenv("REVIEW_MODERATION_FLAG_THRESHOLD", "60"))
+PHOTO_MODERATION_ENABLED = os.getenv("PHOTO_MODERATION_ENABLED", "True") == "True"
 
 # ============================================================
 # Alert email throttling (notifications.email_guard)

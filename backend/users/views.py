@@ -9,9 +9,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from notifications.emails import send_html_email
+from notifications.models import Notification
 from notifications.utils import create_notification
 
-from .models import KycDocument, User
+from .models import KycDocument, TenantVerification, User
 from .serializers import (
     KycAuditEntrySerializer,
     KycDocumentSerializer,
@@ -19,6 +20,9 @@ from .serializers import (
     KycReviewRequestSerializer,
     KycSlaSerializer,
     KycUploadRequestSerializer,
+    TenantKycPendingSerializer,
+    TenantKycReviewRequestSerializer,
+    TenantVerificationSerializer,
     UserSerializer,
 )
 
@@ -444,6 +448,327 @@ class KycReviewView(APIView):
                     )
                 )
         return Response(KycPendingUserSerializer(target, context={"request": request}).data)
+
+
+# ============================================================
+# Tenant KYC verification (Phase 12 — two-sided trust)
+# ============================================================
+
+
+# How long an approved tenant verification stays valid before expiring.
+# Identity documents age; a verified badge should never be a lifetime claim.
+TENANT_KYC_EXPIRY_DAYS = 365
+
+
+class TenantKycView(APIView):
+    """The tenant's own verification: read status or submit a document.
+
+    - ``GET`` — the caller's verification record (null when never started).
+      A verified record past ``expires_at`` is lazily flipped to EXPIRED and
+      clears ``tenant_verified``, so a stale badge can't outlive its proof.
+    - ``POST`` — submit (or re-submit) an identity document. Re-submission is
+      allowed from rejected/expired/needs_review, blocked while pending and
+      once verified. Files are validated (type + size + non-empty) and renamed
+      to a UUID so original filenames never leak NID data into storage/logs.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser]
+
+    @extend_schema(
+        tags=["Tenant KYC"],
+        summary="My tenant verification status",
+        description="Authenticated. The caller's own tenant-verification record, "
+        "or null when not started. Document URL is owner-only.",
+        responses=TenantVerificationSerializer,
+    )
+    def get(self, request):
+        verification = TenantVerification.objects.filter(user=request.user).first()
+        if verification is not None:
+            self._expire_if_stale(verification)
+        return Response(
+            TenantVerificationSerializer(verification, context={"request": request}).data
+            if verification
+            else None
+        )
+
+    @extend_schema(
+        tags=["Tenant KYC"],
+        summary="Submit a tenant identity document",
+        description="Multipart: `doc_type` (nid|passport) + `file` (image or PDF, up to 5 MB). "
+        "Re-submission allowed after rejection/expiry/needs-review.",
+        request=KycUploadRequestSerializer,
+        responses=TenantVerificationSerializer,
+    )
+    def post(self, request):
+        # Guard on both the cached user flag and the authoritative record: the
+        # flag can be stale on a long-lived request object, and the record's
+        # VERIFIED status is what actually gates resubmission.
+        verification = TenantVerification.objects.filter(user=request.user).first()
+        if request.user.tenant_verified or (
+            verification is not None and verification.status == TenantVerification.Status.VERIFIED
+        ):
+            return Response(
+                {"detail": "You are already verified as a tenant."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if verification is not None and verification.status == TenantVerification.Status.PENDING:
+            return Response(
+                {"detail": "Your verification is already under review."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        doc_type = request.data.get("doc_type")
+        file_obj = request.data.get("file")
+        if doc_type not in KycDocument.DocType.values:
+            return Response(
+                {"doc_type": "doc_type must be one of: nid, passport."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if file_obj is None:
+            return Response(
+                {"file": "A document file is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        content_type = getattr(file_obj, "content_type", "")
+        if content_type and content_type not in ALLOWED_KYC_CONTENT_TYPES:
+            return Response(
+                {"file": "Only JPG, PNG, WebP images or PDF documents are accepted."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if file_obj.size > MAX_KYC_FILE_SIZE:
+            return Response(
+                {"file": "The document must be 5 MB or smaller."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if file_obj.size <= 0:
+            return Response(
+                {"file": "The document appears to be empty."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        verification, _created = TenantVerification.objects.get_or_create(user=request.user)
+
+        # UUID-rename the upload so the original filename (which often embeds
+        # an NID number) never reaches storage, logs, or error reporting.
+        import os
+        import uuid
+
+        ext = os.path.splitext(getattr(file_obj, "name", ""))[1].lower()[:10]
+        file_obj.name = f"{uuid.uuid4().hex}{ext}"
+
+        verification.doc_type = doc_type
+        verification.file = file_obj
+        verification.status = TenantVerification.Status.PENDING
+        verification.review_note = ""
+        verification.reviewed_at = None
+        verification.expires_at = None
+        verification.save()
+
+        from audit.services import log_action
+
+        log_action(
+            actor=request.user,
+            action="tenant_kyc.submitted",
+            target=request.user,
+            request=request,
+            detail={"doc_type": doc_type, "verification_id": verification.pk},
+        )
+        return Response(
+            TenantVerificationSerializer(verification, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    def _expire_if_stale(self, verification: TenantVerification) -> None:
+        """Lazily expire a verified record past its validity window."""
+        if (
+            verification.status == TenantVerification.Status.VERIFIED
+            and verification.expires_at
+            and verification.expires_at <= timezone.now()
+        ):
+            verification.status = TenantVerification.Status.EXPIRED
+            verification.save(update_fields=["status", "updated_at"])
+            user = verification.user
+            if user.tenant_verified:
+                user.tenant_verified = False
+                user.save(update_fields=["tenant_verified"])
+
+
+class TenantKycFileView(APIView):
+    """Serve one tenant's verification document — the tenant or admin only.
+
+    Same privacy contract as the landlord KYC file endpoint: never served from
+    MEDIA_URL; non-owners get a 404 (not 403) so a guessed user id doesn't even
+    confirm a verification exists.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Tenant KYC"],
+        summary="Download a tenant verification document",
+        description="Authenticated. Owner or admin only; otherwise 404.",
+    )
+    def get(self, request, user_id):
+        verification = get_object_or_404(TenantVerification, user_id=user_id)
+        if not (_is_admin(request.user) or verification.user_id == request.user.id):
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        if not verification.file:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        response = FileResponse(verification.file.open("rb"))
+        response["Content-Disposition"] = f'inline; filename="{verification.file.name}"'
+        return response
+
+
+class TenantKycPendingApplicationsView(APIView):
+    """Admin review queue for tenant verifications."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Tenant KYC"],
+        summary="List pending tenant verifications",
+        description="Admin only. Tenants with a pending verification, oldest first, "
+        "each with the admin-gated document URL.",
+        responses=TenantKycPendingSerializer(many=True),
+    )
+    def get(self, request):
+        if not _is_admin(request.user):
+            return Response(
+                {"detail": "Admin access required."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        pending = (
+            TenantVerification.objects.filter(status=TenantVerification.Status.PENDING)
+            .select_related("user")
+            .order_by("created_at")
+        )
+        return Response(
+            TenantKycPendingSerializer(
+                [v.user for v in pending], many=True, context={"request": request}
+            ).data
+        )
+
+
+class TenantKycReviewView(APIView):
+    """Admin decision on a tenant's verification: approve (flips
+    ``tenant_verified`` on, sets expiry), reject, or request re-submission.
+    Every decision is audited (``tenant_kyc.*``) and the tenant is notified;
+    rejections also get a branded email with the reviewer's note.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Tenant KYC"],
+        summary="Review a tenant verification",
+        description="Admin only. `decision`: approved | rejected | needs_review.",
+        request=TenantKycReviewRequestSerializer,
+        responses=TenantKycPendingSerializer,
+    )
+    def post(self, request, user_id):
+        if not _is_admin(request.user):
+            return Response(
+                {"detail": "Admin access required."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        serializer = TenantKycReviewRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        target = get_object_or_404(User, pk=user_id)
+        verification = get_object_or_404(TenantVerification, user=target)
+        decision = serializer.validated_data["decision"]
+        note = serializer.validated_data.get("note", "")
+
+        if verification.status != TenantVerification.Status.PENDING:
+            return Response(
+                {"detail": "Only pending verifications can be reviewed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from datetime import timedelta
+
+        from django.db import transaction
+
+        with transaction.atomic():
+            if decision == "approved":
+                verification.status = TenantVerification.Status.VERIFIED
+                verification.expires_at = timezone.now() + timedelta(days=TENANT_KYC_EXPIRY_DAYS)
+                target.tenant_verified = True
+            elif decision == "needs_review":
+                verification.status = TenantVerification.Status.NEEDS_REVIEW
+                target.tenant_verified = False
+            else:  # rejected
+                verification.status = TenantVerification.Status.REJECTED
+                target.tenant_verified = False
+            verification.review_note = note
+            verification.reviewed_at = timezone.now()
+            verification.save()
+            target.save(update_fields=["tenant_verified"])
+
+            from audit.services import log_action
+
+            log_action(
+                actor=request.user,
+                action=f"tenant_kyc.{decision}",
+                target=target,
+                request=request,
+                detail={
+                    "note": note,
+                    "verification_id": verification.pk,
+                    "expires_at": verification.expires_at.isoformat()
+                    if verification.expires_at
+                    else None,
+                },
+            )
+
+            if decision == "approved":
+                create_notification(
+                    user=target,
+                    notification_type=Notification.Type.TENANT_KYC_APPROVED,
+                    title="Identity verified 🎉",
+                    message=(
+                        "Your identity was verified. Landlords can now see the "
+                        "verified-tenant badge when you inquire or book."
+                    ),
+                    action_url="/dashboard",
+                )
+            else:
+                create_notification(
+                    user=target,
+                    notification_type=(
+                        Notification.Type.TENANT_KYC_REJECTED
+                        if decision == "rejected"
+                        else Notification.Type.TENANT_KYC_NEEDS_REVIEW
+                    ),
+                    title=(
+                        "Identity verification not approved"
+                        if decision == "rejected"
+                        else "Identity verification needs your attention"
+                    ),
+                    message=(
+                        note
+                        or (
+                            "Your identity document could not be verified. "
+                            "Please re-upload a clear copy."
+                        )
+                    ),
+                    action_url="/dashboard",
+                )
+                if decision == "rejected":
+                    transaction.on_commit(
+                        lambda: send_html_email(
+                            subject="Your Rentora tenant verification needs attention",
+                            to_email=target.email,
+                            template_name="tenant_kyc_rejected",
+                            context={
+                                "user": target,
+                                "note": note,
+                                "action_url": f"{settings.FRONTEND_URL}/dashboard",
+                            },
+                        )
+                    )
+        return Response(TenantKycPendingSerializer(target, context={"request": request}).data)
 
 
 class ReferralInfoView(APIView):
