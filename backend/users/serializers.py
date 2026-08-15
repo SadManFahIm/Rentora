@@ -5,7 +5,7 @@ from django.urls import reverse
 from drf_spectacular.utils import extend_schema_field, inline_serializer
 from rest_framework import serializers
 
-from .models import KycDocument
+from .models import KycDocument, TenantVerification
 
 User = get_user_model()
 
@@ -34,12 +34,13 @@ class UserSerializer(serializers.ModelSerializer):
             "role",
             "gender",
             "nid_verified",
+            "tenant_verified",
             "bio",
             "date_of_birth",
             "otp_enabled",
             "date_joined",
         ]
-        read_only_fields = ["id", "date_joined", "nid_verified"]
+        read_only_fields = ["id", "date_joined", "nid_verified", "tenant_verified"]
 
 
 class CustomUserDetailsSerializer(UserDetailsSerializer):
@@ -61,12 +62,13 @@ class CustomUserDetailsSerializer(UserDetailsSerializer):
             "is_staff",
             "gender",
             "nid_verified",
+            "tenant_verified",
             "bio",
             "date_of_birth",
             "otp_enabled",
             "passkeys",
         )
-        read_only_fields = ("email", "nid_verified")
+        read_only_fields = ("email", "nid_verified", "tenant_verified")
 
     @extend_schema_field(
         serializers.ListField(
@@ -267,6 +269,101 @@ class KycAuditEntrySerializer(serializers.Serializer):
     user_name = serializers.CharField()
     note = serializers.CharField(default="")
     created_at = serializers.DateTimeField()
+
+
+# ============================================================
+# Tenant KYC verification (Phase 12 — two-sided trust)
+# ============================================================
+
+
+class TenantVerificationSerializer(serializers.ModelSerializer):
+    """The tenant's own verification record.
+
+    Only ever returned to the tenant themselves or to staff/admins (the views
+    enforce it). The ``file`` field points at the *authenticated* file
+    endpoint rather than the public MEDIA_URL, and is only populated for the
+    owner and admins — everyone else simply never receives this serializer.
+    """
+
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    doc_type_display = serializers.CharField(source="get_doc_type_display", read_only=True)
+    file = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TenantVerification
+        fields = [
+            "id",
+            "status",
+            "status_display",
+            "doc_type",
+            "doc_type_display",
+            "file",
+            "review_note",
+            "created_at",
+            "updated_at",
+            "reviewed_at",
+            "expires_at",
+        ]
+        read_only_fields = fields
+
+    def get_file(self, obj: TenantVerification) -> str | None:
+        """The permission-gated file URL (owner/admin only) — never MEDIA_URL."""
+        if not obj.file:
+            return None
+        path = reverse("tenant-kyc-file", args=[obj.user_id])
+        request = self.context.get("request")
+        return request.build_absolute_uri(path) if request else path
+
+
+class TenantKycReviewRequestSerializer(serializers.Serializer):
+    """Admin decision on a tenant's verification.
+
+    ``decision`` is one of approved | rejected | needs_review; ``note`` is the
+    reviewer's reason (required for rejected/needs_review so the tenant knows
+    what to fix, optional for approval).
+    """
+
+    decision = serializers.ChoiceField(choices=["approved", "rejected", "needs_review"])
+    note = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate(self, attrs):
+        if attrs["decision"] in ("rejected", "needs_review") and not attrs.get("note", "").strip():
+            raise serializers.ValidationError(
+                {
+                    "note": "A note explaining the decision is required for rejection or needs-review."
+                }
+            )
+        return attrs
+
+
+class TenantKycPendingSerializer(serializers.ModelSerializer):
+    """One applicant in the admin tenant-verification queue: profile summary +
+    their verification record (with the admin-gated document URL)."""
+
+    name = serializers.SerializerMethodField()
+    verification = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "email",
+            "name",
+            "phone",
+            "role",
+            "tenant_verified",
+            "verification",
+        ]
+
+    def get_name(self, obj):
+        return obj.get_full_name() or obj.username
+
+    def get_verification(self, obj):
+        verification = getattr(obj, "tenant_verification", None)
+        if verification is None:
+            return None
+        return TenantVerificationSerializer(verification, context=self.context).data
 
 
 class PasskeySerializer(serializers.Serializer):

@@ -79,6 +79,9 @@ export interface User {
   phone?: string;
   bio?: string;
   nidVerified?: boolean;
+  /** Tenant identity verification (Phase 12) — landlords see only this flag,
+   * never the document. Shown as the "Identity Verified" tenant badge. */
+  tenantVerified?: boolean;
   /** Email-OTP two-factor authentication is enabled for this account. */
   otpEnabled?: boolean;
   /** Registered WebAuthn passkeys (from the user detail payload). */
@@ -106,8 +109,10 @@ export interface ChatUser {
   firstName: string;
   lastName: string;
   avatar: string | null;
-  /** KYC-verified — shown as a trust badge next to the participant's name. */
+  /** Landlord KYC-verified — shown as a trust badge next to the name. */
   nidVerified?: boolean;
+  /** Tenant identity-verified (Phase 12) — "Identity Verified" tenant badge. */
+  tenantVerified?: boolean;
 }
 
 export type ChatMessageType = "text" | "image" | "file" | "system";
@@ -121,6 +126,204 @@ export interface ChatMessage {
   messageType: ChatMessageType;
   fileUrl: string;
   status: ChatMessageStatus;
+  createdAt: string;
+  /** Chat safety engine (Phase 12.3) — present only on messages that tripped
+   * a rule: warned/flagged carry a caution warning, blocked messages were
+   * replaced with a safety notice server-side. */
+  safety?: ChatSafetyInfo;
+}
+
+/** The slice of a chat-safety assessment the client sees (never raw content). */
+export interface ChatSafetyInfo {
+  riskLevel: "low" | "medium" | "high" | "critical";
+  outcome: "allowed" | "warned" | "flagged" | "blocked";
+  blocked: boolean;
+  warning?: string;
+  detectors?: { key: string; label: string }[];
+}
+
+// ---- Report / Block (Phase 12.4 — marketplace integrity) ----
+
+/** Categories a user can report another user / message under. */
+export type ReportCategory =
+  "scam" | "harassment" | "fake_listing" | "payment_fraud" | "impersonation" | "spam" | "other";
+
+export type ReportStatus = "open" | "under_review" | "resolved" | "dismissed" | "escalated";
+
+/** Admin decision on a report: dismiss | warn | suspend | escalate. */
+export type ReportAdminAction = "dismiss" | "warn" | "suspend" | "escalate";
+
+/** A moderation report of a user and/or a specific message. */
+export interface Report {
+  id: number;
+  reporterUsername: string;
+  reporterName: string;
+  targetUserId: number;
+  targetUsername: string;
+  targetName: string;
+  /** The specific message reported (e.g. a suspicious payment request), if any. */
+  messageId: number | null;
+  category: ReportCategory;
+  categoryDisplay: string;
+  description: string;
+  status: ReportStatus;
+  statusDisplay: string;
+  actionTaken: string;
+  actionTakenDisplay: string;
+  adminNote: string;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+/** A user the caller has blocked. */
+export interface BlockedUser {
+  id: number;
+  username: string;
+}
+
+// ---- Content moderation (Phase 12.5 — reviews + photos) ----
+
+export type ModerationStatus = "pending" | "approved" | "rejected" | "flagged";
+
+/** One review in the admin moderation queue. */
+export interface ReviewModerationItem {
+  id: number;
+  review: number;
+  roomId: number;
+  roomTitle: string;
+  authorUsername: string;
+  authorName: string;
+  rating: number;
+  commentPreview: string;
+  status: ModerationStatus;
+  statusDisplay: string;
+  riskScore: number;
+  signals: { key: string; label: string }[];
+  adminNote: string;
+  reviewedByUsername: string;
+  createdAt: string;
+  reviewedAt: string | null;
+}
+
+/** One photo in the admin moderation queue (listing or review photo). */
+export interface PhotoModerationItem {
+  id: number;
+  targetType: "listing" | "review";
+  targetTypeDisplay: string;
+  room: number | null;
+  roomTitle: string;
+  review: number | null;
+  imageUrl: string;
+  phash: string;
+  status: ModerationStatus;
+  statusDisplay: string;
+  riskScore: number;
+  signals: { key: string; label: string }[];
+  adminNote: string;
+  uploadedByUsername: string;
+  reviewedByUsername: string;
+  createdAt: string;
+  reviewedAt: string | null;
+}
+
+/** Queue-health counts for the moderation overview. */
+export interface ModerationOverview {
+  reviews: number;
+  reviewsPending: number;
+  reviewsFlagged: number;
+  reviewsApproved: number;
+  reviewsRejected: number;
+  photos: number;
+  photosPending: number;
+  photosFlagged: number;
+  photosApproved: number;
+  photosRejected: number;
+}
+
+// ---- Dispute resolution (Phase 12) ----
+
+export type DisputeCategory =
+  | "deposit"
+  | "property_condition"
+  | "booking_cancellation"
+  | "misrepresentation"
+  | "payment"
+  | "other";
+
+export type DisputeStatus =
+  | "open"
+  | "under_review"
+  | "waiting_for_tenant"
+  | "waiting_for_landlord"
+  | "escalated"
+  | "resolved"
+  | "rejected";
+
+export type DisputeDecision = "none" | "release_to_landlord" | "refund_to_tenant" | "partial";
+
+export interface DisputeEvidence {
+  id: number;
+  dispute: number;
+  uploadedBy: number;
+  uploadedByUsername: string;
+  kind: "text" | "photo" | "document";
+  kindDisplay: string;
+  content: string;
+  file: string | null;
+  createdAt: string;
+}
+
+export interface Dispute {
+  id: number;
+  booking: number;
+  roomId: number;
+  roomTitle: string;
+  openedBy: number;
+  openedByUsername: string;
+  otherPartyUsername: string;
+  category: DisputeCategory;
+  categoryDisplay: string;
+  description: string;
+  status: DisputeStatus;
+  statusDisplay: string;
+  decision: DisputeDecision;
+  decisionDisplay: string;
+  decisionAmount: number | null;
+  resolution: string;
+  evidence: DisputeEvidence[];
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+}
+
+// ---- Chat safety admin feed (Phase 12.3) + audit trail ----
+
+/** One chat-safety assessment in the admin feed — metadata only, never the
+ * message content (mirrors the backend's ChatSafetyEventSerializer). */
+export interface ChatSafetyEvent {
+  id: number;
+  chat_room: number;
+  sender_username: string;
+  sender_name: string;
+  risk_level: string;
+  risk_level_display: string;
+  outcome: string;
+  outcome_display: string;
+  detectors: { key: string; label: string }[];
+  detail: Record<string, unknown>;
+  created_at: string;
+}
+
+/** One entry in the append-only admin audit trail. */
+export interface AuditEntry {
+  id: number;
+  actor: number | null;
+  actorUsername: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  detail: Record<string, unknown>;
+  ipAddress: string | null;
   createdAt: string;
 }
 
@@ -551,6 +754,43 @@ export interface KycApplication {
   role: string;
   nidVerified: boolean;
   documents: KycDocument[];
+}
+
+// ---- Tenant KYC verification (Phase 12 — two-sided trust) ----
+
+/** Tenant verification lifecycle. Landlords only ever see the coarse badge
+ * states (verified / pending / not verified) — never this record's document. */
+export type TenantVerificationStatus =
+  "not_started" | "pending" | "verified" | "rejected" | "expired" | "needs_review";
+
+export type TenantKycDecision = "approved" | "rejected" | "needs_review";
+
+/** The tenant's own verification record (owner or admin only). */
+export interface TenantVerification {
+  id: number;
+  status: TenantVerificationStatus;
+  statusDisplay: string;
+  docType: KycDocType;
+  docTypeDisplay: string;
+  /** Private, auth-gated document URL — owner/admin can fetch it. */
+  fileUrl: string | null;
+  reviewNote: string;
+  createdAt: string;
+  updatedAt: string;
+  reviewedAt: string | null;
+  expiresAt: string | null;
+}
+
+/** One applicant in the admin tenant-verification queue. */
+export interface TenantKycApplication {
+  id: number;
+  username: string;
+  email: string;
+  name: string;
+  phone: string;
+  role: string;
+  tenantVerified: boolean;
+  verification: TenantVerification | null;
 }
 
 /** Admin review-queue health from GET /users/kyc/sla/. */

@@ -10,6 +10,9 @@ from rest_framework import permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from moderation.models import NOT_PUBLIC
+from moderation.services import record_review_moderation, record_review_photo_moderation
+
 from .models import Booking, Review
 from .permissions import IsReviewAuthorOrReadOnly, IsTenantOrRoomOwner
 from .serializers import (
@@ -146,10 +149,21 @@ class BookingViewSet(viewsets.ModelViewSet):
     destroy=extend_schema(tags=["Reviews"], summary="Delete a review (author only)"),
 )
 class ReviewViewSet(viewsets.ModelViewSet):
-    """Room reviews. Reads are public; writing requires an approved booking."""
+    """Room reviews. Reads are public; writing requires an approved booking.
+
+    Phase 12.5 — content moderation: every review is assessed on creation.
+    Reviews held in moderation (``pending``/``flagged``/``rejected``) are
+    withheld from the public list until an admin approves them; auto-approved
+    low-risk reviews publish immediately, preserving the pre-moderation UX.
+    """
 
     queryset = Review.objects.select_related("user", "room").all()
     filterset_fields = ["room"]
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Review.objects.none()
+        return super().get_queryset().exclude(moderation__status__in=list(NOT_PUBLIC))
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -169,6 +183,11 @@ class ReviewViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         review = serializer.save()
+        # Phase 12.5 — content moderation: assess the text + any review photos.
+        # Auto-approves low-risk reviews; high-risk ones go to the admin queue.
+        record_review_moderation(review)
+        for url in review.photos or []:
+            record_review_photo_moderation(review, url, request.user)
         output = ReviewSerializer(review, context=self.get_serializer_context())
         return Response(output.data, status=status.HTTP_201_CREATED)
 

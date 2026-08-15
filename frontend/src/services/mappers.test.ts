@@ -6,6 +6,7 @@ import {
   mapChatUser,
   mapChatMessage,
   mapChatRoom,
+  mapReport,
   mapUser,
   relativeTime,
   type ApiBooking,
@@ -238,6 +239,46 @@ describe("chat mappers", () => {
     expect(m.sender.username).toBe("sabbir.rahman");
   });
 
+  it("mapChatMessage carries the chat-safety payload", () => {
+    const m = mapChatMessage({
+      id: 22,
+      chat_room: 3,
+      sender: chatUser,
+      content: "🚫 Message blocked for safety review.",
+      message_type: "text",
+      file_url: "",
+      is_read: true,
+      status: "sent",
+      created_at: "2025-01-01T00:00:00Z",
+      safety: {
+        risk_level: "critical",
+        outcome: "blocked",
+        blocked: true,
+        detectors: [{ key: "impersonation", label: "Impersonation of Rentora / staff" }],
+      },
+    });
+    expect(m.safety).toMatchObject({
+      riskLevel: "critical",
+      outcome: "blocked",
+      blocked: true,
+      detectors: [{ key: "impersonation", label: "Impersonation of Rentora / staff" }],
+    });
+    // Messages without safety stay undefined.
+    expect(
+      mapChatMessage({
+        id: 23,
+        chat_room: 3,
+        sender: chatUser,
+        content: "hi",
+        message_type: "text",
+        file_url: "",
+        is_read: true,
+        status: "sent",
+        created_at: "2025-01-01T00:00:00Z",
+      }).safety
+    ).toBeUndefined();
+  });
+
   it("mapChatRoom with full participants and last message", () => {
     const r = mapChatRoom({
       id: 3,
@@ -287,6 +328,56 @@ describe("chat mappers", () => {
     expect(r.otherParticipant).toBeNull();
     expect(r.lastMessage).toBeNull();
     expect(r.participants).toEqual([]);
+  });
+});
+
+describe("mapReport (Phase 12.4)", () => {
+  const apiReport = {
+    id: 31,
+    reporter_username: "nadia.islam",
+    reporter_name: "Nadia Islam",
+    target_user: 5,
+    target_username: "sabbir.rahman",
+    target_name: "Sabbir Rahman",
+    message: 88,
+    category: "payment_fraud",
+    category_display: "Payment fraud",
+    description: "Asked me to send rent to a bKash number outside the app.",
+    status: "open",
+    status_display: "Open",
+    action_taken: "",
+    action_taken_display: "—",
+    admin_note: "",
+    created_at: "2025-01-05T10:00:00Z",
+    resolved_at: null,
+  };
+
+  it("maps every field from the DRF shape", () => {
+    const r = mapReport(apiReport);
+    expect(r).toMatchObject({
+      id: 31,
+      reporterUsername: "nadia.islam",
+      reporterName: "Nadia Islam",
+      targetUserId: 5,
+      targetUsername: "sabbir.rahman",
+      targetName: "Sabbir Rahman",
+      messageId: 88,
+      category: "payment_fraud",
+      categoryDisplay: "Payment fraud",
+      description: "Asked me to send rent to a bKash number outside the app.",
+      status: "open",
+      statusDisplay: "Open",
+      actionTaken: "",
+      actionTakenDisplay: "—",
+      adminNote: "",
+      createdAt: "2025-01-05T10:00:00Z",
+      resolvedAt: null,
+    });
+  });
+
+  it("tolerates a report without a message anchor", () => {
+    const r = mapReport({ ...apiReport, message: null });
+    expect(r.messageId).toBeNull();
   });
 });
 

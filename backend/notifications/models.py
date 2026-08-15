@@ -25,6 +25,18 @@ class Notification(models.Model):
         ROOMMATE_APPROVED = "roommate_approved", "Roommate Approved"
         FRAUD_FLAG = "fraud_flag", "Fraud Flag"
         KYC_SLA_BREACH = "kyc_sla_breach", "KYC SLA Breach"
+        TENANT_KYC_APPROVED = "tenant_kyc_approved", "Tenant KYC Approved"
+        TENANT_KYC_REJECTED = "tenant_kyc_rejected", "Tenant KYC Rejected"
+        TENANT_KYC_NEEDS_REVIEW = "tenant_kyc_needs_review", "Tenant KYC Needs Review"
+        # Moderation actions from report reviews (Phase 12.4).
+        ACCOUNT_WARNING = "account_warning", "Account Warning"
+        ACCOUNT_SUSPENDED = "account_suspended", "Account Suspended"
+        REPORT_RESOLVED = "report_resolved", "Report Resolved"
+        # Content moderation decisions (Phase 12.5) — review/photo approved or rejected.
+        CONTENT_MODERATED = "content_moderated", "Content Moderated"
+        # Dispute resolution (Phase 12) — a dispute was opened / updated.
+        DISPUTE_OPENED = "dispute_opened", "Dispute Opened"
+        DISPUTE_UPDATE = "dispute_update", "Dispute Update"
         SAVED_SEARCH_MATCH = "saved_search_match", "Saved Search Match"
         SYSTEM = "system", "System"
 
@@ -33,7 +45,7 @@ class Notification(models.Model):
         on_delete=models.CASCADE,
         related_name="notifications",
     )
-    notification_type = models.CharField(max_length=20, choices=Type.choices)
+    notification_type = models.CharField(max_length=32, choices=Type.choices)
     title = models.CharField(max_length=200)
     message = models.TextField()
     is_read = models.BooleanField(default=False)
