@@ -468,6 +468,173 @@ const CAPTURES = [
       return 'filtered';
     })()`,
   },
+  // ================= Phase 12 — Trust & Safety V2 =================
+  // Tenant KYC (start): the tenant-facing identity-verification card in its
+  // Start Verification state (document type + upload) for a new tenant with
+  // no record yet. Seeded via backend/scripts/seed_phase12_demo.py.
+  {
+    user: "tenant.new",
+    route: "/dashboard",
+    out: "tenant-kyc-upload.png",
+    waitMs: 4500,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+  },
+  // Tenant KYC (pending): the Reviewing state once a document is submitted.
+  {
+    user: "tenant.pending",
+    route: "/dashboard",
+    out: "tenant-kyc-pending.png",
+    waitMs: 4500,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+  },
+  // Verified tenant badge: the chat header shows the BadgeCheck
+  // "Identity verified tenant" mark next to an identity-verified tenant's
+  // name (landlord's side of the seeded direct room).
+  {
+    user: "rahim.hossain",
+    route: "/chat?room=6",
+    out: "verified-tenant-badge.png",
+    waitMs: 5000,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+  },
+  // Report / block UI: the conversation header ⋮ menu (Report user / Block
+  // user), opened via its aria-label.
+  {
+    user: "rahim.hossain",
+    route: "/chat?room=6",
+    out: "report-block.png",
+    waitMs: 5000,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+    afterLoad: `(() => {
+      const btn = document.querySelector('button[aria-label="Conversation options"]');
+      if (btn) { btn.click(); return 'menu-open'; }
+      return 'no-btn';
+    })()`,
+    afterLoadMs: 800,
+  },
+  // Chat safety feed: Trust Center -> Chat Safety sub-tab shows the seeded
+  // MEDIUM / HIGH / CRITICAL assessments (metadata only, no raw content).
+  {
+    user: "admin",
+    route: "/dashboard?tab=trust",
+    out: "chat-safety-feed.png",
+    waitMs: 4500,
+    afterLoad: `(() => {
+      const btn = [...document.querySelectorAll('button')]
+        .find(b => b.textContent.trim() === 'Chat Safety');
+      if (btn) { btn.click(); return 'opened'; }
+      return 'no-btn';
+    })()`,
+    afterLoadMs: 1500,
+  },
+  // Review moderation queue: the held review (spam-ish contact info) with
+  // risk signals + approve/reject actions.
+  {
+    user: "admin",
+    route: "/dashboard?tab=moderation",
+    out: "moderation-reviews.png",
+    waitMs: 4500,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+  },
+  // Photo moderation queue: switch to the Photos queue to show the flagged
+  // duplicate-image photo.
+  {
+    user: "admin",
+    route: "/dashboard?tab=moderation",
+    out: "moderation-photos.png",
+    waitMs: 4500,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+    afterLoad: `(() => {
+      const btn = [...document.querySelectorAll('button')]
+        .find(b => b.textContent.trim().toLowerCase() === 'photos');
+      if (btn) { btn.click(); return 'photos'; }
+      return 'no-btn';
+    })()`,
+    afterLoadMs: 1500,
+  },
+  // Dispute resolution (admin): the dispute list with evidence + the
+  // deposit decision affordance (release / refund / partial).
+  {
+    user: "admin",
+    route: "/dashboard?tab=disputes",
+    out: "dispute-admin.png",
+    waitMs: 4500,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+  },
+  // Deposit protection (participant): the tenant's dispute card on the
+  // approved booking that carries the paid security deposit.
+  {
+    user: "tenant.verified",
+    route: "/dashboard?tab=disputes",
+    out: "deposit-protection.png",
+    waitMs: 4500,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+  },
+  // Admin Trust & Safety Operations Center: overview cards aggregating
+  // every queue (KYC, chat safety, reports, moderation, disputes).
+  {
+    user: "admin",
+    route: "/dashboard?tab=trust",
+    out: "trust-center.png",
+    waitMs: 4500,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+  },
+  // Audit trail: Trust Center -> Audit Trail sub-tab (append-only trail of
+  // every Phase 12 decision).
+  {
+    user: "admin",
+    route: "/dashboard?tab=trust",
+    out: "audit-trail.png",
+    waitMs: 4500,
+    beforeCapture: `(() => {
+      localStorage.setItem('rentora-ui',
+        JSON.stringify({ state: { darkMode: false }, version: 0 }));
+      return 'light';
+    })()`,
+    afterLoad: `(() => {
+      const btn = [...document.querySelectorAll('button')]
+        .find(b => b.textContent.trim() === 'Audit Trail');
+      if (btn) { btn.click(); return 'opened'; }
+      return 'no-btn';
+    })()`,
+    afterLoadMs: 1500,
+  },
 ];
 
 // ---- Helpers ----

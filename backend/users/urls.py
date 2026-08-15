@@ -9,6 +9,10 @@ from .views import (
     KycReviewView,
     KycSlaStatsView,
     ReferralInfoView,
+    TenantKycFileView,
+    TenantKycPendingApplicationsView,
+    TenantKycReviewView,
+    TenantKycView,
     UserViewSet,
 )
 
@@ -28,6 +32,24 @@ urlpatterns = [
     path("kyc/audit/", KycAuditTrailView.as_view(), name="kyc-audit"),
     path("kyc/sla/", KycSlaStatsView.as_view(), name="kyc-sla"),
     path("kyc/<int:user_id>/review/", KycReviewView.as_view(), name="kyc-review"),
+    # Tenant KYC (Phase 12 — two-sided trust): the tenant's own status/upload,
+    # the auth-gated document endpoint, and the admin review queue.
+    path("tenant-kyc/", TenantKycView.as_view(), name="tenant-kyc"),
+    path(
+        "tenant-kyc/<int:user_id>/file/",
+        TenantKycFileView.as_view(),
+        name="tenant-kyc-file",
+    ),
+    path(
+        "tenant-kyc/pending/",
+        TenantKycPendingApplicationsView.as_view(),
+        name="tenant-kyc-pending",
+    ),
+    path(
+        "tenant-kyc/<int:user_id>/review/",
+        TenantKycReviewView.as_view(),
+        name="tenant-kyc-review",
+    ),
     path("referral/", ReferralInfoView.as_view(), name="referral-info"),
     *router.urls,
 ]

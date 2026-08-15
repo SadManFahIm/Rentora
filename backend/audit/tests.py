@@ -86,3 +86,27 @@ class AuditFraudReviewTests(APITestCase):
         )
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(AuditLogEntry.objects.count(), 0)
+
+
+class AuditTrailApiTests(APITestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="atadmin", email="at@example.com", password="x", is_staff=True
+        )
+        self.user = make_user("atuser")
+        log_action(actor=self.admin, action="moderation.review.approve", detail={"n": 1})
+        log_action(actor=self.admin, action="dispute.resolve", detail={"n": 2})
+        log_action(action="system.tick")
+
+    def test_admin_can_read_audit_trail_with_prefix_filter(self):
+        self.client.force_authenticate(user=self.admin)
+        res = self.client.get("/api/v1/audit/?prefix=moderation")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res.data), 1)
+        self.assertEqual(res.data[0]["action"], "moderation.review.approve")
+        self.assertEqual(res.data[0]["actor_username"], "atadmin")
+
+    def test_non_admin_cannot_read_audit_trail(self):
+        self.client.force_authenticate(user=self.user)
+        res = self.client.get("/api/v1/audit/")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)

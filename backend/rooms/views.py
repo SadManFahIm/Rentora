@@ -47,8 +47,8 @@ from .map_intel import (
 from .models import Room, RoomView
 from .nl_query import parse_nl_query
 from .permissions import IsOwnerOrReadOnly
-from .ranking import hybrid_rank
 from .semantic import semantic_candidates
+from .semantic_cache import cached_hybrid_rank
 from .serializers import (
     LandmarkSerializer,
     RoomCreateUpdateSerializer,
@@ -394,7 +394,10 @@ class RoomViewSet(viewsets.ModelViewSet):
                     settings.DEBUG or self.request.query_params.get("debug_rank") == "1"
                 )
                 if getattr(settings, "SEMANTIC_SEARCH_ENABLED", True):
-                    rank_result = hybrid_rank(
+                    # Same-query cache (Tier-1 quick win): identical queries
+                    # over the same pool reuse the last ranking; bypassed for
+                    # authenticated (personalized) and debug requests.
+                    rank_result = cached_hybrid_rank(
                         query_text,
                         pool_ids,
                         user=self.request.user,

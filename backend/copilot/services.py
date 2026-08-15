@@ -35,7 +35,7 @@ from django.db.models import Case, IntegerField, Value, When
 
 from rooms.models import Room
 from rooms.nl_query import parse_nl_query
-from rooms.ranking import hybrid_rank
+from rooms.semantic_cache import cached_hybrid_rank
 
 logger = logging.getLogger(__name__)
 
@@ -267,7 +267,9 @@ def retrieve_rooms(intent: dict, user, top_k: int | None = None) -> tuple[list[R
 
     ranked = None
     if query:
-        ranked = hybrid_rank(query, pool_ids, user=user, top_k=len(pool_ids))
+        # Same-query cache (Tier-1 quick win): Copilot is public and often
+        # repeats queries — reuse the last ranking over the same pool.
+        ranked = cached_hybrid_rank(query, pool_ids, user=user, top_k=len(pool_ids))
     if ranked and ranked["ids"]:
         ordering = Case(
             *[
