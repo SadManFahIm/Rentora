@@ -13,6 +13,7 @@ import type {
   ChatMessage,
   ChatMessageType,
   ChatRoom,
+  ChatSafetyEvent,
   Report,
   ReportAdminAction,
   ReportCategory,
@@ -76,6 +77,13 @@ export const chatService = {
       { headers: { "Content-Type": "multipart/form-data" } }
     );
     return { fileUrl: data.file_url, messageType: data.message_type as ChatMessageType };
+  },
+
+  /** GET /chat/safety/events/ — admin feed of chat-safety assessments
+   * (metadata only — never message content). */
+  async getSafetyEvents(): Promise<ChatSafetyEvent[]> {
+    const { data } = await api.get<ChatSafetyEvent[]>("/chat/safety/events/");
+    return data;
   },
 
   /** GET /chat/online-status/ — split `userIds` into online/offline. */

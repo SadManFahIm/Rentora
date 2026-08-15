@@ -20,6 +20,7 @@ import AdminReportsPanel from "../../components/AdminReportsPanel/AdminReportsPa
 import AdminModerationPanel from "../../components/AdminModerationPanel/AdminModerationPanel";
 import AdminDisputesPanel from "../../components/AdminDisputesPanel/AdminDisputesPanel";
 import DisputesTab from "../../components/DisputesTab/DisputesTab";
+import AdminTrustCenter from "../../components/AdminTrustCenter/AdminTrustCenter";
 import LandlordInsights from "../../components/LandlordInsights/LandlordInsights";
 import PushNotificationCard from "../../components/PushNotificationCard/PushNotificationCard";
 import ReferralCard from "../../components/ReferralCard/ReferralCard";
@@ -64,6 +65,7 @@ type DashboardTab =
   | "reports"
   | "moderation"
   | "disputes"
+  | "trust"
   | "insights";
 const TABS: DashboardTab[] = [
   "overview",
@@ -76,6 +78,7 @@ const TABS: DashboardTab[] = [
   "reports",
   "moderation",
   "disputes",
+  "trust",
   "insights",
 ];
 
@@ -229,7 +232,7 @@ export default function Dashboard() {
   const isAdmin = user?.role === "admin" || user?.isStaff === true;
   const isLandlord = isAdmin || user?.role === "landlord";
   const visibleTabs = TABS.filter((t) => {
-    if (t === "kyc" || t === "reports" || t === "moderation") return isAdmin;
+    if (t === "kyc" || t === "reports" || t === "moderation" || t === "trust") return isAdmin;
     if (t === "insights") return isLandlord;
     return true;
   });
@@ -677,6 +680,8 @@ export default function Dashboard() {
       {activeTab === "moderation" && isAdmin && <AdminModerationPanel />}
 
       {activeTab === "disputes" && (isAdmin ? <AdminDisputesPanel /> : <DisputesTab />)}
+
+      {activeTab === "trust" && isAdmin && <AdminTrustCenter />}
 
       {activeTab === "insights" && isLandlord && <LandlordInsights />}
 
