@@ -85,6 +85,7 @@ INSTALLED_APPS = [
     "copilot",
     "moderation",
     "disputes",
+    "analytics",
 ]
 
 # ============================================================
@@ -233,6 +234,9 @@ REST_FRAMEWORK = {
         "user": "1000/hour",
         "auth": "10/hour",
         "chat_upload": "30/hour",
+        # Analytics capture is fire-and-forget but still bounded — a busy
+        # visitor is fine, a scripted flood filling the event store is not.
+        "analytics": "300/hour",
         # Reports are moderation actions — a tight dedicated scope stops one
         # user from flooding the admin queue (see chat.views.ReportRateThrottle).
         "report": "10/hour",
@@ -365,6 +369,15 @@ SEMANTIC_SEARCH_ENABLED = os.getenv("SEMANTIC_SEARCH_ENABLED", "True") == "True"
 SEMANTIC_EMBEDDING_MODEL = os.getenv(
     "SEMANTIC_EMBEDDING_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 )
+# Embedding provider mode (Tier 3): "auto" (default) uses sentence-
+# transformers when installed else the lite provider; "neural" requires the
+# real model (falls back with a warning); "lite" forces the zero-dependency
+# provider for dev/CI parity.
+SEMANTIC_EMBEDDING_MODE = os.getenv("SEMANTIC_EMBEDDING_MODE", "auto")
+# Where the precomputed embedding matrix is persisted (production-grade
+# warm cache — see `manage.py prebuild_embeddings`). Defaults to
+# MEDIA_ROOT/embeddings; point this at a persistent volume in production.
+SEMANTIC_EMBEDDING_CACHE_DIR = os.getenv("SEMANTIC_EMBEDDING_CACHE_DIR", "") or None
 # Hybrid ranking blend: final = semantic * SEMANTIC_SEARCH_WEIGHT
 #                        + lexical  * TFIDF_SEARCH_WEIGHT  (weights need not sum to 1).
 SEMANTIC_SEARCH_WEIGHT = float(os.getenv("SEMANTIC_SEARCH_WEIGHT", "0.7"))
@@ -424,6 +437,39 @@ CHAT_SAFETY_ENABLED = os.getenv("CHAT_SAFETY_ENABLED", "True") == "True"
 CHAT_SAFETY_BLOCK_LEVEL = os.getenv("CHAT_SAFETY_BLOCK_LEVEL", "critical")
 # Messages at or above this risk level are flagged for admin review.
 CHAT_SAFETY_FLAG_LEVEL = os.getenv("CHAT_SAFETY_FLAG_LEVEL", "high")
+# Learned chat-safety classifier (Tier 2, see chat/classifier.py): a
+# deterministic Naive-Bayes layer on top of the rules. It can only raise a
+# message to medium (flag for human review) or boost a rule-based medium to
+# high — it never blocks, and a model mistake degrades to a queue item.
+CHAT_SAFETY_ML_ENABLED = os.getenv("CHAT_SAFETY_ML_ENABLED", "True") == "True"
+# Posterior threshold: suspicious >= this flags an otherwise rule-clean message.
+CHAT_SAFETY_ML_FLAG_CONFIDENCE = float(os.getenv("CHAT_SAFETY_ML_FLAG_CONFIDENCE", "0.60"))
+# Posterior threshold: suspicious >= this boosts a rule-based medium to high.
+CHAT_SAFETY_ML_BOOST_CONFIDENCE = float(os.getenv("CHAT_SAFETY_ML_BOOST_CONFIDENCE", "0.85"))
+
+# ============================================================
+# ClamAV virus scanning for chat uploads (Tier 2) — see chat/antivirus.py
+# ============================================================
+# Opt-in: dev/CI run without a clamd daemon (scan reports unavailable and
+# the existing type/size checks stay the gate). Production sets True once
+# clamav/clamd is running and reachable at CLAMAV_HOST:CLAMAV_PORT.
+CLAMAV_ENABLED = os.getenv("CLAMAV_ENABLED", "False") == "True"
+CLAMAV_HOST = os.getenv("CLAMAV_HOST", "127.0.0.1")
+CLAMAV_PORT = int(os.getenv("CLAMAV_PORT", "3310"))
+CLAMAV_TIMEOUT_SECONDS = int(os.getenv("CLAMAV_TIMEOUT_SECONDS", "10"))
+
+# ============================================================
+# OSRM commute ETA (Tier 2) — see rooms/osrm.py
+# ============================================================
+# Off by default (safe rollout): the map keeps its straight-line/MRT
+# heuristics until OSRM_ENABLED=True and OSRM_URL points at a routing
+# server. The free public demo works for dev; production should self-host
+# OSRM (open-source, one Docker command — Phase 8).
+OSRM_ENABLED = os.getenv("OSRM_ENABLED", "False") == "True"
+OSRM_URL = os.getenv("OSRM_URL", "https://router.project-osrm.org")
+OSRM_TIMEOUT_SECONDS = int(os.getenv("OSRM_TIMEOUT_SECONDS", "3"))
+OSRM_CACHE_TTL = int(os.getenv("OSRM_CACHE_TTL", "900"))
+
 # Semantic search result cache (Tier-1 quick win): identical smart-search /
 # Copilot queries over the same pool of rooms reuse the last ranking instead
 # of recomputing embeddings on every request. Bypassed for authenticated

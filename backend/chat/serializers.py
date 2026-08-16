@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.utils import extend_schema_field, inline_serializer
 from rest_framework import serializers
 
 from config.sanitizers import sanitize_text
@@ -15,8 +15,12 @@ class ChatUserSerializer(serializers.ModelSerializer):
 
     ``nid_verified`` (landlord) and ``tenant_verified`` (tenant) are exposed so
     chat participants can show the right trust badge next to the other person's
-    name — same trust signal as rooms.
+    name — same trust signal as rooms. ``trust_signals`` (Tier 3) adds the
+    behavioral side (completed bookings) so a landlord can see at a glance
+    that the person they're talking to has actually completed stays.
     """
+
+    trust_signals = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -28,7 +32,24 @@ class ChatUserSerializer(serializers.ModelSerializer):
             "avatar",
             "nid_verified",
             "tenant_verified",
+            "trust_signals",
         ]
+
+    @extend_schema_field(
+        inline_serializer(
+            "ChatUserTrustSignals",
+            fields={
+                "tenant_verified": serializers.BooleanField(read_only=True),
+                "nid_verified": serializers.BooleanField(read_only=True),
+                "completed_bookings": serializers.IntegerField(read_only=True),
+                "profile_complete": serializers.BooleanField(read_only=True),
+            },
+        )
+    )
+    def get_trust_signals(self, obj):
+        from users.trust import trust_signals
+
+        return trust_signals(obj)
 
 
 class MessageSerializer(serializers.ModelSerializer):

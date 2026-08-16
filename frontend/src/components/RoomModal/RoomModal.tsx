@@ -1,9 +1,19 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { ShieldAlert, Star, ShieldCheck, MessageCircle, CalendarCheck } from "lucide-react";
+import {
+  ShieldAlert,
+  Star,
+  ShieldCheck,
+  MessageCircle,
+  CalendarCheck,
+  Sparkles,
+} from "lucide-react";
 import { useRoomFraudStatus } from "../../hooks/useFraud";
 import { fraudBadgeLabel } from "../../lib/fraud";
+import { track } from "../../services/analytics";
+import { useCopilotStore } from "../../stores/copilotStore";
 import type { Room } from "../../types";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -41,6 +51,7 @@ interface RoomModalProps {
 export default function RoomModal({ room, onClose }: RoomModalProps) {
   const navigate = useNavigate();
   const { user } = useApp();
+  const { t } = useTranslation();
   const [current, setCurrent] = useState<Room | null>(room);
   const createBooking = useCreateBooking();
   const startChat = useStartDirectChat();
@@ -55,7 +66,16 @@ export default function RoomModal({ room, onClose }: RoomModalProps) {
       navigate("/auth");
       return;
     }
+    // First-party analytics (Tier 2): the booking step of the conversion funnel.
+    track("booking_requested", { room_id: current.id });
     createBooking.mutate({ roomId: current.id, checkIn: defaultCheckIn() }, { onSuccess: onClose });
+  };
+
+  const handleAskCopilot = () => {
+    if (!current) return;
+    // Tier 3 RAG: open the floating Copilot grounded on this listing — every
+    // answer comes from this listing's facts, never invented.
+    useCopilotStore.getState().openWithListing({ id: current.id, title: current.name });
   };
 
   const handleMessageOwner = () => {
@@ -196,6 +216,11 @@ export default function RoomModal({ room, onClose }: RoomModalProps) {
               </div>
 
               {/* Actions */}
+              <Button variant="outline" className="mt-4 w-full text-sm" onClick={handleAskCopilot}>
+                <Sparkles className="size-4 text-orange-500" />
+                {t("roomModal.askCopilot")}
+              </Button>
+
               <div className="mt-6 flex gap-3">
                 <Button
                   variant="outline"

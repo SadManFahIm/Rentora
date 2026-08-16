@@ -470,6 +470,30 @@ function TenantKycCard({
         </div>
       </div>
 
+      {verification?.autoScreenResult && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs dark:border-gray-800 dark:bg-gray-800/50">
+          <span className="font-semibold text-gray-600 dark:text-gray-400">Auto screen</span>
+          {verification.autoScreenResult === "recommend_approve" ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 font-semibold text-emerald-600 dark:text-emerald-400">
+              <ShieldCheck className="size-3" /> Approve {verification.autoScreenScore}/100
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 font-semibold text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="size-3" /> Review {verification.autoScreenScore ?? "—"}/100
+            </span>
+          )}
+          {verification.autoScreenDetail.reasons.length > 0 && (
+            <span
+              title={verification.autoScreenDetail.reasons.join(" · ")}
+              className="cursor-help text-gray-500 underline decoration-dotted dark:text-gray-400"
+            >
+              {verification.autoScreenDetail.reasons.length} reason
+              {verification.autoScreenDetail.reasons.length > 1 ? "s" : ""} — hover to read
+            </span>
+          )}
+        </div>
+      )}
+
       {verification && (
         <div className="mt-4 flex items-center justify-between gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm dark:border-gray-800 dark:bg-gray-800/50">
           <span className="font-medium text-gray-700 dark:text-gray-300">

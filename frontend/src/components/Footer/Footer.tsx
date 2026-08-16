@@ -1,8 +1,10 @@
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import BangladeshFlag from "../BangladeshFlag/BangladeshFlag";
 
 export default function Footer() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   return (
     <footer className="border-t border-gray-200 bg-card px-4 pb-6 pt-12 dark:border-gray-800 md:px-6 lg:px-8">
@@ -15,44 +17,47 @@ export default function Footer() {
             <BangladeshFlag className="h-5 w-auto" />
           </div>
           <p className="max-w-70 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-            Bangladesh's most trusted AI-powered room rental platform. Find verified, affordable
-            rooms in Dhaka and beyond.
+            {t("footer.tagline")}
           </p>
         </div>
         <div>
-          <h4 className="mb-4 font-display text-sm font-bold text-foreground">Browse</h4>
+          <h4 className="mb-4 font-display text-sm font-bold text-foreground">
+            {t("footer.browse")}
+          </h4>
           <a
             className="mb-2 block cursor-pointer text-sm text-gray-600 hover:text-orange-600 dark:text-gray-400"
             onClick={() => navigate("/rooms")}
           >
-            All Rooms
+            {t("footer.allRooms")}
           </a>
           <a
             className="mb-2 block cursor-pointer text-sm text-gray-600 hover:text-orange-600 dark:text-gray-400"
             onClick={() => navigate("/map")}
           >
-            Map View
+            {t("footer.mapView")}
           </a>
           <a className="mb-2 block cursor-pointer text-sm text-gray-600 hover:text-orange-600 dark:text-gray-400">
-            Featured Listings
+            {t("footer.featuredListings")}
           </a>
           <a className="mb-2 block cursor-pointer text-sm text-gray-600 hover:text-orange-600 dark:text-gray-400">
-            New Listings
+            {t("footer.newListings")}
           </a>
         </div>
         <div>
-          <h4 className="mb-4 font-display text-sm font-bold text-foreground">Account</h4>
+          <h4 className="mb-4 font-display text-sm font-bold text-foreground">
+            {t("footer.account")}
+          </h4>
           <a
             className="mb-2 block cursor-pointer text-sm text-gray-600 hover:text-orange-600 dark:text-gray-400"
             onClick={() => navigate("/auth")}
           >
-            Sign In
+            {t("footer.signIn")}
           </a>
           <a
             className="mb-2 block cursor-pointer text-sm text-gray-600 hover:text-orange-600 dark:text-gray-400"
             onClick={() => navigate("/auth")}
           >
-            Register
+            {t("footer.register")}
           </a>
           <a
             className="mb-2 block cursor-pointer text-sm text-gray-600 hover:text-orange-600 dark:text-gray-400"

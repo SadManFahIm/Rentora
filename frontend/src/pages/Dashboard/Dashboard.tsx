@@ -169,6 +169,15 @@ function BookingListItem({
           >
             {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
           </span>
+          {booking.tenantTrustSignals && booking.tenantTrustSignals.completedBookings > 0 && (
+            <span
+              title="Approved bookings this tenant has completed on Rentora."
+              className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400"
+            >
+              ✓ {booking.tenantTrustSignals.completedBookings.toLocaleString()} completed booking
+              {booking.tenantTrustSignals.completedBookings > 1 ? "s" : ""}
+            </span>
+          )}
           {hasDeposit && (
             <span
               className={cn(
