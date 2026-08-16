@@ -48,6 +48,8 @@ class CustomUserDetailsSerializer(UserDetailsSerializer):
     """Used by dj-rest-auth's GET/PUT /api/v1/auth/user/."""
 
     passkeys = serializers.SerializerMethodField()
+    # Tier 3: transparent behavioral trust signals (completed bookings etc.)
+    trust_signals = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -69,8 +71,25 @@ class CustomUserDetailsSerializer(UserDetailsSerializer):
             "otp_enabled",
             "digest_emails_enabled",
             "passkeys",
+            "trust_signals",
         )
         read_only_fields = ("email", "nid_verified", "tenant_verified")
+
+    @extend_schema_field(
+        inline_serializer(
+            "TrustSignals",
+            fields={
+                "tenant_verified": serializers.BooleanField(read_only=True),
+                "nid_verified": serializers.BooleanField(read_only=True),
+                "completed_bookings": serializers.IntegerField(read_only=True),
+                "profile_complete": serializers.BooleanField(read_only=True),
+            },
+        )
+    )
+    def get_trust_signals(self, obj):
+        from .trust import trust_signals
+
+        return trust_signals(obj)
 
     @extend_schema_field(
         serializers.ListField(
