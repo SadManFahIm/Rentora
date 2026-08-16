@@ -7,6 +7,9 @@ import { initSentry } from "./lib/sentry";
 // class-based styles keep precedence over Tailwind preflight).
 import "./styles/app.css";
 
+// i18n (Tier 3): EN/BN dictionaries load synchronously before first render.
+import "./i18n";
+
 // Error tracking must be initialised before the app renders.
 initSentry();
 

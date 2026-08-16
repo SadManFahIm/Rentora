@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Bot, Loader2, MessageSquare, Send, Sparkles, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useCopilot } from "../../hooks/useCopilot";
 import roomService from "../../services/roomService";
+import { useCopilotStore } from "../../stores/copilotStore";
 import { cn } from "../../lib/utils";
 import type { Room } from "../../types";
 import { Button } from "../ui/button";
@@ -18,17 +20,28 @@ import RoomModal from "../RoomModal/RoomModal";
  * the backend generated from the current intent.
  */
 export default function CopilotWidget() {
-  const { messages, isSending, isOpen, setIsOpen, send, reset } = useCopilot();
+  const { messages, isSending, isOpen, setIsOpen, send, reset, listingMode, openWithListing } =
+    useCopilot();
+  const listingContext = useCopilotStore((s) => s.listingContext);
   const [input, setInput] = useState("");
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [loadingRoom, setLoadingRoom] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   // Auto-scroll to the newest message.
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, isSending]);
+
+  // Tier 3 listing mode: when a page asks the Copilot to talk about a
+  // listing, open the widget and seed the grounded listing conversation.
+  useEffect(() => {
+    if (listingContext) {
+      openWithListing(listingContext);
+    }
+  }, [listingContext, openWithListing]);
 
   const submit = (text: string) => {
     if (!text.trim() || isSending) return;
@@ -53,7 +66,7 @@ export default function CopilotWidget() {
       {/* Floating trigger button */}
       <button
         type="button"
-        aria-label={isOpen ? "Close Rentora Copilot" : "Open Rentora Copilot"}
+        aria-label={isOpen ? t("copilot.close") : t("copilot.open")}
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
           "fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all",
@@ -73,9 +86,11 @@ export default function CopilotWidget() {
               <Sparkles className="size-4" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="font-display text-sm font-bold text-foreground">Rentora Copilot</div>
+              <div className="font-display text-sm font-bold text-foreground">
+                {t("copilot.title")}
+              </div>
               <div className="text-[11px] text-gray-600 dark:text-gray-400">
-                Ask in Bangla or English — I search live listings
+                {listingMode ? t("copilot.listingMode") : t("copilot.subtitle")}
               </div>
             </div>
             {messages.length > 0 && (
@@ -245,9 +260,9 @@ export default function CopilotWidget() {
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask Rentora anything…"
+              placeholder={t("copilot.placeholder")}
               className="h-10 text-sm"
-              aria-label="Message Rentora Copilot"
+              aria-label={t("copilot.title")}
             />
             <Button
               type="submit"

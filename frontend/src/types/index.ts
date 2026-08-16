@@ -113,6 +113,11 @@ export interface ChatUser {
   nidVerified?: boolean;
   /** Tenant identity-verified (Phase 12) — "Identity Verified" tenant badge. */
   tenantVerified?: boolean;
+  /**
+   * Tier 3 behavioral trust signal: approved bookings this user has actually
+   * completed on Rentora (deposit refunded or stay ended).
+   */
+  completedBookings?: number;
 }
 
 export type ChatMessageType = "text" | "image" | "file" | "system";
@@ -367,6 +372,12 @@ export interface Booking extends Room {
   securityDepositAmount: number;
   securityDepositPaid: boolean;
   securityDepositRefunded: boolean;
+  /** Tier 3 behavioral trust signals of the booking's tenant (completed
+   * stays) — shown to the landlord next to the identity badge. */
+  tenantTrustSignals?: {
+    tenantVerified: boolean;
+    completedBookings: number;
+  };
 }
 
 // ---- Search / filter state ----
