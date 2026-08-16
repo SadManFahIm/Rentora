@@ -784,6 +784,10 @@ export interface TenantVerification {
   updatedAt: string;
   reviewedAt: string | null;
   expiresAt: string | null;
+  /** Automated pre-screening (Tier 2) — recommendation for the admin queue. */
+  autoScreenScore: number | null;
+  autoScreenResult: "recommend_approve" | "recommend_review" | null;
+  autoScreenDetail: { reasons: string[] };
 }
 
 /** One applicant in the admin tenant-verification queue. */
@@ -815,6 +819,20 @@ export interface KycSla {
   breaches: string[];
   /** Last 30 days, oldest first: decisions + average review hours per day. */
   trend30d: { date: string; decisions: number; avgReviewHours: number | null }[];
+}
+
+// ---- First-party analytics (Tier 2) ----
+
+/** Admin dashboard snapshot from GET /api/v1/analytics/summary/. */
+export interface AnalyticsSummary {
+  days: number;
+  totals: { events: number; sessions: number; activeUsers: number };
+  topEvents: { event: string; count: number }[];
+  topPages: { path: string; count: number }[];
+  daily: { date: string; count: number }[];
+  funnel: Record<string, number>;
+  funnelSteps: string[];
+  note: string;
 }
 
 /** One KYC decision in the admin history view (append-only audit trail). */
