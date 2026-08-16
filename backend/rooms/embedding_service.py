@@ -30,6 +30,7 @@ import hashlib
 import importlib.util
 import logging
 import unicodedata
+from pathlib import Path
 
 import numpy as np
 from django.conf import settings
@@ -38,6 +39,32 @@ from django.db.models import Max
 from .models import Room
 
 logger = logging.getLogger(__name__)
+
+# Embedding mode (Tier 3 — production-grade neural embeddings):
+#   "auto"   (default) — sentence-transformers when installed, else lite.
+#   "neural"           — require the real model; fall back to lite with a
+#                        warning if the package is missing (search never
+#                        breaks, it just logs the deployment gap).
+#   "lite"             — force the zero-dependency provider (dev/CI).
+_EMBEDDING_MODES = ("auto", "neural", "lite")
+
+
+def _embedding_mode() -> str:
+    mode = getattr(settings, "SEMANTIC_EMBEDDING_MODE", "auto").lower()
+    return mode if mode in _EMBEDDING_MODES else "auto"
+
+
+def _cache_dir() -> Path:
+    """Where the precomputed embedding matrix is persisted.
+
+    Production deploys point this at a persistent volume; the default lives
+    under MEDIA_ROOT so a stock checkout just works.
+    """
+    configured = getattr(settings, "SEMANTIC_EMBEDDING_CACHE_DIR", None)
+    if configured:
+        return Path(configured)
+    return Path(getattr(settings, "MEDIA_ROOT", Path.cwd() / "media")) / "embeddings"
+
 
 # Fixed dimension of the lite (hash-based) provider. Big enough to separate
 # concepts, small enough to keep the cached room matrix cheap.
@@ -189,17 +216,22 @@ def _room_text(room: Room) -> str:
 
 
 def get_provider() -> EmbeddingProvider | None:
-    """Pick the best available provider, or None when embeddings are disabled.
+    """Pick the best available provider per ``SEMANTIC_EMBEDDING_MODE``.
 
-    Order: sentence-transformers (when the package is installed) -> the
-    zero-dependency lite provider. The optional import is checked eagerly so
-    a missing package never even constructs the heavy provider; a model that
-    installs but fails to load is caught downstream by ``semantic_scores``
-    and degrades to the TF-IDF leg.
+    ``auto``: sentence-transformers (when installed) -> lite fallback.
+    ``neural``: sentence-transformers required; a missing/broken install
+    downgrades to lite with a warning so search never breaks.
+    ``lite``: always the zero-dependency provider (dev/CI parity).
     """
     if not getattr(settings, "SEMANTIC_SEARCH_ENABLED", True):
         return None
-    if importlib.util.find_spec("sentence_transformers") is not None:
+
+    mode = _embedding_mode()
+    neural = importlib.util.find_spec("sentence_transformers") is not None
+    if mode == "lite":
+        return LiteEmbeddingProvider()
+
+    if neural:
         try:
             return SentenceTransformerProvider(
                 getattr(
@@ -209,16 +241,31 @@ def get_provider() -> EmbeddingProvider | None:
                 )
             )
         except Exception as exc:  # broken install
-            logger.debug("sentence-transformers unusable (%s); using lite provider", exc)
+            logger.warning("sentence-transformers unusable (%s); using lite provider", exc)
+    elif mode == "neural":
+        logger.warning(
+            "SEMANTIC_EMBEDDING_MODE=neural but sentence-transformers is not installed — "
+            "falling back to the lite provider. Install it in production for "
+            "full neural embeddings."
+        )
     return LiteEmbeddingProvider()
+
+
+def _cache_file_name(provider: EmbeddingProvider) -> str:
+    model = getattr(provider, "model_name", provider.name)
+    digest = hashlib.md5(model.encode("utf-8")).hexdigest()[:12]  # nosec B324: cache key only
+    return f"embedding-matrix-{provider.name}-{digest}.npz"
 
 
 class EmbeddingIndex:
     """Cached embedding matrix over all rooms, self-invalidating by fingerprint.
 
-    Building the lite matrix is cheap enough to rebuild on demand; the
-    sentence-transformer matrix is expensive, so it is computed once and
-    reused until room data changes (same pattern as ``SemanticIndex``).
+    The neural matrix is expensive to build (a real model encode over every
+    room), so it is **persisted to disk** keyed by the provider + room-data
+    fingerprint. ``build()`` first tries the on-disk cache and only
+    recomputes when the data changed or the cache is missing — production
+    workers share the prebuilt matrix instead of each re-encoding the corpus
+    (and re-downloading the model) on first request.
     """
 
     def __init__(self, provider: EmbeddingProvider) -> None:
@@ -234,17 +281,60 @@ class EmbeddingIndex:
     def is_stale(self) -> bool:
         return self._fingerprint != self._current_fingerprint()
 
+    # -- disk persistence ---------------------------------------------------
+
+    def _cache_path(self) -> Path:
+        return _cache_dir() / _cache_file_name(self.provider)
+
+    def _try_load_cache(self, fingerprint: tuple[int, str]) -> bool:
+        path = self._cache_path()
+        if not path.exists():
+            return False
+        try:
+            with np.load(path, allow_pickle=False) as data:
+                stored_fp = (int(data["count"][0]), str(data["updated_at"][0]))
+                if stored_fp != fingerprint:
+                    return False
+                self.room_ids = [int(v) for v in data["room_ids"]]
+                self.matrix = data["matrix"]
+                self._fingerprint = fingerprint
+            return True
+        except Exception as exc:
+            logger.warning("Embedding cache unreadable (%s); rebuilding", exc)
+            return False
+
+    def _save_cache(self, fingerprint: tuple[int, str]) -> None:
+        if self.matrix is None:
+            return
+        try:
+            path = self._cache_path()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            np.savez_compressed(
+                path,
+                count=np.asarray([fingerprint[0]], dtype=np.int64),
+                updated_at=np.asarray([fingerprint[1]], dtype="U64"),
+                room_ids=np.asarray(self.room_ids, dtype=np.int64),
+                matrix=self.matrix,
+            )
+        except Exception as exc:
+            logger.warning("Embedding cache write failed (%s); continuing in-memory", exc)
+
     def build(self) -> bool:
+        fingerprint = self._current_fingerprint()
+        if self._try_load_cache(fingerprint):
+            return True
+
         rooms = list(
             Room.objects.only("id", "title", "area", "description", "address", "amenities")
         )
         if not rooms:
-            self._fingerprint = self._current_fingerprint()
+            self._fingerprint = fingerprint
             return False
         texts = [_room_text(r) for r in rooms]
         self.room_ids = [r.id for r in rooms]
         self.matrix = self.provider.encode(texts)
-        self._fingerprint = self._current_fingerprint()
+        self._fingerprint = fingerprint
+        self._save_cache(fingerprint)
         return True
 
 
