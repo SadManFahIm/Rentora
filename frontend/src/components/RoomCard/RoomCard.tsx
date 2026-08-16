@@ -1,4 +1,5 @@
 import { Star, MapPin, Heart, ShieldCheck } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useWishlistStore } from "../../stores/wishlistStore";
 import type { Room } from "../../types";
 import { Card, CardContent } from "../ui/card";
@@ -12,6 +13,7 @@ interface RoomCardProps {
 }
 
 export default function RoomCard({ room, onClick }: RoomCardProps) {
+  const { t } = useTranslation();
   const wishlist = useWishlistStore((s) => s.wishlist);
   const toggleWishlist = useWishlistStore((s) => s.toggleWishlist);
   const isWishlisted = wishlist.includes(room.id);
@@ -45,7 +47,7 @@ export default function RoomCard({ room, onClick }: RoomCardProps) {
             room.available ? "bg-orange-600 text-white" : "bg-gray-500 text-white"
           )}
         >
-          {room.available ? room.type : "Unavailable"}
+          {room.available ? room.type : t("roomCard.unavailable")}
         </Badge>
         <div className="absolute left-3 top-3 flex flex-col items-start gap-1.5">
           <TierBadge tier={room.tier} />
@@ -56,7 +58,7 @@ export default function RoomCard({ room, onClick }: RoomCardProps) {
             e.stopPropagation();
             toggleWishlist(room.id);
           }}
-          aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
+          aria-label={isWishlisted ? t("roomCard.removeFromWishlist") : t("roomCard.addToWishlist")}
         >
           <Heart
             className={cn(
@@ -81,7 +83,7 @@ export default function RoomCard({ room, onClick }: RoomCardProps) {
           <div className="shrink-0 text-right">
             <div className="font-display text-lg font-bold text-orange-600">
               ৳{room.price.toLocaleString()}
-              <sub className="text-xs font-medium text-gray-500">/mo</sub>
+              <sub className="text-xs font-medium text-gray-500">{t("roomCard.perMonth")}</sub>
             </div>
             {room.priceAnomaly && (
               <span

@@ -101,6 +101,15 @@ function VerifiedMark({ participant }: { participant?: ChatUser | null }) {
           />
         </span>
       )}
+      {participant.tenantVerified && (participant.completedBookings ?? 0) > 0 && (
+        <span
+          title="Approved bookings this tenant has completed on Rentora."
+          className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400"
+        >
+          ✓ {(participant.completedBookings ?? 0).toLocaleString()} completed booking
+          {(participant.completedBookings ?? 0) > 1 ? "s" : ""}
+        </span>
+      )}
     </>
   );
 }

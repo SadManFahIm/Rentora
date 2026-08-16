@@ -3,6 +3,10 @@ import { afterEach } from "vitest";
 
 import "@testing-library/jest-dom/vitest";
 
+// i18n (Tier 3): dictionaries load synchronously so translated components
+// render real English strings in tests (never raw keys).
+import "../i18n";
+
 // Vitest runs without `globals: true`, so RTL's auto-cleanup (which hooks
 // into a global afterEach) never fires — without this, rendered DOM leaks
 // between tests and queries find stale elements. Clean up explicitly.

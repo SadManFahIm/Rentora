@@ -22,4 +22,20 @@ describe("VerifiedTenantBadge", () => {
     expect(screen.getByText("Not verified")).toBeInTheDocument();
     expect(screen.queryByText("Identity Verified")).not.toBeInTheDocument();
   });
+
+  it("shows a completed-bookings chip when the tenant has completed stays", () => {
+    render(<VerifiedTenantBadge verified completedBookings={3} />);
+    expect(screen.getByText("Identity Verified")).toBeInTheDocument();
+    expect(screen.getByText("3 completed bookings")).toBeInTheDocument();
+  });
+
+  it("shows the singular completed-booking label for one stay", () => {
+    render(<VerifiedTenantBadge verified completedBookings={1} />);
+    expect(screen.getByText("1 completed booking")).toBeInTheDocument();
+  });
+
+  it("omits the completed-bookings chip when the count is zero", () => {
+    render(<VerifiedTenantBadge verified completedBookings={0} />);
+    expect(screen.queryByText(/completed booking/)).not.toBeInTheDocument();
+  });
 });

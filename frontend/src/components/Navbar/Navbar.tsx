@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Menu, X, Sun, Moon, Heart, Bell } from "lucide-react";
 import { useApp } from "../../context/AppContext";
@@ -13,6 +14,7 @@ import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import PwaInstallPrompt from "../PwaInstallPrompt/PwaInstallPrompt";
 import BangladeshFlag from "../BangladeshFlag/BangladeshFlag";
+import LanguageToggle from "../LanguageToggle/LanguageToggle";
 import { cn } from "../../lib/utils";
 
 interface NotificationWsEvent {
@@ -20,12 +22,12 @@ interface NotificationWsEvent {
   data: ApiNotification;
 }
 
-const NAV_ITEMS: { label: string; to: string }[] = [
-  { label: "Home", to: "/" },
-  { label: "Rooms", to: "/rooms" },
-  { label: "Map", to: "/map" },
-  { label: "Chat", to: "/chat" },
-  { label: "Roommates", to: "/roommates" },
+const NAV_KEYS: { key: string; to: string }[] = [
+  { key: "nav.home", to: "/" },
+  { key: "nav.rooms", to: "/rooms" },
+  { key: "nav.map", to: "/map" },
+  { key: "nav.chat", to: "/chat" },
+  { key: "nav.roommates", to: "/roommates" },
 ];
 
 export default function Navbar() {
@@ -36,6 +38,7 @@ export default function Navbar() {
   const notifications = useNotificationStore((s) => s.notifications);
   const markAllRead = useNotificationStore((s) => s.markAllRead);
   const logout = useLogout();
+  const { t } = useTranslation();
 
   const [showNotif, setShowNotif] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -88,14 +91,14 @@ export default function Navbar() {
 
         {/* Desktop nav links */}
         <div className="hidden items-center gap-1 md:flex">
-          {NAV_ITEMS.map((item) => (
+          {NAV_KEYS.map((item) => (
             <NavLink key={item.to} to={item.to} end={item.to === "/"} className={navLinkClass}>
-              {item.label}
+              {t(item.key)}
             </NavLink>
           ))}
           {user && (
             <NavLink to="/dashboard" className={navLinkClass}>
-              Dashboard
+              {t("nav.dashboard")}
             </NavLink>
           )}
         </div>
@@ -103,6 +106,7 @@ export default function Navbar() {
         {/* Desktop actions */}
         <div className="hidden items-center gap-2 md:flex">
           <PwaInstallPrompt />
+          <LanguageToggle />
           <Button
             variant="outline"
             size="icon"
@@ -187,12 +191,12 @@ export default function Navbar() {
                 {user.name.slice(0, 2).toUpperCase()}
               </div>
               <Button variant="outline" onClick={() => logout.mutate()}>
-                Logout
+                {t("nav.logout")}
               </Button>
             </div>
           ) : (
             <Button variant="brand" onClick={() => navigate("/auth")}>
-              Sign In
+              {t("nav.signIn")}
             </Button>
           )}
         </div>
@@ -213,7 +217,7 @@ export default function Navbar() {
       {mobileOpen && (
         <div className="border-t border-gray-200 bg-card dark:border-gray-800 px-4 py-4 md:hidden">
           <div className="flex flex-col gap-1">
-            {NAV_ITEMS.map((item) => (
+            {NAV_KEYS.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -221,7 +225,7 @@ export default function Navbar() {
                 className={mobileNavLinkClass}
                 onClick={() => setMobileOpen(false)}
               >
-                {item.label}
+                {t(item.key)}
               </NavLink>
             ))}
             {user && (
@@ -230,12 +234,13 @@ export default function Navbar() {
                 className={mobileNavLinkClass}
                 onClick={() => setMobileOpen(false)}
               >
-                Dashboard
+                {t("nav.dashboard")}
               </NavLink>
             )}
           </div>
 
           <div className="mt-4 flex items-center gap-2 border-t border-gray-200 pt-4 dark:border-gray-800">
+            <LanguageToggle />
             <Button
               variant="outline"
               size="icon"

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import logging
 import os
 import uuid
+
+logger = logging.getLogger(__name__)
 
 from django.contrib.auth import get_user_model
 from django.core.files.storage import default_storage
@@ -16,6 +19,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
+from .antivirus import scan_bytes
 from .models import ChatRoom, ChatRoomMembership, ChatSafetyEvent, Message, Report, UserBlock
 from .presence import bulk_online_status
 from .safety import record_safety_event, run_chat_safety, safety_payload
@@ -446,6 +450,25 @@ class ChatUploadView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Virus scan (Tier 2, optional): when ClamAV is enabled and reachable,
+        # a positive detection rejects the file outright. When no scanner is
+        # available the result is always clean-by-default — the type/size
+        # checks above remain the baseline gate either way.
+        uploaded.seek(0)
+        scan = scan_bytes(uploaded.read())
+        uploaded.seek(0)
+        if scan.rejected:
+            logger.warning(
+                "chat upload rejected by virus scan: user=%s size=%s viruses=%s",
+                request.user.pk,
+                uploaded.size,
+                scan.viruses,
+            )
+            return Response(
+                {"detail": "File rejected by the security scan."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         message_type = (
             Message.MessageType.IMAGE
             if content_type in _ALLOWED_IMAGE_TYPES
@@ -585,6 +608,19 @@ class ReportCreateView(APIView):
             message=message,
             category=serializer.validated_data["category"],
             description=serializer.validated_data.get("description", ""),
+        )
+        from audit.services import log_action
+
+        log_action(
+            actor=request.user,
+            action="report.created",
+            target=report,
+            request=request,
+            detail={
+                "category": report.category,
+                "target_user_id": report.target_user_id,
+                "message_id": report.message_id,
+            },
         )
         return Response(ReportSerializer(report).data, status=status.HTTP_201_CREATED)
 
@@ -730,6 +766,15 @@ class BlockUserView(APIView):
             )
         target = get_object_or_404(User, pk=user_id)
         UserBlock.objects.get_or_create(blocker=request.user, blocked=target)
+        from audit.services import log_action
+
+        log_action(
+            actor=request.user,
+            action="user.blocked",
+            target=target,
+            request=request,
+            detail={"blocker_id": request.user.pk},
+        )
         return Response({"detail": f"{target.username} is now blocked."}, status=status.HTTP_200_OK)
 
 
@@ -744,6 +789,14 @@ class UnblockUserView(APIView):
         deleted, _ = UserBlock.objects.filter(blocker=request.user, blocked_id=user_id).delete()
         if not deleted:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        from audit.services import log_action
+
+        log_action(
+            actor=request.user,
+            action="user.unblocked",
+            request=request,
+            detail={"blocker_id": request.user.pk, "blocked_user_id": user_id},
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

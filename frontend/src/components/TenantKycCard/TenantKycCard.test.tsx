@@ -25,6 +25,9 @@ const verifiedRecord: TenantVerification = {
   updatedAt: "2026-08-01T00:00:00Z",
   reviewedAt: "2026-08-01T00:00:00Z",
   expiresAt: "2027-08-01T00:00:00Z",
+  autoScreenScore: null,
+  autoScreenResult: null,
+  autoScreenDetail: { reasons: [] },
 };
 
 const rejectedRecord: TenantVerification = {

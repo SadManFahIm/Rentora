@@ -1,0 +1,91 @@
+{
+  "nav": {
+    "home": "Home",
+    "rooms": "Rooms",
+    "map": "Map",
+    "chat": "Chat",
+    "roommates": "Roommates",
+    "signIn": "Sign In",
+    "register": "Register",
+    "dashboard": "Dashboard",
+    "logout": "Log Out",
+    "menu": "Menu"
+  },
+  "footer": {
+    "tagline": "Bangladesh's most trusted AI-powered room rental platform. Find verified, affordable rooms in Dhaka and beyond.",
+    "browse": "Browse",
+    "allRooms": "All Rooms",
+    "mapView": "Map View",
+    "featuredListings": "Featured Listings",
+    "newListings": "New Listings",
+    "account": "Account",
+    "signIn": "Sign In",
+    "register": "Register"
+  },
+  "home": {
+    "heroTitle": "Find your perfect room in Bangladesh",
+    "heroSubtitle": "AI-powered room discovery with verified listings, smart search and map intelligence.",
+    "exploreRooms": "Explore Rooms",
+    "openMap": "Open Map",
+    "searchPlaceholder": "Try: ১০ হাজার এর মধ্যে uttara student room…"
+  },
+  "roomCard": {
+    "perMonth": "/mo",
+    "unavailable": "Unavailable",
+    "verified": "Verified",
+    "removeFromWishlist": "Remove from wishlist",
+    "addToWishlist": "Add to wishlist",
+    "valueBadge": "Good value",
+    "viewDetails": "View Details"
+  },
+  "roomModal": {
+    "bookNow": "Book Now",
+    "startChat": "Chat with Owner",
+    "securityDeposit": "Security Deposit",
+    "depositIncluded": "Deposit included in booking",
+    "verifiedListing": "Verified Listing",
+    "unverifiedListing": "Not Verified",
+    "askCopilot": "Ask Copilot about this listing",
+    "askCopilotHint": "Price, amenities, area — grounded answers only"
+  },
+  "searchFilter": {
+    "allAreas": "All Areas",
+    "all": "All",
+    "any": "Any",
+    "sortDefault": "Sort: Default",
+    "sortPriceAsc": "Price: Low→High",
+    "sortPriceDesc": "Price: High→Low",
+    "sortTopRated": "Top Rated",
+    "searchByVoice": "Search by voice",
+    "stopVoice": "Stop voice search"
+  },
+  "copilot": {
+    "title": "Rentora Copilot",
+    "subtitle": "Ask for rooms in Bangla or English — every answer comes from live listings.",
+    "placeholder": "Ask anything… e.g. “Uttara-তে ১০ হাজারের মধ্যে room”",
+    "open": "Open Rentora Copilot",
+    "close": "Close Rentora Copilot",
+    "listingMode": "Talking about this listing — grounded answers only",
+    "send": "Send message"
+  },
+  "trust": {
+    "identityVerified": "Identity Verified",
+    "notVerified": "Not verified",
+    "identityVerifiedAria": "Identity verified tenant",
+    "notVerifiedAria": "Tenant not verified",
+    "identityTooltip": "Identity verified by Rentora.",
+    "pendingTooltip": "Identity verification pending or not started.",
+    "completedBookings_one": "{{count}} completed booking",
+    "completedBookings_other": "{{count}} completed bookings",
+    "completedBookingsTooltip": "Approved bookings this tenant has actually completed on Rentora."
+  },
+  "kyc": {
+    "verified": "Verified",
+    "pending": "Pending",
+    "rejected": "Rejected",
+    "reviewNote": "Review note",
+    "startVerification": "Start Verification",
+    "resubmit": "Resubmit Documents",
+    "underReview": "Under Review"
+  }
+}

@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   ArrowRight,
   BadgeCheck,
+  BarChart3,
   Flag,
   Images,
   MessageSquareWarning,
@@ -9,6 +10,7 @@ import {
   ScrollText,
   ShieldCheck,
 } from "lucide-react";
+import AdminAnalyticsPanel from "../AdminAnalyticsPanel/AdminAnalyticsPanel";
 import { useKycSla, usePendingTenantKycApplications } from "../../hooks/useKyc";
 import { useModerationOverview } from "../../hooks/useModeration";
 import { useAdminReports, useChatSafetyEvents } from "../../hooks/useChat";
@@ -29,6 +31,7 @@ const TABS = [
   { id: "reports", label: "Reports" },
   { id: "moderation", label: "Moderation" },
   { id: "disputes", label: "Disputes" },
+  { id: "analytics", label: "Analytics" },
   { id: "audit", label: "Audit Trail" },
 ] as const;
 
@@ -168,10 +171,18 @@ export default function AdminTrustCenter() {
             detail="append-only trail of admin actions"
             onOpen={() => setTab("audit")}
           />
+          <OverviewCard
+            icon={<BarChart3 className="size-5" />}
+            label="Analytics"
+            value="live"
+            detail="self-hosted product usage + conversion funnel"
+            onOpen={() => setTab("analytics")}
+          />
         </div>
       )}
 
       {tab === "kyc" && <AdminKycPanel />}
+      {tab === "analytics" && <AdminAnalyticsPanel />}
       {tab === "chat" && <ChatSafetyFeed />}
       {tab === "reports" && <AdminReportsPanel />}
       {tab === "moderation" && <AdminModerationPanel />}
