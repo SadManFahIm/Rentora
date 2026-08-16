@@ -60,6 +60,9 @@ interface ApiTenantVerification {
   updated_at: string;
   reviewed_at: string | null;
   expires_at: string | null;
+  auto_screen_score: number | null;
+  auto_screen_result: "recommend_approve" | "recommend_review" | null;
+  auto_screen_detail: { reasons: string[] };
 }
 
 interface ApiTenantKycApplication {
@@ -85,6 +88,9 @@ const mapTenantVerification = (v: ApiTenantVerification): TenantVerification => 
   updatedAt: v.updated_at,
   reviewedAt: v.reviewed_at,
   expiresAt: v.expires_at,
+  autoScreenScore: v.auto_screen_score,
+  autoScreenResult: v.auto_screen_result,
+  autoScreenDetail: v.auto_screen_detail ?? { reasons: [] },
 });
 
 const mapTenantKycApplication = (a: ApiTenantKycApplication): TenantKycApplication => ({

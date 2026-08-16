@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { ShieldAlert, Star, ShieldCheck, MessageCircle, CalendarCheck } from "lucide-react";
 import { useRoomFraudStatus } from "../../hooks/useFraud";
 import { fraudBadgeLabel } from "../../lib/fraud";
+import { track } from "../../services/analytics";
 import type { Room } from "../../types";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -55,6 +56,8 @@ export default function RoomModal({ room, onClose }: RoomModalProps) {
       navigate("/auth");
       return;
     }
+    // First-party analytics (Tier 2): the booking step of the conversion funnel.
+    track("booking_requested", { room_id: current.id });
     createBooking.mutate({ roomId: current.id, checkIn: defaultCheckIn() }, { onSuccess: onClose });
   };
 

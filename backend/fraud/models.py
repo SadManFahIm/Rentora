@@ -60,6 +60,7 @@ class FraudSignal(models.Model):
         UNVERIFIED_OWNER = "unverified_owner", "Unverified Owner"
         DESCRIPTION_SIMILARITY = "description_similarity", "Description Similarity"
         DUPLICATE_IMAGE = "duplicate_image", "Duplicate Image"
+        MANIPULATED_IMAGE = "manipulated_image", "Manipulated Image"
 
     report = models.ForeignKey(FraudReport, on_delete=models.CASCADE, related_name="signals")
     detector = models.CharField(max_length=30, choices=Detector.choices)
