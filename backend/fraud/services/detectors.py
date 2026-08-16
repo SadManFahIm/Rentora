@@ -208,6 +208,65 @@ def _rapid_listing(room: Room) -> Signal | None:
 # its function), so there is no circular import.
 from .duplicate_image import duplicate_image_signal
 
+# Photo-forensics detector (Tier 2): ELA / watermark / low-quality signals on
+# the listing's own images. Imported at module level the same way as
+# duplicate_image (it imports RoomImage lazily inside its function).
+from .image_forensics import analyze_image
+
+
+def _image_forensics(room: Room) -> Signal | None:
+    """Flag listing photos that show signs of manipulation (ELA inconsistency,
+    watermark overlay, editor software) or are too small to be real photos.
+
+    Reads at most the first 8 images and treats any unreadable/missing file
+    as 'no signal' — the scan must never fail a listing because of one bad
+    file. Severity: medium for a likely manipulation, low otherwise.
+    """
+
+    images = list(room.images.all()[:8])
+    findings: list[dict] = []
+    worst: str | None = None
+    for image in images:
+        try:
+            path = image.image.path
+        except Exception:
+            continue
+        import os
+
+        if not os.path.exists(path):
+            continue
+        try:
+            result = analyze_image(path)
+        except Exception:
+            logger.exception("image forensics failed for image %s", image.pk)
+            continue
+        if not result.signals:
+            continue
+        findings.append(
+            {
+                "image_id": image.pk,
+                "signals": [s.as_dict() for s in result.signals],
+                "ela_mean": result.ela_mean,
+                "ela_p99": result.ela_p99,
+            }
+        )
+        if result.worst_severity and (worst is None or result.worst_severity == "medium"):
+            worst = result.worst_severity
+
+    if not findings:
+        return None
+    severity = FraudReport.Severity.MEDIUM if worst == "medium" else FraudReport.Severity.LOW
+    return Signal(
+        detector=FraudSignal.Detector.MANIPULATED_IMAGE,
+        severity=severity,
+        message=(
+            "Listing photos show possible manipulation or watermarking — "
+            f"{len(findings)} image(s) flagged for review."
+        ),
+        detail={"images": findings},
+    )
+
+
 DETECTORS: list[Callable[[Room], Signal | None]] = [
     _duplicate_listing,
     _description_similarity,
@@ -216,6 +275,7 @@ DETECTORS: list[Callable[[Room], Signal | None]] = [
     _unverified_owner,
     _rapid_listing,
     duplicate_image_signal,
+    _image_forensics,
 ]
 
 

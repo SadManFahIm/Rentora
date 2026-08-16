@@ -159,6 +159,14 @@ class TenantVerification(models.Model):
     reviewed_at = models.DateTimeField(null=True, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)
 
+    # Automated pre-screening (Tier 2, see users/kyc_auto.py): a deterministic
+    # first pass over the document that *recommends* a decision for the admin
+    # queue (it never decides alone). ``auto_screen_detail`` carries the
+    # human-readable reasons so the recommendation is explainable/auditable.
+    auto_screen_score = models.IntegerField(null=True, blank=True)
+    auto_screen_result = models.CharField(max_length=24, null=True, blank=True)
+    auto_screen_detail = models.JSONField(default=dict, blank=True)
+
     class Meta:
         ordering = ["-created_at"]
 

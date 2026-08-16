@@ -137,6 +137,27 @@ def commute_eta(
     ``minutes=None`` with an honest detail string.
     """
     distance = haversine_km(from_lat, from_lng, to_lat, to_lng)
+    # Tier 2: road modes (driving/car/cng/bus) prefer a real road-network ETA
+    # via OSRM when the server answers; any failure falls through to the
+    # existing straight-line heuristic, so the map never breaks.
+    if mode in ("driving", "car", "cng", "bus"):
+        from .osrm import osrm_eta
+
+        eta = osrm_eta(
+            from_lat,
+            from_lng,
+            to_lat,
+            to_lng,
+            mode="car" if mode == "driving" else mode,
+        )
+        if eta is not None:
+            return CommuteEstimate(
+                mode=mode,
+                minutes=eta["minutes"],
+                distance_km=eta["distance_km"],
+                estimate=True,
+                detail=f"{mode.title()} ETA ~{eta['minutes']} min via road network (OSRM)",
+            )
     if mode == "driving":
         minutes = round((distance / DRIVING_SPEED_KMH) * 60)
         return CommuteEstimate(

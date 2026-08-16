@@ -443,6 +443,7 @@ class DetectorRegistrationTests(TestCase):
                 "_unverified_owner",
                 "_rapid_listing",
                 "duplicate_image_signal",
+                "_image_forensics",
             },
         )
 
