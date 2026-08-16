@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import logging
 import os
 import uuid
+
+logger = logging.getLogger(__name__)
 
 from django.contrib.auth import get_user_model
 from django.core.files.storage import default_storage
@@ -16,6 +19,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
+from .antivirus import scan_bytes
 from .models import ChatRoom, ChatRoomMembership, ChatSafetyEvent, Message, Report, UserBlock
 from .presence import bulk_online_status
 from .safety import record_safety_event, run_chat_safety, safety_payload
@@ -443,6 +447,25 @@ class ChatUploadView(APIView):
         if content_type not in _ALLOWED_FILE_TYPES:
             return Response(
                 {"detail": f"Unsupported file type: {content_type or 'unknown'}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Virus scan (Tier 2, optional): when ClamAV is enabled and reachable,
+        # a positive detection rejects the file outright. When no scanner is
+        # available the result is always clean-by-default — the type/size
+        # checks above remain the baseline gate either way.
+        uploaded.seek(0)
+        scan = scan_bytes(uploaded.read())
+        uploaded.seek(0)
+        if scan.rejected:
+            logger.warning(
+                "chat upload rejected by virus scan: user=%s size=%s viruses=%s",
+                request.user.pk,
+                uploaded.size,
+                scan.viruses,
+            )
+            return Response(
+                {"detail": "File rejected by the security scan."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
