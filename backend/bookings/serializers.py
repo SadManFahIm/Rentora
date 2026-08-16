@@ -1,6 +1,7 @@
 from datetime import date
 
 from django.conf import settings
+from drf_spectacular.utils import extend_schema_field, inline_serializer
 from rest_framework import serializers
 
 from config.sanitizers import sanitize_text
@@ -44,6 +45,17 @@ class BookingSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    @extend_schema_field(
+        inline_serializer(
+            "BookingTenantTrustSignals",
+            fields={
+                "tenant_verified": serializers.BooleanField(read_only=True),
+                "nid_verified": serializers.BooleanField(read_only=True),
+                "completed_bookings": serializers.IntegerField(read_only=True),
+                "profile_complete": serializers.BooleanField(read_only=True),
+            },
+        )
+    )
     def get_tenant_trust_signals(self, obj):
         from users.trust import trust_signals
 
