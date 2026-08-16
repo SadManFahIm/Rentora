@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-881%20(569%20BE%20%2B%20312%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-930%20(610%20BE%20%2B%20320%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -166,6 +166,47 @@ Full gallery (38 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 - **Dependency bump audit** — safe patch/minor bumps applied to backend +
   frontend deps and documented in `docs/tier1-dependency-audit.md` (majors
   like React 19 / Vite 8 / Django 6 held for a dedicated upgrade cycle).
+
+**Tier-3 Upgrades (RAG Copilot, i18n, embeddings, E2E, trust signals)**
+
+- **RAG-powered Copilot (listing mode)** — the Copilot is no longer
+  search-only: from any room modal, **Ask Copilot about this listing** opens
+  a conversation *grounded on that single listing* (`listing_id` on
+  `POST /api/v1/copilot/chat/`, fact card at `GET
+  /api/v1/copilot/listing/<id>/`). Questions about price / amenities / area /
+  type / size / gender / verification / availability are answered strictly
+  from the listing's public fields (bilingual keyword detection, EN + BN +
+  Banglish); anything the listing doesn't state is refused explicitly — no
+  hallucination by construction. Deterministic map intel (nearest metro)
+  included in the fact card.
+- **Full EN ⇄ বাংলা UI toggle** — `react-i18next` + `i18next` with inline
+  dictionaries (`src/i18n/en.json` / `bn.json`), a **বাংলা/EN toggle in the
+  navbar**, language persisted in `localStorage` and applied before first
+  render (no flash of the wrong language), `document.documentElement.lang`
+  set for accessibility, and English fallback for any untranslated key. Core
+  surfaces translated: navbar, footer, home hero, room cards, room modal,
+  copilot widget, trust badges, search labels.
+- **Production-grade neural embeddings** — `SEMANTIC_EMBEDDING_MODE`
+  (`auto`/`neural`/`lite`) selects the provider, the embedding matrix is
+  **persisted to disk** keyed by provider + data fingerprint
+  (`SEMANTIC_EMBEDDING_CACHE_DIR`, default `media/embeddings`) so every
+  worker reuses the prebuilt neural matrix instead of re-encoding the corpus
+  and re-downloading the model, and `python manage.py prebuild_embeddings`
+  warms the cache after deploy. `neural` mode degrades to lite with a
+  warning when sentence-transformers is missing — search never breaks.
+- **E2E suite expansion (trust-flow + map)** — new tagged E2E tests driving
+  the real API: the full trust chain (report → duplicate-report guard →
+  admin queue → dismiss → block → chat refused → unblock → audit trail,
+  with `report.created` / `user.blocked` / `user.unblocked` audit events
+  added where the spec required them) and the map flow (map search → area
+  stats → commute ETA with OSRM-off graceful fallback).
+- **Tenant behavioral trust signals** — transparent, data-backed signals
+  beside the identity badge: **completed bookings** (approved bookings whose
+  deposit was refunded or stay ended — never pending/in-progress),
+  exposed as `trust_signals` on the user details, chat participants and
+  booking payloads, and rendered as a ✓ N completed bookings chip in chat
+  headers, the verified-tenant badge and the landlord dashboard.
+- **Engineering** — 610 backend + 320 frontend tests, ruff/eslint/tsc clean.
 
 **Tier-2 Medium Upgrades (trust, analytics & infra)**
 
@@ -363,6 +404,7 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 | **12**     | Trust & Safety V2 — two-sided marketplace integrity: 🪪 tenant KYC + verified-tenant badge, 🛡️ chat safety engine, 🚩 report/block, 🖼️ photo + review moderation, ⚖️ disputes + deposit protection, 🎛️ admin Trust & Safety Operations Center + audit trail | ✅ Shipped |
 | **12.6**   | Tier-1 Quick Wins — 💬 chat message search + edit/delete (audited), 📧 saved-search email digest, 🚦 report rate-limit + duplicate guard, ⚡ semantic search cache, 🛡️ CSP headers + security.txt + dependency bump audit | ✅ Shipped |
 | **12.7**   | Tier-2 Upgrades — 🧠 AI chat-safety classifier (learned layer, human fallback), 📊 self-hosted analytics + conversion funnel, 🖼️ photo manipulation/watermark detection (ELA), 🗺️ OSRM road-network ETA, 🦠 ClamAV upload scan, 🪪 KYC auto pre-screening, ⬆️ react-router v7 | ✅ Shipped |
+| **12.8**   | Tier-3 Upgrades — 🤖 RAG Copilot (listing-grounded Q&A, zero hallucination), 🌐 full EN⇄BN UI toggle, 🧠 production-grade neural embeddings (disk-persisted matrix + prebuild command), 🧪 E2E expansion (trust-flow + map), 👤 tenant behavioral trust signals (completed bookings) | ✅ Shipped |
 
 ---
 
@@ -548,12 +590,12 @@ Rentora/
 
 Quality is enforced **in CI and at commit time** — style or coverage drift fails the pipeline automatically.
 
-### Automated tests (881 total)
+### Automated tests (930 total)
 
 | Suite             | Count | Gate                                      |
 | ----------------- | ----- | ----------------------------------------- |
-| Backend (Django)  | 569   | ✅ passing · coverage ≥ 50% lines         |
-| Frontend (Vitest) | 312   | ✅ passing · coverage ≥ 55% lines         |
+| Backend (Django)  | 610   | ✅ passing (578 unit + 32 tagged E2E) · coverage ≥ 50% lines |
+| Frontend (Vitest) | 320   | ✅ passing · coverage ≥ 55% lines         |
 
 ```bash
 # Backend
@@ -875,9 +917,10 @@ Frontend runs at `http://localhost:3000`
 
 ### Copilot
 
-| Method | Endpoint                     | Auth   | Description                                                              |
-| ------ | ---------------------------- | ------ | ------------------------------------------------------------------------ |
-| POST   | `/api/v1/copilot/chat/`      | Public | Conversational room discovery — intent + retrieved listings + suggestions |
+| Method | Endpoint                          | Auth   | Description                                                                        |
+| ------ | --------------------------------- | ------ | ---------------------------------------------------------------------------------- |
+| POST   | `/api/v1/copilot/chat/`           | Public | Conversational discovery — search mode (intent + listings) or `listing_id`-grounded RAG Q&A over one listing |
+| GET    | `/api/v1/copilot/listing/:id/`    | Public | Grounded public fact card for one listing (the RAG source document)                |
 
 ### Roommates
 
@@ -956,7 +999,7 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 | `/api/v1/redoc/`  | ReDoc                 |
 | `/api/v1/schema/` | OpenAPI schema (YAML) |
 
-> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook) · [`docs/RENTORA_COPILOT.md`](docs/RENTORA_COPILOT.md) (Copilot architecture, API, config) · [`docs/AI_PRICING_V2.md`](docs/AI_PRICING_V2.md) (pricing suggestion v2) · [`docs/DUPLICATE_IMAGE_FRAUD.md`](docs/DUPLICATE_IMAGE_FRAUD.md) (duplicate-image detector) · [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) + [`docs/MAP_API.md`](docs/MAP_API.md) + [`docs/MAP_SCORING.md`](docs/MAP_SCORING.md) (intelligent map v2) · [`docs/VOICE_SEARCH_PLAYBOOK.md`](docs/VOICE_SEARCH_PLAYBOOK.md) (voice search) · [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md) (verified feature matrix) · [`docs/PWA.md`](docs/PWA.md) (PWA architecture, manifest, SW strategy, install/update/offline behavior) · [`docs/phase-12-trust-safety-v2.md`](docs/phase-12-trust-safety-v2.md) (Phase 12 Trust & Safety V2) · [`docs/TENANT_KYC.md`](docs/TENANT_KYC.md) + [`docs/CHAT_SAFETY.md`](docs/CHAT_SAFETY.md) (tenant KYC + chat safety) · [`docs/tier2-upgrades.md`](docs/tier2-upgrades.md) (AI chat-safety classifier, self-hosted analytics, photo forensics, OSRM ETA, ClamAV, KYC auto pre-screen, react-router v7)
+> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook) · [`docs/RENTORA_COPILOT.md`](docs/RENTORA_COPILOT.md) (Copilot architecture, API, config) · [`docs/AI_PRICING_V2.md`](docs/AI_PRICING_V2.md) (pricing suggestion v2) · [`docs/DUPLICATE_IMAGE_FRAUD.md`](docs/DUPLICATE_IMAGE_FRAUD.md) (duplicate-image detector) · [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) + [`docs/MAP_API.md`](docs/MAP_API.md) + [`docs/MAP_SCORING.md`](docs/MAP_SCORING.md) (intelligent map v2) · [`docs/VOICE_SEARCH_PLAYBOOK.md`](docs/VOICE_SEARCH_PLAYBOOK.md) (voice search) · [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md) (verified feature matrix) · [`docs/PWA.md`](docs/PWA.md) (PWA architecture, manifest, SW strategy, install/update/offline behavior) · [`docs/phase-12-trust-safety-v2.md`](docs/phase-12-trust-safety-v2.md) (Phase 12 Trust & Safety V2) · [`docs/TENANT_KYC.md`](docs/TENANT_KYC.md) + [`docs/CHAT_SAFETY.md`](docs/CHAT_SAFETY.md) (tenant KYC + chat safety) · [`docs/tier2-upgrades.md`](docs/tier2-upgrades.md) (AI chat-safety classifier, self-hosted analytics, photo forensics, OSRM ETA, ClamAV, KYC auto pre-screen, react-router v7) · [`docs/tier3-upgrades.md`](docs/tier3-upgrades.md) (RAG Copilot listing mode, EN⇄BN i18n, production-grade embeddings, E2E expansion, tenant trust signals)
 
 ---
 
@@ -1043,6 +1086,26 @@ See [`docs/PWA.md`](docs/PWA.md) for the manifest, icon system, service-worker s
 ---
 
 ## 🖼️ Screenshots
+
+### Phase-wise gallery
+
+Every shipped phase with its captured screenshots (all in `docs/screenshots/`):
+
+| Phase | Feature | Screenshot(s) |
+| ----- | ------- | ------------- |
+| 4 | Real-time chat | [`voice-search.png`](docs/screenshots/voice-search.png) (voice search in chat) |
+| 5 | Payments & security deposit | [`deposit-protection.png`](docs/screenshots/deposit-protection.png) |
+| 6 | AI recommendations & price insight | [`listing-quality.png`](docs/screenshots/listing-quality.png) · [`price-anomaly.png`](docs/screenshots/price-anomaly.png) · [`pricing-suggestion.png`](docs/screenshots/pricing-suggestion.png) |
+| 7 | Map + Intelligent Map (v2/v3) | [`map-view.png`](docs/screenshots/map-view.png) · [`map-view-dark.png`](docs/screenshots/map-view-dark.png) · [`map-intel-ai-search.png`](docs/screenshots/map-intel-ai-search.png) · [`map-intel-areas.png`](docs/screenshots/map-intel-areas.png) · [`map-intel-affordability.png`](docs/screenshots/map-intel-affordability.png) · [`map-ux-light-default.png`](docs/screenshots/map-ux-light-default.png) · [`map-ux-dark-state.png`](docs/screenshots/map-ux-dark-state.png) |
+| 9 | Reliability & observability | [`kyc-sla.png`](docs/screenshots/kyc-sla.png) · [`kyc-trend-chart.png`](docs/screenshots/kyc-trend-chart.png) |
+| 10 | Growth & personalization | [`phase10-dashboard-growth.png`](docs/screenshots/phase10-dashboard-growth.png) · [`phase10-insights.png`](docs/screenshots/phase10-insights.png) · [`phase10-saved-search.png`](docs/screenshots/phase10-saved-search.png) · [`saved-search-match.png`](docs/screenshots/saved-search-match.png) |
+| 11 | AI search + Copilot + fraud | [`phase11-ai-search.png`](docs/screenshots/phase11-ai-search.png) · [`copilot.png`](docs/screenshots/copilot.png) · [`duplicate-image-fraud.png`](docs/screenshots/duplicate-image-fraud.png) · [`fraud-admin.png`](docs/screenshots/fraud-admin.png) |
+| 12 | Trust & Safety V2 | [`tenant-kyc-upload.png`](docs/screenshots/tenant-kyc-upload.png) · [`tenant-kyc-pending.png`](docs/screenshots/tenant-kyc-pending.png) · [`verified-tenant-badge.png`](docs/screenshots/verified-tenant-badge.png) · [`report-block.png`](docs/screenshots/report-block.png) · [`chat-safety-feed.png`](docs/screenshots/chat-safety-feed.png) · [`moderation-reviews.png`](docs/screenshots/moderation-reviews.png) · [`moderation-photos.png`](docs/screenshots/moderation-photos.png) · [`dispute-admin.png`](docs/screenshots/dispute-admin.png) · [`trust-center.png`](docs/screenshots/trust-center.png) · [`audit-trail.png`](docs/screenshots/audit-trail.png) |
+| 12.6–12.8 | Tier-1/2/3 upgrades (chat edit/delete, analytics, RAG Copilot, EN⇄BN UI, trust signals) | UI captured live in the app — capture workflow in [`docs/screenshots/README.md`](docs/screenshots/README.md) |
+
+Below, the detailed phase-by-phase screenshots.
+
+---
 
 **Interactive Map (MapLibre GL)** — street-search autocomplete, price marker pins, clustering, split-view list, radius search, walking travel-time overlay & MRT Line 6 corridor:
 
