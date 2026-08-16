@@ -16,6 +16,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.filters import OrderingFilter
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from wishlist.models import Wishlist
 
@@ -1236,4 +1237,50 @@ class RoomViewSet(viewsets.ModelViewSet):
         return Response(
             {"created": created, "created_count": len(created), "errors": errors},
             status=status.HTTP_201_CREATED if created else status.HTTP_400_BAD_REQUEST,
+        )
+
+
+@extend_schema(
+    tags=["Rooms"],
+    summary="Commute ETA between two points",
+    description=(
+        "Road-network ETA (car/cng/bus) via OSRM with automatic fallback to "
+        "the straight-line heuristic when routing is unavailable. Modes: "
+        "car, cng, bus, driving, walking, transit. Response includes the "
+        "`source` so clients can show 'approximate' for heuristic results."
+    ),
+)
+class CommuteEtaView(APIView):
+    """GET /api/v1/rooms/eta/?from_lat=..&from_lng=..&to_lat=..&to_lng=..&mode=car"""
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        try:
+            from_lat = float(request.query_params["from_lat"])
+            from_lng = float(request.query_params["from_lng"])
+            to_lat = float(request.query_params["to_lat"])
+            to_lng = float(request.query_params["to_lng"])
+        except (KeyError, TypeError, ValueError):
+            return Response(
+                {"detail": "from_lat, from_lng, to_lat, to_lng are required numbers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        mode = request.query_params.get("mode", "car")
+        if mode not in ("car", "cng", "bus", "driving", "walking", "transit"):
+            return Response(
+                {"detail": f"Unsupported mode: {mode}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        estimate = commute_eta(from_lat, from_lng, to_lat, to_lng, mode)
+        return Response(
+            {
+                "mode": estimate.mode,
+                "minutes": estimate.minutes,
+                "distance_km": estimate.distance_km,
+                "estimate": estimate.estimate,
+                "detail": estimate.detail,
+                "source": "osrm" if "OSRM" in estimate.detail else "heuristic",
+            }
         )

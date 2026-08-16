@@ -305,6 +305,9 @@ class TenantVerificationSerializer(serializers.ModelSerializer):
             "updated_at",
             "reviewed_at",
             "expires_at",
+            "auto_screen_score",
+            "auto_screen_result",
+            "auto_screen_detail",
         ]
         read_only_fields = fields
 
