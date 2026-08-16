@@ -1,0 +1,91 @@
+{
+  "nav": {
+    "home": "হোম",
+    "rooms": "রুম",
+    "map": "ম্যাপ",
+    "chat": "চ্যাট",
+    "roommates": "রুমমেট",
+    "signIn": "সাইন ইন",
+    "register": "রেজিস্টার",
+    "dashboard": "ড্যাশবোর্ড",
+    "logout": "লগ আউট",
+    "menu": "মেনু"
+  },
+  "footer": {
+    "tagline": "বাংলাদেশের সবচেয়ে বিশ্বস্ত AI-চালিত রুম ভাড়া প্ল্যাটফর্ম। ঢাকা ও তার বাইরে যাচাইকৃত, সাশ্রয়ী রুম খুঁজুন।",
+    "browse": "ব্রাউজ করুন",
+    "allRooms": "সব রুম",
+    "mapView": "ম্যাপ ভিউ",
+    "featuredListings": "ফিচার্ড লিস্টিং",
+    "newListings": "নতুন লিস্টিং",
+    "account": "অ্যাকাউন্ট",
+    "signIn": "সাইন ইন",
+    "register": "রেজিস্টার"
+  },
+  "home": {
+    "heroTitle": "বাংলাদেশে আপনার নিখুঁত রুম খুঁজুন",
+    "heroSubtitle": "যাচাইকৃত লিস্টিং, স্মার্ট সার্চ আর ম্যাপ ইন্টেলিজেন্স সহ AI-চালিত রুম খোঁজা।",
+    "exploreRooms": "রুম দেখুন",
+    "openMap": "ম্যাপ খুলুন",
+    "searchPlaceholder": "Try: ১০ হাজার এর মধ্যে uttara student room…"
+  },
+  "roomCard": {
+    "perMonth": "/মাস",
+    "unavailable": "অনুপলব্ধ",
+    "verified": "যাচাইকৃত",
+    "removeFromWishlist": "উইশলিস্ট থেকে সরান",
+    "addToWishlist": "উইশলিস্টে যোগ করুন",
+    "valueBadge": "ভালো দাম",
+    "viewDetails": "বিস্তারিত দেখুন"
+  },
+  "roomModal": {
+    "bookNow": "বুক করুন",
+    "startChat": "মালিকের সাথে চ্যাট",
+    "securityDeposit": "সিকিউরিটি ডিপোজিট",
+    "depositIncluded": "বুকিংয়ে ডিপোজিট অন্তর্ভুক্ত",
+    "verifiedListing": "যাচাইকৃত লিস্টিং",
+    "unverifiedListing": "যাচাইকৃত নয়",
+    "askCopilot": "এই লিস্টিং সম্পর্কে কপাইলটকে জিজ্ঞাসা করুন",
+    "askCopilotHint": "দাম, সুবিধা, এলাকা — শুধু তথ্যভিত্তিক উত্তর"
+  },
+  "searchFilter": {
+    "allAreas": "সব এলাকা",
+    "all": "সব",
+    "any": "যেকোনো",
+    "sortDefault": "সাজান: ডিফল্ট",
+    "sortPriceAsc": "দাম: কম→বেশি",
+    "sortPriceDesc": "দাম: বেশি→কম",
+    "sortTopRated": "সেরা রেটেড",
+    "searchByVoice": "ভয়েস দিয়ে খুঁজুন",
+    "stopVoice": "ভয়েস সার্চ বন্ধ করুন"
+  },
+  "copilot": {
+    "title": "রেন্টোরা কপাইলট",
+    "subtitle": "বাংলা বা ইংরেজিতে রুম খুঁজতে বলুন — প্রতিটি উত্তর লাইভ লিস্টিং থেকে আসে।",
+    "placeholder": "যেকোনো প্রশ্ন… যেমন “Uttara-তে ১০ হাজারের মধ্যে room”",
+    "open": "রেন্টোরা কপাইলট খুলুন",
+    "close": "রেন্টোরা কপাইলট বন্ধ করুন",
+    "listingMode": "এই লিস্টিং নিয়ে কথা হচ্ছে — শুধু তথ্যভিত্তিক উত্তর",
+    "send": "বার্তা পাঠান"
+  },
+  "trust": {
+    "identityVerified": "আইডেন্টিটি যাচাইকৃত",
+    "notVerified": "যাচাইকৃত নয়",
+    "identityVerifiedAria": "আইডেন্টিটি যাচাইকৃত ভাড়াটিয়া",
+    "notVerifiedAria": "ভাড়াটিয়া যাচাইকৃত নয়",
+    "identityTooltip": "রেন্টোরার মাধ্যমে আইডেন্টিটি যাচাই করা হয়েছে।",
+    "pendingTooltip": "আইডেন্টিটি যাচাই বাকি বা শুরু হয়নি।",
+    "completedBookings_one": "{{count}}টি সম্পন্ন বুকিং",
+    "completedBookings_other": "{{count}}টি সম্পন্ন বুকিং",
+    "completedBookingsTooltip": "এই ভাড়াটিয়ার রেন্টোরায় সম্পন্ন হওয়া অনুমোদিত বুকিং।"
+  },
+  "kyc": {
+    "verified": "যাচাইকৃত",
+    "pending": "বিচারাধীন",
+    "rejected": "প্রত্যাখ্যাত",
+    "reviewNote": "রিভিউ নোট",
+    "startVerification": "যাচাই শুরু করুন",
+    "resubmit": "আবার জমা দিন",
+    "underReview": "রিভিউ চলছে"
+  }
+}

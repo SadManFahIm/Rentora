@@ -1,6 +1,7 @@
 from datetime import date
 
 from django.conf import settings
+from drf_spectacular.utils import extend_schema_field, inline_serializer
 from rest_framework import serializers
 
 from config.sanitizers import sanitize_text
@@ -19,6 +20,9 @@ class BookingSerializer(serializers.ModelSerializer):
 
     room = RoomListSerializer(read_only=True)
     tenant = RoomOwnerSerializer(read_only=True)
+    # Tier 3: behavioral trust signals for the requesting tenant — shown to
+    # the landlord next to the identity badge (completed bookings etc.).
+    tenant_trust_signals = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -26,6 +30,7 @@ class BookingSerializer(serializers.ModelSerializer):
             "id",
             "room",
             "tenant",
+            "tenant_trust_signals",
             "status",
             "check_in",
             "check_out",
@@ -39,6 +44,22 @@ class BookingSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = fields
+
+    @extend_schema_field(
+        inline_serializer(
+            "BookingTenantTrustSignals",
+            fields={
+                "tenant_verified": serializers.BooleanField(read_only=True),
+                "nid_verified": serializers.BooleanField(read_only=True),
+                "completed_bookings": serializers.IntegerField(read_only=True),
+                "profile_complete": serializers.BooleanField(read_only=True),
+            },
+        )
+    )
+    def get_tenant_trust_signals(self, obj):
+        from users.trust import trust_signals
+
+        return trust_signals(obj.tenant)
 
 
 class BookingCreateSerializer(serializers.ModelSerializer):

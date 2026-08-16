@@ -1,12 +1,17 @@
 from django.conf import settings
+from django.http import Http404
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
-from .serializers import CopilotChatRequestSerializer, CopilotChatResponseSerializer
-from .services import chat
+from .serializers import (
+    CopilotChatRequestSerializer,
+    CopilotChatResponseSerializer,
+    CopilotListingFactsSerializer,
+)
+from .services import chat, listing_facts_for
 
 
 class CopilotRateThrottle(UserRateThrottle):
@@ -57,5 +62,34 @@ class CopilotChatView(APIView):
             message=data["message"],
             session_id=data.get("session_id") or None,
             user=getattr(request, "user", None),
+            listing_id=data.get("listing_id") or None,
         )
         return Response(CopilotChatResponseSerializer(result).data)
+
+
+class CopilotListingFactsView(APIView):
+    """Grounded fact card for one listing (Tier 3 RAG).
+
+    Public — same fields the rooms list exposes. This is what the UI shows
+    as the "Ask Copilot about this listing" panel and what grounds the
+    listing chat mode. A listing that is unavailable is a 404, matching the
+    rooms list's behaviour.
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    @extend_schema(
+        tags=["Copilot"],
+        summary="Listing fact card (RAG source)",
+        description=(
+            "Grounded, public fact card for one listing — the retrieval "
+            "document behind the listing chat mode. 404 when the listing is "
+            "missing or unavailable."
+        ),
+        responses={200: CopilotListingFactsSerializer, 404: None},
+    )
+    def get(self, request, pk: int):
+        facts = listing_facts_for(pk)
+        if facts is None:
+            raise Http404("Listing not found or unavailable")
+        return Response(CopilotListingFactsSerializer(facts).data)

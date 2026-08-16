@@ -382,8 +382,93 @@ def generate_response(
     }
 
 
-def chat(message: str, session_id: str | None, user) -> dict[str, Any]:
-    """Full Copilot turn: session -> intent -> retrieve -> respond."""
+# --------------------------------------------------------------------------
+# Listing mode (Tier 3 — RAG Copilot)
+# --------------------------------------------------------------------------
+
+_LISTING_SUGGESTIONS = [
+    "দাম কত?",
+    "কি সুবিধা আছে?",
+    "কোথায় অবস্থিত?",
+    "ভেরিফাইড কি?",
+]
+
+
+def _empty_listing_turn(session_id: str | None, message: str) -> dict[str, Any]:
+    """Graceful fallback for a listing that no longer exists — never 500."""
+    return {
+        "session_id": session_id or "",
+        "message": (
+            "I couldn't find that listing — it may have been taken down or is "
+            "no longer available. You can search for other rooms instead."
+        ),
+        "intent": extract_intent(""),
+        "listings": [],
+        "total_count": 0,
+        "suggestions": ["আবার খুঁজি"],
+        "mode": "listing",
+        "listing": None,
+    }
+
+
+def _listing_turn(message: str, listing_id: int, session_id: str | None) -> dict[str, Any]:
+    """One Copilot turn grounded on a *single* listing (RAG over one doc).
+
+    The retrieval step is the listing row itself; the answer is generated
+    strictly from its public fields (``listing_qa.listing_answer``). Follow-up
+    turns keep working because the client re-sends the same ``listing_id`` —
+    search filters never leak into listing mode.
+    """
+    from .listing_qa import listing_answer, listing_facts
+
+    try:
+        room = Room.objects.filter(pk=listing_id, is_available=True).select_related("owner").first()
+    except (ValueError, TypeError):
+        room = None
+    if room is None:
+        return _empty_listing_turn(session_id, message)
+
+    answer = listing_answer(message, room)
+    return {
+        "session_id": session_id or "",
+        "message": answer["text"],
+        "intent": extract_intent(""),
+        "listings": [],
+        "total_count": 0,
+        "suggestions": _LISTING_SUGGESTIONS,
+        "mode": "listing",
+        "listing": listing_facts(room),
+        "aspect": answer["aspect"],
+    }
+
+
+def listing_facts_for(room_id: int) -> dict[str, Any] | None:
+    """Public grounded fact card for one listing (used by the GET endpoint)."""
+    from .listing_qa import listing_facts
+
+    try:
+        room = Room.objects.filter(pk=room_id, is_available=True).select_related("owner").first()
+    except (ValueError, TypeError):
+        return None
+    if room is None:
+        return None
+    return listing_facts(room)
+
+
+def chat(
+    message: str,
+    session_id: str | None,
+    user,
+    listing_id: int | None = None,
+) -> dict[str, Any]:
+    """Full Copilot turn: session -> intent -> retrieve -> respond.
+
+    When ``listing_id`` is given the turn is **grounded on that one listing**
+    (RAG over a single document) instead of a search — see ``_listing_turn``.
+    """
+    if listing_id is not None:
+        return _listing_turn(message or "", listing_id, session_id)
+
     message = (message or "").strip()
     if not message:
         return {
@@ -393,6 +478,9 @@ def chat(message: str, session_id: str | None, user) -> dict[str, Any]:
             "listings": [],
             "total_count": 0,
             "suggestions": [],
+            "mode": "search",
+            "listing": None,
+            "aspect": None,
         }
 
     sid, stored = get_session(session_id)
@@ -406,6 +494,9 @@ def chat(message: str, session_id: str | None, user) -> dict[str, Any]:
             "listings": [],
             "total_count": 0,
             "suggestions": [],
+            "mode": "search",
+            "listing": None,
+            "aspect": None,
         }
 
     if _is_greeting(message):
@@ -425,6 +516,9 @@ def chat(message: str, session_id: str | None, user) -> dict[str, Any]:
                 "Dhanmondi-তে furnished studio",
                 "Mirpur-এ single room, AC",
             ],
+            "mode": "search",
+            "listing": None,
+            "aspect": None,
         }
 
     fresh = extract_intent(message)
@@ -434,6 +528,9 @@ def chat(message: str, session_id: str | None, user) -> dict[str, Any]:
     rooms, total_count, kind = retrieve_rooms(intent, user)
     response = generate_response(message, intent, rooms, total_count)
     response["session_id"] = sid
+    response["mode"] = "search"
+    response["listing"] = None
+    response["aspect"] = None
 
     if kind == "match":
         save_session(sid, intent)
