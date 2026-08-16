@@ -369,6 +369,15 @@ SEMANTIC_SEARCH_ENABLED = os.getenv("SEMANTIC_SEARCH_ENABLED", "True") == "True"
 SEMANTIC_EMBEDDING_MODEL = os.getenv(
     "SEMANTIC_EMBEDDING_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 )
+# Embedding provider mode (Tier 3): "auto" (default) uses sentence-
+# transformers when installed else the lite provider; "neural" requires the
+# real model (falls back with a warning); "lite" forces the zero-dependency
+# provider for dev/CI parity.
+SEMANTIC_EMBEDDING_MODE = os.getenv("SEMANTIC_EMBEDDING_MODE", "auto")
+# Where the precomputed embedding matrix is persisted (production-grade
+# warm cache — see `manage.py prebuild_embeddings`). Defaults to
+# MEDIA_ROOT/embeddings; point this at a persistent volume in production.
+SEMANTIC_EMBEDDING_CACHE_DIR = os.getenv("SEMANTIC_EMBEDDING_CACHE_DIR", "") or None
 # Hybrid ranking blend: final = semantic * SEMANTIC_SEARCH_WEIGHT
 #                        + lexical  * TFIDF_SEARCH_WEIGHT  (weights need not sum to 1).
 SEMANTIC_SEARCH_WEIGHT = float(os.getenv("SEMANTIC_SEARCH_WEIGHT", "0.7"))
