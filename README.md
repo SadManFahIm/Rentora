@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-633%20(381%20BE%20%2B%20252%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-881%20(569%20BE%20%2B%20312%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -166,6 +166,41 @@ Full gallery (38 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 - **Dependency bump audit** — safe patch/minor bumps applied to backend +
   frontend deps and documented in `docs/tier1-dependency-audit.md` (majors
   like React 19 / Vite 8 / Django 6 held for a dedicated upgrade cycle).
+
+**Tier-2 Medium Upgrades (trust, analytics & infra)**
+
+- **AI chat-safety classifier** — a learned Naive-Bayes layer (trained on
+  real EN+BN rental conversations, Unicode-aware tokenization) sits on top
+  of the deterministic rules: it flags scam-like messages the rules miss,
+  can only ever *flag for human review* (never block), and every model
+  mistake degrades to a queue item. Toggle: `CHAT_SAFETY_ML_ENABLED`.
+- **Self-hosted analytics** — first-party event capture (`POST
+  /api/v1/analytics/events/`, auth-optional, bounded payloads, throttled,
+  no PII) + admin dashboard (`GET /api/v1/analytics/summary/`): event
+  totals, top events/pages, daily volume and the **conversion funnel**
+  (page_view → room_view → chat_started → booking_requested →
+  booking_confirmed → payment_completed, distinct users per step). New
+  **Analytics** tab in the Trust & Safety Operations Center.
+- **Photo manipulation / watermark detection** — pure-Pillow forensics on
+  listing images: block-level **ELA consistency** (catches the classic
+  multi-generation paste attack without flagging honest recompression),
+  watermark-band / editor-EXIF / tiny-low-quality heuristics. Wired into
+  the fraud scan as the `manipulated_image` detector.
+- **OSRM commute ETA** — real road-network ETA for the map: car/CNG/bus
+  via a self-hostable OSRM server (`GET /api/v1/rooms/eta/`), cached 15
+  min, and a **graceful fallback** to the straight-line/MRT heuristics
+  when routing is down (`OSRM_ENABLED`).
+- **ClamAV virus scan for chat uploads** — optional malware scan on
+  attachments; a positive detection rejects the file, an unreachable
+  scanner degrades to clean-by-default (type/size checks stay the gate).
+  Opt-in: `CLAMAV_ENABLED`.
+- **KYC automated pre-screening** — every tenant verification submission
+  is scored automatically (document parses, cross-account reuse via pHash,
+  readable size, profile completeness, attempt history from the audit
+  log) and the admin queue gets an **approve/review recommendation + the
+  reasons** — the human decision stays the source of truth.
+- **react-router v7** — upgraded from v6 (fixes the last 2 moderate npm
+  audit findings; `npm audit` is now clean).
 
 **Paid Listing Tiers (first revenue stream)**
 
@@ -327,6 +362,7 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 | **12 P1**  | Offline & polish — 🔌 offline search over cached public listings, background sync (offline action replay), periodic refresh, splash screens, dark icon, iOS install hint, Lighthouse audit | ✅ Shipped |
 | **12**     | Trust & Safety V2 — two-sided marketplace integrity: 🪪 tenant KYC + verified-tenant badge, 🛡️ chat safety engine, 🚩 report/block, 🖼️ photo + review moderation, ⚖️ disputes + deposit protection, 🎛️ admin Trust & Safety Operations Center + audit trail | ✅ Shipped |
 | **12.6**   | Tier-1 Quick Wins — 💬 chat message search + edit/delete (audited), 📧 saved-search email digest, 🚦 report rate-limit + duplicate guard, ⚡ semantic search cache, 🛡️ CSP headers + security.txt + dependency bump audit | ✅ Shipped |
+| **12.7**   | Tier-2 Upgrades — 🧠 AI chat-safety classifier (learned layer, human fallback), 📊 self-hosted analytics + conversion funnel, 🖼️ photo manipulation/watermark detection (ELA), 🗺️ OSRM road-network ETA, 🦠 ClamAV upload scan, 🪪 KYC auto pre-screening, ⬆️ react-router v7 | ✅ Shipped |
 
 ---
 
@@ -512,11 +548,11 @@ Rentora/
 
 Quality is enforced **in CI and at commit time** — style or coverage drift fails the pipeline automatically.
 
-### Automated tests (785 total)
+### Automated tests (881 total)
 
 | Suite             | Count | Gate                                      |
 | ----------------- | ----- | ----------------------------------------- |
-| Backend (Django)  | 473   | ✅ passing · coverage ≥ 50% lines         |
+| Backend (Django)  | 569   | ✅ passing · coverage ≥ 50% lines         |
 | Frontend (Vitest) | 312   | ✅ passing · coverage ≥ 55% lines         |
 
 ```bash
@@ -714,6 +750,7 @@ Frontend runs at `http://localhost:3000`
 | GET       | `/api/v1/rooms/summary/`   | Public | COUNT/AVG for the current viewport (map badge)    |
 | GET       | `/api/v1/rooms/map-intel/stats/`         | Public | Per-area rent/demand/metro stats (intelligent map)          |
 | GET       | `/api/v1/rooms/map-intel/commute/`       | Public | Walking/driving/MRT-corridor ETA between two points        |
+| GET       | `/api/v1/rooms/eta/`                     | Public | OSRM road-network ETA (car/cng/bus) with heuristic fallback |
 | GET       | `/api/v1/rooms/map-intel/value/`         | Public | Transparent 0–100 value scores for room ids                |
 | GET       | `/api/v1/rooms/map-intel/affordability/` | Public | % of listed rooms per area within a budget                 |
 | GET       | `/api/v1/rooms/map-intel/ideal-areas/`   | Public | Ranked areas for budget + destination, with reasons        |
@@ -908,6 +945,8 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 | GET    | `/api/v1/disputes/admin/`                               | Admin  | All disputes (`?status=`)                                            |
 | POST   | `/api/v1/disputes/admin/:id/action/`                    | Admin  | Transition / resolve / reject + deposit decision (release/refund)    |
 | GET    | `/api/v1/audit/`                                        | Admin  | Read-only audit trail (`?prefix=` filters by domain)                 |
+| POST   | `/api/v1/analytics/events/`                             | Any    | First-party event capture (auth-optional, bounded, throttled)        |
+| GET    | `/api/v1/analytics/summary/`                            | Admin  | Analytics snapshot: totals, top events/pages, conversion funnel      |
 
 ### Documentation
 
@@ -917,7 +956,7 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 | `/api/v1/redoc/`  | ReDoc                 |
 | `/api/v1/schema/` | OpenAPI schema (YAML) |
 
-> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook) · [`docs/RENTORA_COPILOT.md`](docs/RENTORA_COPILOT.md) (Copilot architecture, API, config) · [`docs/AI_PRICING_V2.md`](docs/AI_PRICING_V2.md) (pricing suggestion v2) · [`docs/DUPLICATE_IMAGE_FRAUD.md`](docs/DUPLICATE_IMAGE_FRAUD.md) (duplicate-image detector) · [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) + [`docs/MAP_API.md`](docs/MAP_API.md) + [`docs/MAP_SCORING.md`](docs/MAP_SCORING.md) (intelligent map v2) · [`docs/VOICE_SEARCH_PLAYBOOK.md`](docs/VOICE_SEARCH_PLAYBOOK.md) (voice search) · [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md) (verified feature matrix) · [`docs/PWA.md`](docs/PWA.md) (PWA architecture, manifest, SW strategy, install/update/offline behavior) · [`docs/phase-12-trust-safety-v2.md`](docs/phase-12-trust-safety-v2.md) (Phase 12 Trust & Safety V2) · [`docs/TENANT_KYC.md`](docs/TENANT_KYC.md) + [`docs/CHAT_SAFETY.md`](docs/CHAT_SAFETY.md) (tenant KYC + chat safety)
+> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook) · [`docs/RENTORA_COPILOT.md`](docs/RENTORA_COPILOT.md) (Copilot architecture, API, config) · [`docs/AI_PRICING_V2.md`](docs/AI_PRICING_V2.md) (pricing suggestion v2) · [`docs/DUPLICATE_IMAGE_FRAUD.md`](docs/DUPLICATE_IMAGE_FRAUD.md) (duplicate-image detector) · [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) + [`docs/MAP_API.md`](docs/MAP_API.md) + [`docs/MAP_SCORING.md`](docs/MAP_SCORING.md) (intelligent map v2) · [`docs/VOICE_SEARCH_PLAYBOOK.md`](docs/VOICE_SEARCH_PLAYBOOK.md) (voice search) · [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md) (verified feature matrix) · [`docs/PWA.md`](docs/PWA.md) (PWA architecture, manifest, SW strategy, install/update/offline behavior) · [`docs/phase-12-trust-safety-v2.md`](docs/phase-12-trust-safety-v2.md) (Phase 12 Trust & Safety V2) · [`docs/TENANT_KYC.md`](docs/TENANT_KYC.md) + [`docs/CHAT_SAFETY.md`](docs/CHAT_SAFETY.md) (tenant KYC + chat safety) · [`docs/tier2-upgrades.md`](docs/tier2-upgrades.md) (AI chat-safety classifier, self-hosted analytics, photo forensics, OSRM ETA, ClamAV, KYC auto pre-screen, react-router v7)
 
 ---
 
