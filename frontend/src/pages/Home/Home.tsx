@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useRooms } from "../../hooks/useRooms";
 import RoomCard from "../../components/RoomCard/RoomCard";
 import RoomCardSkeleton from "../../components/RoomCardSkeleton";
@@ -18,6 +19,7 @@ interface AIFeature {
 
 function HeroSection() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
 
   const handleSearch = () => {
@@ -33,17 +35,15 @@ function HeroSection() {
           Listings in Dhaka
         </div>
         <h1 className="mb-4 font-display text-[clamp(2.2rem,4vw,3.2rem)] font-bold leading-[1.15] tracking-tight text-foreground">
-          Find Your Perfect{" "}
-          <em className="not-italic text-orange-600 dark:text-orange-400">Room</em> in Bangladesh
+          {t("home.heroTitle")}
         </h1>
         <p className="mb-8 text-base leading-relaxed text-gray-600 dark:text-gray-400 sm:text-lg">
-          AI-powered room search with verified landlords, secure payments, and real-time
-          availability. The smarter way to rent in 2025.
+          {t("home.heroSubtitle")}
         </p>
         <div className="flex gap-2 rounded-2xl border border-gray-200 bg-card p-2 shadow-sm dark:border-gray-800">
           <Input
             className="h-11 border-none bg-transparent shadow-none focus-visible:ring-0"
-            placeholder="Search area, room type..."
+            placeholder={t("home.searchPlaceholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -54,7 +54,7 @@ function HeroSection() {
             className="h-11 shrink-0 bg-orange-600 text-white hover:bg-orange-700"
             onClick={handleSearch}
           >
-            Search Rooms
+            {t("home.exploreRooms")}
           </Button>
         </div>
         <div className="mt-6 flex gap-8">

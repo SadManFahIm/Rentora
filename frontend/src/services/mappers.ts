@@ -111,6 +111,13 @@ export interface ApiBooking {
   security_deposit_paid: boolean;
   security_deposit_refunded: boolean;
   created_at: string;
+  /** Tier 3 behavioral trust signals of the booking's tenant. */
+  tenant_trust_signals?: {
+    tenant_verified: boolean;
+    nid_verified: boolean;
+    completed_bookings: number;
+    profile_complete: boolean;
+  };
 }
 
 export interface ApiNotification {
@@ -134,6 +141,13 @@ export interface ApiChatUser {
   avatar?: string | null;
   nid_verified?: boolean;
   tenant_verified?: boolean;
+  /** Tier 3 behavioral trust signals (completed bookings etc.). */
+  trust_signals?: {
+    tenant_verified: boolean;
+    nid_verified: boolean;
+    completed_bookings: number;
+    profile_complete: boolean;
+  };
 }
 
 export interface ApiChatMessage {
@@ -407,6 +421,8 @@ export function mapRoom(api: ApiRoom): Room {
 }
 
 export function mapBooking(api: ApiBooking): Booking {
+  // The mapped Booking extends the room's mapped fields; attach the tenant
+  // trust signals so landlord booking rows can show completed stays.
   return {
     ...mapRoom(api.room),
     bookingId: api.id,
@@ -417,6 +433,12 @@ export function mapBooking(api: ApiBooking): Booking {
     securityDepositAmount: Number(api.security_deposit_amount ?? 0),
     securityDepositPaid: api.security_deposit_paid ?? false,
     securityDepositRefunded: api.security_deposit_refunded ?? false,
+    tenantTrustSignals: api.tenant_trust_signals
+      ? {
+          tenantVerified: api.tenant_trust_signals.tenant_verified,
+          completedBookings: api.tenant_trust_signals.completed_bookings,
+        }
+      : undefined,
   };
 }
 
@@ -438,6 +460,7 @@ export function mapChatUser(api: ApiChatUser): ChatUser {
     avatar: api.avatar ?? null,
     nidVerified: api.nid_verified,
     tenantVerified: api.tenant_verified,
+    completedBookings: api.trust_signals?.completed_bookings ?? 0,
   };
 }
 
