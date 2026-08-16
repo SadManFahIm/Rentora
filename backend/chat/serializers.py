@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.utils import extend_schema_field, inline_serializer
 from rest_framework import serializers
 
 from config.sanitizers import sanitize_text
@@ -35,6 +35,17 @@ class ChatUserSerializer(serializers.ModelSerializer):
             "trust_signals",
         ]
 
+    @extend_schema_field(
+        inline_serializer(
+            "ChatUserTrustSignals",
+            fields={
+                "tenant_verified": serializers.BooleanField(read_only=True),
+                "nid_verified": serializers.BooleanField(read_only=True),
+                "completed_bookings": serializers.IntegerField(read_only=True),
+                "profile_complete": serializers.BooleanField(read_only=True),
+            },
+        )
+    )
     def get_trust_signals(self, obj):
         from users.trust import trust_signals
 
