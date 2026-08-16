@@ -45,6 +45,16 @@ WARNINGS = {
 REPEAT_WINDOW_MINUTES = 30
 REPEAT_MIN_HITS = 2
 
+# Learned-classifier layer (Tier 2). The model adds a *learned* signal for
+# messages that pattern-match known scam messaging without tripping a rule.
+# It can only ever raise a message to medium (flag for human review) or
+# boost a rule-based medium to high — it can never block, and it never
+# overrides a rules verdict. Thresholds are posteriors (0..1).
+ML_FLAG_CONFIDENCE = 0.60
+ML_BOOST_CONFIDENCE = 0.85
+ML_HIT_KEY = "ml_classifier"
+ML_HIT_LABEL = "Pattern matches known scam messaging"
+
 
 @dataclass
 class DetectorHit:
@@ -261,6 +271,39 @@ def assess_message(content: str, chat_room=None, sender=None) -> Assessment:
     # high is a warning to review, a stack of them is an active attack.
     if len({h.key for h in hits if h.risk == "high"}) >= 2:
         risk = "critical"
+
+    # Learned layer (Tier 2): a deterministic Naive-Bayes model trained on
+    # real rental-conversation patterns sits on top of the rules. If it is
+    # confident the message is scam-like but no rule fired, raise to medium
+    # (which flags it for human review — never blocks). If it is *very*
+    # confident and a rule already found medium, boost one level. It can
+    # never produce critical on its own and never downgrades a rule verdict.
+    from .classifier import classify_text_cached
+
+    verdict = classify_text_cached(content)
+    if verdict.label == "suspicious" and verdict.confidence > 0:
+        flag_conf = getattr(settings, "CHAT_SAFETY_ML_FLAG_CONFIDENCE", ML_FLAG_CONFIDENCE)
+        boost_conf = getattr(settings, "CHAT_SAFETY_ML_BOOST_CONFIDENCE", ML_BOOST_CONFIDENCE)
+        if risk == "low" and verdict.confidence >= flag_conf:
+            hits.append(
+                DetectorHit(
+                    key=ML_HIT_KEY,
+                    label=ML_HIT_LABEL,
+                    risk="medium",
+                    fragments=["learned-pattern match"],
+                )
+            )
+            risk = "medium"
+        elif risk == "medium" and verdict.confidence >= boost_conf:
+            hits.append(
+                DetectorHit(
+                    key=ML_HIT_KEY,
+                    label=ML_HIT_LABEL,
+                    risk="high",
+                    fragments=["learned-pattern match (high confidence)"],
+                )
+            )
+            risk = "high"
 
     repeated = False
     if hits and chat_room is not None and sender is not None:

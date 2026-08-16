@@ -565,6 +565,19 @@ class TenantKycView(APIView):
         verification.expires_at = None
         verification.save()
 
+        # Automated pre-screening (Tier 2): score the submission and record
+        # the recommendation + reasons for the admin queue. It never decides
+        # alone — the admin still reviews every application.
+        from .kyc_auto import auto_screen
+
+        screen = auto_screen(verification)
+        verification.auto_screen_score = screen["score"]
+        verification.auto_screen_result = screen["result"]
+        verification.auto_screen_detail = {"reasons": screen["reasons"]}
+        verification.save(
+            update_fields=["auto_screen_score", "auto_screen_result", "auto_screen_detail"]
+        )
+
         from audit.services import log_action
 
         log_action(

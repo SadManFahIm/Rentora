@@ -91,6 +91,7 @@ urlpatterns = [
     path("api/v1/pricing/", include("pricing.urls")),
     path("api/v1/roommates/", include("roommates.urls")),
     path("api/v1/fraud/", include("fraud.urls")),
+    path("api/v1/analytics/", include("analytics.urls")),
     path("api/v1/saved-searches/", include("savedsearches.urls")),
     path("api/v1/copilot/", include("copilot.urls")),
     path("api/v1/moderation/", include("moderation.urls")),
