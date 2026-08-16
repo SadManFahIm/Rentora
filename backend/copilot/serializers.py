@@ -9,6 +9,11 @@ class CopilotChatRequestSerializer(serializers.Serializer):
         min_length=1, max_length=500, help_text="Free-text request, Bangla or English."
     )
     session_id = serializers.CharField(required=False, allow_blank=True, default="")
+    listing_id = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        help_text="When set, the turn is grounded on this single listing (RAG over one document).",
+    )
 
 
 class CopilotIntentSerializer(serializers.Serializer):
@@ -34,9 +39,36 @@ class CopilotListingSerializer(serializers.Serializer):
     image = serializers.CharField(allow_null=True)
 
 
+class CopilotListingFactsSerializer(serializers.Serializer):
+    """Full grounded fact card for one listing (Tier 3 RAG). Public fields
+    only — the same data the rooms list exposes, plus deterministic map
+    intel. Never includes owner contact details or internal scores."""
+
+    id = serializers.IntegerField()
+    title = serializers.CharField()
+    price = serializers.FloatField()
+    area = serializers.CharField()
+    area_display = serializers.CharField()
+    room_type = serializers.CharField()
+    room_type_display = serializers.CharField()
+    gender_preference = serializers.CharField()
+    size_sqft = serializers.IntegerField(allow_null=True)
+    amenities = serializers.ListField(child=serializers.CharField())
+    verified = serializers.BooleanField()
+    available = serializers.BooleanField()
+    address = serializers.CharField()
+    description = serializers.CharField()
+    metro_km = serializers.FloatField(allow_null=True)
+    image = serializers.CharField(allow_null=True)
+
+
 class CopilotChatResponseSerializer(serializers.Serializer):
     """Structured Copilot reply: a human message plus the *retrieved* rooms
-    and the interpreted intent (chips) so the UI never parses prose."""
+    and the interpreted intent (chips) so the UI never parses prose.
+
+    ``mode`` is ``"search"`` (rooms retrieved from the engine) or
+    ``"listing"`` (grounded on one listing — ``listing`` carries its fact
+    card and ``aspect`` says which question was answered)."""
 
     session_id = serializers.CharField()
     message = serializers.CharField()
@@ -44,3 +76,6 @@ class CopilotChatResponseSerializer(serializers.Serializer):
     listings = CopilotListingSerializer(many=True)
     total_count = serializers.IntegerField()
     suggestions = serializers.ListField(child=serializers.CharField())
+    mode = serializers.CharField(required=False, default="search")
+    listing = CopilotListingFactsSerializer(allow_null=True, required=False)
+    aspect = serializers.CharField(allow_null=True, required=False)

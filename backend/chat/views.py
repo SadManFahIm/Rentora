@@ -609,6 +609,19 @@ class ReportCreateView(APIView):
             category=serializer.validated_data["category"],
             description=serializer.validated_data.get("description", ""),
         )
+        from audit.services import log_action
+
+        log_action(
+            actor=request.user,
+            action="report.created",
+            target=report,
+            request=request,
+            detail={
+                "category": report.category,
+                "target_user_id": report.target_user_id,
+                "message_id": report.message_id,
+            },
+        )
         return Response(ReportSerializer(report).data, status=status.HTTP_201_CREATED)
 
 
@@ -753,6 +766,15 @@ class BlockUserView(APIView):
             )
         target = get_object_or_404(User, pk=user_id)
         UserBlock.objects.get_or_create(blocker=request.user, blocked=target)
+        from audit.services import log_action
+
+        log_action(
+            actor=request.user,
+            action="user.blocked",
+            target=target,
+            request=request,
+            detail={"blocker_id": request.user.pk},
+        )
         return Response({"detail": f"{target.username} is now blocked."}, status=status.HTTP_200_OK)
 
 
@@ -767,6 +789,14 @@ class UnblockUserView(APIView):
         deleted, _ = UserBlock.objects.filter(blocker=request.user, blocked_id=user_id).delete()
         if not deleted:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        from audit.services import log_action
+
+        log_action(
+            actor=request.user,
+            action="user.unblocked",
+            request=request,
+            detail={"blocker_id": request.user.pk, "blocked_user_id": user_id},
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
