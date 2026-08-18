@@ -369,11 +369,36 @@ SEMANTIC_SEARCH_ENABLED = os.getenv("SEMANTIC_SEARCH_ENABLED", "True") == "True"
 SEMANTIC_EMBEDDING_MODEL = os.getenv(
     "SEMANTIC_EMBEDDING_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 )
-# Embedding provider mode (Tier 3): "auto" (default) uses sentence-
+# Embedding provider mode (Tier 3/4): "auto" (default) uses sentence-
 # transformers when installed else the lite provider; "neural" requires the
 # real model (falls back with a warning); "lite" forces the zero-dependency
-# provider for dev/CI parity.
+# provider for dev/CI parity; "hosted" (Tier 4) calls a hosted embeddings
+# endpoint (Hugging Face Inference API compatible) with graceful lite
+# fallback on any failure — production-grade without shipping the model.
 SEMANTIC_EMBEDDING_MODE = os.getenv("SEMANTIC_EMBEDDING_MODE", "auto")
+# Hosted embeddings endpoint (Tier 4, mode="hosted"). Any HTTPS server
+# implementing the HF Inference API `/embed` contract works — HF Inference
+# Endpoints, a self-hosted TEI instance, etc. The token is env-only.
+SEMANTIC_EMBEDDING_HOSTED_URL = os.getenv("SEMANTIC_EMBEDDING_HOSTED_URL", "") or None
+SEMANTIC_EMBEDDING_HOSTED_TOKEN = os.getenv("SEMANTIC_EMBEDDING_HOSTED_TOKEN", "") or None
+SEMANTIC_EMBEDDING_HOSTED_MODEL = os.getenv(
+    "SEMANTIC_EMBEDDING_HOSTED_MODEL", "hosted-multilingual"
+)
+
+# ============================================================
+# Automated KYC provider (Tier 4) — pluggable document verification
+# ============================================================
+# Master switch for auto-approval. OFF by default: existing behaviour is
+# untouched (every submission goes to the human review queue). Turn on only
+# when the provider + confidence bar are proven on real documents.
+KYC_AUTO_APPROVE_ENABLED = os.getenv("KYC_AUTO_APPROVE_ENABLED", "False") == "True"
+# Provider implementation: "rules" = bundled deterministic provider
+# (users/kyc_provider.RuleBasedProvider); empty = manual review only.
+KYC_PROVIDER = os.getenv("KYC_PROVIDER", "")
+# Minimum confidence (0..1) for an automated approval to take effect.
+KYC_AUTO_APPROVE_MIN_CONFIDENCE = float(os.getenv("KYC_AUTO_APPROVE_MIN_CONFIDENCE", "0.7"))
+# How long an auto-approved verification stays valid.
+KYC_VALIDITY_DAYS = int(os.getenv("KYC_VALIDITY_DAYS", "365"))
 # Where the precomputed embedding matrix is persisted (production-grade
 # warm cache — see `manage.py prebuild_embeddings`). Defaults to
 # MEDIA_ROOT/embeddings; point this at a persistent volume in production.
@@ -582,6 +607,23 @@ OTP_TTL_SECONDS = int(os.getenv("OTP_TTL_SECONDS", "600"))
 OTP_MAX_ATTEMPTS = int(os.getenv("OTP_MAX_ATTEMPTS", "5"))
 # Minimum delay between resend requests for the same challenge.
 OTP_RESEND_COOLDOWN_SECONDS = int(os.getenv("OTP_RESEND_COOLDOWN_SECONDS", "30"))
+
+# ============================================================
+# Phone (SMS) OTP login (Phase 13 — reach, users app)
+# ============================================================
+# Master switch — OFF by default; a deployment enables it once an SMS gateway
+# is configured (see SMS_PROVIDER below).
+SMS_OTP_ENABLED = os.getenv("SMS_OTP_ENABLED", "False") == "True"
+# Provider: "console" (default) logs codes to the server log for local
+# dev/CI; "http" POSTs a generic gateway (SMS_GATEWAY_URL / API key / sender).
+SMS_PROVIDER = os.getenv("SMS_PROVIDER", "console")
+SMS_GATEWAY_URL = os.getenv("SMS_GATEWAY_URL", "")
+SMS_GATEWAY_API_KEY = os.getenv("SMS_GATEWAY_API_KEY", "")
+SMS_SENDER_ID = os.getenv("SMS_SENDER_ID", "")
+# Code lifecycle knobs (independent of the email-OTP ones above).
+SMS_OTP_TTL_SECONDS = int(os.getenv("SMS_OTP_TTL_SECONDS", "600"))
+SMS_OTP_MAX_ATTEMPTS = int(os.getenv("SMS_OTP_MAX_ATTEMPTS", "5"))
+SMS_OTP_RESEND_COOLDOWN_SECONDS = int(os.getenv("SMS_OTP_RESEND_COOLDOWN_SECONDS", "30"))
 
 # ============================================================
 # WebAuthn / Passkeys (users app)

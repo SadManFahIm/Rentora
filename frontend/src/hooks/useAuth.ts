@@ -71,6 +71,19 @@ export function useVerifyOtp() {
   });
 }
 
+/** Sign in with a phone number + SMS code (Phase 13). Auto-registers new phones. */
+export function useSmsLogin() {
+  const { setUser } = useApp();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ phone, code }: { phone: string; code: string }) =>
+      authService.smsVerify(phone, code),
+    onSuccess: async (user) => {
+      await completeAuth(user, queryClient, setUser);
+    },
+  });
+}
+
 /** Sign in with a passkey (WebAuthn assertion already collected client-side). */
 export function usePasskeyLogin() {
   const { setUser } = useApp();

@@ -186,6 +186,43 @@ class OTPSerializer(serializers.Serializer):
 
 
 # ============================================================
+# Phone (SMS) OTP login (Phase 13)
+# ============================================================
+
+
+def _normalize_bd_phone(value: str) -> str:
+    from .sms import normalize_bd_phone
+
+    normalized = normalize_bd_phone(value)
+    if normalized is None:
+        raise serializers.ValidationError(
+            "Enter a valid Bangladeshi mobile number (e.g. 01712345678)."
+        )
+    return normalized
+
+
+class SmsOtpRequestSerializer(serializers.Serializer):
+    """Input for ``POST /api/v1/auth/sms/request/`` — a BD mobile number."""
+
+    phone = serializers.CharField(max_length=20)
+
+    def validate_phone(self, value):
+        return _normalize_bd_phone(value)
+
+
+class SmsOtpVerifySerializer(SmsOtpRequestSerializer):
+    """Input for ``POST /api/v1/auth/sms/verify/`` — phone + 6-digit code."""
+
+    code = serializers.CharField(max_length=10)
+
+    def validate_code(self, value):
+        value = value.strip()
+        if not value.isdigit() or len(value) != 6:
+            raise serializers.ValidationError("The code must be exactly 6 digits.")
+        return value
+
+
+# ============================================================
 # KYC verification (documents + admin review panel)
 # ============================================================
 

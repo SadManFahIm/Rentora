@@ -455,6 +455,23 @@ def listing_facts_for(room_id: int) -> dict[str, Any] | None:
     return listing_facts(room)
 
 
+def share_summary_for(room_id: int) -> dict[str, Any] | None:
+    """Share-ready, deterministic summary for one listing (Phase 13).
+
+    Powers the WhatsApp share text pre-fill. None when the listing is missing
+    or unavailable (matching the fact-card endpoint's 404 behaviour).
+    """
+    from .listing_qa import listing_share_summary
+
+    try:
+        room = Room.objects.filter(pk=room_id, is_available=True).select_related("owner").first()
+    except (ValueError, TypeError):
+        return None
+    if room is None:
+        return None
+    return listing_share_summary(room)
+
+
 def chat(
     message: str,
     session_id: str | None,

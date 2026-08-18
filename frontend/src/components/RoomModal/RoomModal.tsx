@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -9,6 +9,8 @@ import {
   MessageCircle,
   CalendarCheck,
   Sparkles,
+  HandCoins,
+  Loader2,
 } from "lucide-react";
 import { useRoomFraudStatus } from "../../hooks/useFraud";
 import { fraudBadgeLabel } from "../../lib/fraud";
@@ -23,6 +25,7 @@ import SimilarRooms from "../SimilarRooms/SimilarRooms";
 import ReviewsSection from "../ReviewsSection/ReviewsSection";
 import { useCreateBooking } from "../../hooks/useBookings";
 import { useStartDirectChat } from "../../hooks/useChat";
+import { useListingShare } from "../../hooks/useListingShare";
 import { useApp } from "../../context/AppContext";
 import { isAuthenticated } from "../../services/api";
 import { getApiErrorMessage } from "../../services/errors";
@@ -55,8 +58,17 @@ export default function RoomModal({ room, onClose }: RoomModalProps) {
   const [current, setCurrent] = useState<Room | null>(room);
   const createBooking = useCreateBooking();
   const startChat = useStartDirectChat();
+  const { share, sharingId } = useListingShare();
   // Live fraud badge — fetched only when the modal is open for this room.
   const { data: fraud } = useRoomFraudStatus(current?.id ?? null);
+
+  // Funnel event (Tier 5): a room being *viewed* is the second conversion
+  // step (after page_view). Fire once per room open.
+  useEffect(() => {
+    if (current?.id != null) {
+      track("room_view", { room_id: current.id });
+    }
+  }, [current?.id]);
 
   const handleBook = () => {
     if (!current) return;
@@ -74,8 +86,16 @@ export default function RoomModal({ room, onClose }: RoomModalProps) {
   const handleAskCopilot = () => {
     if (!current) return;
     // Tier 3 RAG: open the floating Copilot grounded on this listing — every
-    // answer comes from this listing's facts, never invented.
-    useCopilotStore.getState().openWithListing({ id: current.id, title: current.name });
+    // answer comes from this listing's facts, never invented. Tier 4: also
+    // pass the price so the negotiation assistant can draft an offer.
+    // Close the modal so the floating widget is actually visible above the
+    // dialog overlay (both render at z-50).
+    useCopilotStore.getState().openWithListing({
+      id: current.id,
+      title: current.name,
+      price: current.price,
+    });
+    onClose();
   };
 
   const handleMessageOwner = () => {
@@ -216,9 +236,48 @@ export default function RoomModal({ room, onClose }: RoomModalProps) {
               </div>
 
               {/* Actions */}
-              <Button variant="outline" className="mt-4 w-full text-sm" onClick={handleAskCopilot}>
-                <Sparkles className="size-4 text-orange-500" />
-                {t("roomModal.askCopilot")}
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <Button variant="outline" className="text-sm" onClick={handleAskCopilot}>
+                  <Sparkles className="size-4 text-orange-500" />
+                  {t("roomModal.askCopilot")}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="text-sm"
+                  onClick={() => {
+                    if (!current) return;
+                    useCopilotStore.getState().openWithListing({
+                      id: current.id,
+                      title: current.name,
+                      price: current.price,
+                    });
+                    useCopilotStore.getState().requestAiTool("negotiate");
+                    onClose();
+                  }}
+                >
+                  <HandCoins className="size-4 text-emerald-500" />
+                  Draft negotiation
+                </Button>
+              </div>
+
+              <Button
+                variant="outline"
+                className="mt-2 w-full text-sm"
+                onClick={() => {
+                  if (!current) return;
+                  void share(current);
+                }}
+                disabled={sharingId === current?.id}
+              >
+                {sharingId === current?.id ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" /> Preparing share…
+                  </>
+                ) : (
+                  <>
+                    <span className="text-base">💬</span> Share on WhatsApp
+                  </>
+                )}
               </Button>
 
               <div className="mt-6 flex gap-3">

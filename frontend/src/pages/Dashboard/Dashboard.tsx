@@ -22,6 +22,7 @@ import AdminDisputesPanel from "../../components/AdminDisputesPanel/AdminDispute
 import DisputesTab from "../../components/DisputesTab/DisputesTab";
 import AdminTrustCenter from "../../components/AdminTrustCenter/AdminTrustCenter";
 import LandlordInsights from "../../components/LandlordInsights/LandlordInsights";
+import LandlordAiWidget from "../../components/LandlordAiWidget/LandlordAiWidget";
 import PushNotificationCard from "../../components/PushNotificationCard/PushNotificationCard";
 import ReferralCard from "../../components/ReferralCard/ReferralCard";
 import WishlistShareButton from "../../components/WishlistShareButton/WishlistShareButton";
@@ -32,6 +33,7 @@ import RoomCard from "../../components/RoomCard/RoomCard";
 import RoomModal from "../../components/RoomModal/RoomModal";
 import RoomForm from "../../components/RoomForm/RoomForm";
 import TierBadge from "../../components/TierBadge/TierBadge";
+import PriceRecommendationCard from "../../components/PriceRecommendationCard/PriceRecommendationCard";
 import PromoteModal from "../../components/PromoteModal/PromoteModal";
 import PaymentMethodModal, {
   type PaymentRequest,
@@ -692,7 +694,14 @@ export default function Dashboard() {
 
       {activeTab === "trust" && isAdmin && <AdminTrustCenter />}
 
-      {activeTab === "insights" && isLandlord && <LandlordInsights />}
+      {activeTab === "insights" && isLandlord && (
+        <>
+          <LandlordInsights />
+          <div className="mt-6">
+            <LandlordAiWidget />
+          </div>
+        </>
+      )}
 
       {selectedRoom && <RoomModal room={selectedRoom} onClose={() => setSelectedRoom(null)} />}
 
@@ -1047,14 +1056,19 @@ function ListingsTab({ onPromote }: { onPromote: (room: Room) => void }) {
                   )}
                 </div>
               </div>
-              <Button
-                size="sm"
-                className="shrink-0 bg-orange-600 text-white hover:bg-orange-700"
-                onClick={() => onPromote(room)}
-              >
-                <Megaphone className="mr-1.5 size-3.5" />
-                {room.tier === "free" ? "Promote" : "Upgrade"}
-              </Button>
+              <div className="flex shrink-0 items-center gap-2">
+                <div className="w-72">
+                  <PriceRecommendationCard roomId={room.id} />
+                </div>
+                <Button
+                  size="sm"
+                  className="shrink-0 bg-orange-600 text-white hover:bg-orange-700"
+                  onClick={() => onPromote(room)}
+                >
+                  <Megaphone className="mr-1.5 size-3.5" />
+                  {room.tier === "free" ? "Promote" : "Upgrade"}
+                </Button>
+              </div>
             </div>
           ))}
         </div>
