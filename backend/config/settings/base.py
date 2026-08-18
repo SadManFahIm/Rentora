@@ -609,6 +609,23 @@ OTP_MAX_ATTEMPTS = int(os.getenv("OTP_MAX_ATTEMPTS", "5"))
 OTP_RESEND_COOLDOWN_SECONDS = int(os.getenv("OTP_RESEND_COOLDOWN_SECONDS", "30"))
 
 # ============================================================
+# Phone (SMS) OTP login (Phase 13 — reach, users app)
+# ============================================================
+# Master switch — OFF by default; a deployment enables it once an SMS gateway
+# is configured (see SMS_PROVIDER below).
+SMS_OTP_ENABLED = os.getenv("SMS_OTP_ENABLED", "False") == "True"
+# Provider: "console" (default) logs codes to the server log for local
+# dev/CI; "http" POSTs a generic gateway (SMS_GATEWAY_URL / API key / sender).
+SMS_PROVIDER = os.getenv("SMS_PROVIDER", "console")
+SMS_GATEWAY_URL = os.getenv("SMS_GATEWAY_URL", "")
+SMS_GATEWAY_API_KEY = os.getenv("SMS_GATEWAY_API_KEY", "")
+SMS_SENDER_ID = os.getenv("SMS_SENDER_ID", "")
+# Code lifecycle knobs (independent of the email-OTP ones above).
+SMS_OTP_TTL_SECONDS = int(os.getenv("SMS_OTP_TTL_SECONDS", "600"))
+SMS_OTP_MAX_ATTEMPTS = int(os.getenv("SMS_OTP_MAX_ATTEMPTS", "5"))
+SMS_OTP_RESEND_COOLDOWN_SECONDS = int(os.getenv("SMS_OTP_RESEND_COOLDOWN_SECONDS", "30"))
+
+# ============================================================
 # WebAuthn / Passkeys (users app)
 # ============================================================
 # rp_id must match the browser's effective registrable domain — "localhost"
