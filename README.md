@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-930%20(610%20BE%20%2B%20320%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-971%20(651%20BE%20%2B%20320%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -62,7 +62,7 @@ One platform, four surfaces — **browse smarter**, **trust the listings**, **se
 | 🧑‍🤝‍🧑 **Roommate Matching** | Compatible flatmates by budget, area & lifestyle | [`roommates-matching.png`](docs/screenshots/roommates-matching.png) |
 | 🛡️ **Trust & Safety** | Two-sided marketplace integrity — tenant KYC + verified-tenant badge, chat safety engine, report/block, photo & review moderation, disputes + deposit protection, admin Trust Center & audit trail | [`trust-center.png`](docs/screenshots/trust-center.png) |
 
-Full gallery (38 screenshots, light + dark, desktop + mobile) in [🖼️ Screenshots](#-screenshots). Live verification notes in [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md).
+Full gallery (58 screenshots, light + dark, desktop + mobile) in [🖼️ Screenshots](#-screenshots). Live verification notes in [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md).
 
 ---
 
@@ -207,6 +207,45 @@ Full gallery (38 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
   booking payloads, and rendered as a ✓ N completed bookings chip in chat
   headers, the verified-tenant badge and the landlord dashboard.
 - **Engineering** — 610 backend + 320 frontend tests, ruff/eslint/tsc clean.
+
+**Tier-4 Upgrades (AI tools, comparison, forecast, Playwright E2E, hosted KYC)**
+
+- **🤝 AI Rental Advisor** (`POST /api/v1/copilot/advisor/`) — budget + income
+  in → a grounded, transparent budget plan (rent cap, suggested areas, monthly
+  breakdown) built from live listing data, never invented figures.
+- **💬 AI Negotiation Assistant** (`POST /api/v1/copilot/negotiate/`) — picks
+  the right counter-offer bracket from comparable listings in the same area
+  and drafts a polite EN/BN message the tenant can send directly from the
+  listing modal (**Draft negotiation**).
+- **📄 AI Rental Agreement Checker** (`POST /api/v1/copilot/agreement-check/`) —
+  paste a rental agreement; deterministic rules flag one-sided clauses,
+  advance-payment risk and missing Bangladesh-standard fields (refund terms,
+  notice period, deposit return), with plain-language advice.
+- **🏠 Landlord Copilot** (`POST /api/v1/copilot/landlord/`) — landlord-facing
+  insights for any owned listing: price position vs the market median,
+  listing-quality score, occupancy risk and pricing suggestions.
+- **📊 AI Property Comparison** (`GET /api/v1/rooms/compare/?ids=1,2`) — select
+  2–5 rooms and compare price, size, amenities, ratings and per-area value in
+  a dedicated drawer with clear winner call-outs.
+- **📈 Demand Forecasting** (`GET /api/v1/analytics/forecast/`) — lightweight
+  time-series forecast of rental demand for an area + room type, powering
+  smart alerts and landlord insight.
+- **🔔 Smart AI Alerts** (`GET /api/v1/notifications/smart/`) — your
+  notification inbox re-ranked by a transparent priority score (0–100) with a
+  plain-language `reason` for every item.
+- **🧠 Hosted neural embeddings** — `SEMANTIC_EMBEDDING_PROVIDER=hosted` uses a
+  remote Hugging Face endpoint (falling back to local lite mode gracefully);
+  the disk-persisted matrix stays the single source of truth.
+- **🪪 Automated KYC pre-verification** — a pluggable provider
+  (`USERS_KYC_PROVIDER`, mock/auto modes) pre-screens NID submissions with
+  deterministic checks (document number shape, date sanity, duplicate guard),
+  auto-approves only clear passes and routes everything else to the existing
+  manual admin review — the human fallback is always in place.
+- **🧪 Browser-level Playwright E2E** — a real-browser layer (`frontend/e2e`,
+  `npm run test:e2e`) that boots the dev server and verifies the app renders,
+  searches, opens the Copilot and answers a listing question; wired into CI
+  as a separate job.
+- **Engineering** — 651 backend + 320 frontend tests (971 total), ruff/eslint/tsc clean, OpenAPI↔TS schema contract enforced.
 
 **Tier-2 Medium Upgrades (trust, analytics & infra)**
 
@@ -405,6 +444,7 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 | **12.6**   | Tier-1 Quick Wins — 💬 chat message search + edit/delete (audited), 📧 saved-search email digest, 🚦 report rate-limit + duplicate guard, ⚡ semantic search cache, 🛡️ CSP headers + security.txt + dependency bump audit | ✅ Shipped |
 | **12.7**   | Tier-2 Upgrades — 🧠 AI chat-safety classifier (learned layer, human fallback), 📊 self-hosted analytics + conversion funnel, 🖼️ photo manipulation/watermark detection (ELA), 🗺️ OSRM road-network ETA, 🦠 ClamAV upload scan, 🪪 KYC auto pre-screening, ⬆️ react-router v7 | ✅ Shipped |
 | **12.8**   | Tier-3 Upgrades — 🤖 RAG Copilot (listing-grounded Q&A, zero hallucination), 🌐 full EN⇄BN UI toggle, 🧠 production-grade neural embeddings (disk-persisted matrix + prebuild command), 🧪 E2E expansion (trust-flow + map), 👤 tenant behavioral trust signals (completed bookings) | ✅ Shipped |
+| **12.9**   | Tier-4 Upgrades — 🤝 AI Rental Advisor, 💬 AI Negotiation Assistant, 📄 AI Agreement Checker, 🏠 Landlord Copilot, 📊 AI Property Comparison, 📈 Demand Forecasting, 🔔 Smart AI Alerts, 🧠 hosted neural embeddings (HF endpoint), 🪪 automated KYC pre-verification, 🧪 browser-level Playwright E2E | ✅ Shipped |
 
 ---
 
@@ -590,11 +630,11 @@ Rentora/
 
 Quality is enforced **in CI and at commit time** — style or coverage drift fails the pipeline automatically.
 
-### Automated tests (930 total)
+### Automated tests (971 total)
 
 | Suite             | Count | Gate                                      |
 | ----------------- | ----- | ----------------------------------------- |
-| Backend (Django)  | 610   | ✅ passing (578 unit + 32 tagged E2E) · coverage ≥ 50% lines |
+| Backend (Django)  | 651   | ✅ passing (619 unit + 32 tagged E2E) · coverage ≥ 50% lines |
 | Frontend (Vitest) | 320   | ✅ passing · coverage ≥ 55% lines         |
 
 ```bash
@@ -921,6 +961,13 @@ Frontend runs at `http://localhost:3000`
 | ------ | --------------------------------- | ------ | ---------------------------------------------------------------------------------- |
 | POST   | `/api/v1/copilot/chat/`           | Public | Conversational discovery — search mode (intent + listings) or `listing_id`-grounded RAG Q&A over one listing |
 | GET    | `/api/v1/copilot/listing/:id/`    | Public | Grounded public fact card for one listing (the RAG source document)                |
+| POST   | `/api/v1/copilot/advisor/`        | Public | AI Rental Advisor — budget + income → grounded budget plan (rent cap, areas, monthly breakdown) |
+| POST   | `/api/v1/copilot/negotiate/`      | Public | AI Negotiation Assistant — comparable-price counter-offer + draft EN/BN message  |
+| POST   | `/api/v1/copilot/agreement-check/`| Public | AI Rental Agreement Checker — one-sided clauses, advance-payment risk, missing BN-standard fields |
+| POST   | `/api/v1/copilot/landlord/`       | Auth (owner/admin) | Landlord Copilot — price position, quality score, occupancy risk for one owned listing |
+| GET    | `/api/v1/rooms/compare/?ids=1,2`  | Public | AI Property Comparison — 2–5 rooms side-by-side with per-area value        |
+| GET    | `/api/v1/analytics/forecast/`     | Public | Demand forecasting for area + room type (powers alerts & insights)          |
+| GET    | `/api/v1/notifications/smart/`    | Auth   | Smart AI Alerts — inbox re-ranked by transparent priority (0–100) + reason  |
 
 ### Roommates
 
@@ -999,7 +1046,7 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 | `/api/v1/redoc/`  | ReDoc                 |
 | `/api/v1/schema/` | OpenAPI schema (YAML) |
 
-> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook) · [`docs/RENTORA_COPILOT.md`](docs/RENTORA_COPILOT.md) (Copilot architecture, API, config) · [`docs/AI_PRICING_V2.md`](docs/AI_PRICING_V2.md) (pricing suggestion v2) · [`docs/DUPLICATE_IMAGE_FRAUD.md`](docs/DUPLICATE_IMAGE_FRAUD.md) (duplicate-image detector) · [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) + [`docs/MAP_API.md`](docs/MAP_API.md) + [`docs/MAP_SCORING.md`](docs/MAP_SCORING.md) (intelligent map v2) · [`docs/VOICE_SEARCH_PLAYBOOK.md`](docs/VOICE_SEARCH_PLAYBOOK.md) (voice search) · [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md) (verified feature matrix) · [`docs/PWA.md`](docs/PWA.md) (PWA architecture, manifest, SW strategy, install/update/offline behavior) · [`docs/phase-12-trust-safety-v2.md`](docs/phase-12-trust-safety-v2.md) (Phase 12 Trust & Safety V2) · [`docs/TENANT_KYC.md`](docs/TENANT_KYC.md) + [`docs/CHAT_SAFETY.md`](docs/CHAT_SAFETY.md) (tenant KYC + chat safety) · [`docs/tier2-upgrades.md`](docs/tier2-upgrades.md) (AI chat-safety classifier, self-hosted analytics, photo forensics, OSRM ETA, ClamAV, KYC auto pre-screen, react-router v7) · [`docs/tier3-upgrades.md`](docs/tier3-upgrades.md) (RAG Copilot listing mode, EN⇄BN i18n, production-grade embeddings, E2E expansion, tenant trust signals)
+> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook) · [`docs/RENTORA_COPILOT.md`](docs/RENTORA_COPILOT.md) (Copilot architecture, API, config) · [`docs/AI_PRICING_V2.md`](docs/AI_PRICING_V2.md) (pricing suggestion v2) · [`docs/DUPLICATE_IMAGE_FRAUD.md`](docs/DUPLICATE_IMAGE_FRAUD.md) (duplicate-image detector) · [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) + [`docs/MAP_API.md`](docs/MAP_API.md) + [`docs/MAP_SCORING.md`](docs/MAP_SCORING.md) (intelligent map v2) · [`docs/VOICE_SEARCH_PLAYBOOK.md`](docs/VOICE_SEARCH_PLAYBOOK.md) (voice search) · [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md) (verified feature matrix) · [`docs/PWA.md`](docs/PWA.md) (PWA architecture, manifest, SW strategy, install/update/offline behavior) · [`docs/phase-12-trust-safety-v2.md`](docs/phase-12-trust-safety-v2.md) (Phase 12 Trust & Safety V2) · [`docs/TENANT_KYC.md`](docs/TENANT_KYC.md) + [`docs/CHAT_SAFETY.md`](docs/CHAT_SAFETY.md) (tenant KYC + chat safety) · [`docs/tier2-upgrades.md`](docs/tier2-upgrades.md) (AI chat-safety classifier, self-hosted analytics, photo forensics, OSRM ETA, ClamAV, KYC auto pre-screen, react-router v7) · [`docs/tier3-upgrades.md`](docs/tier3-upgrades.md) (RAG Copilot listing mode, EN⇄BN i18n, production-grade embeddings, E2E expansion, tenant trust signals) · [`docs/tier4-upgrades.md`](docs/tier4-upgrades.md) (AI advisor, negotiation assistant, agreement checker, landlord copilot, property comparison, demand forecast, smart alerts, hosted embeddings, KYC auto pre-screen, Playwright E2E)
 
 ---
 
@@ -1101,7 +1148,8 @@ Every shipped phase with its captured screenshots (all in `docs/screenshots/`):
 | 10 | Growth & personalization | [`phase10-dashboard-growth.png`](docs/screenshots/phase10-dashboard-growth.png) · [`phase10-insights.png`](docs/screenshots/phase10-insights.png) · [`phase10-saved-search.png`](docs/screenshots/phase10-saved-search.png) · [`saved-search-match.png`](docs/screenshots/saved-search-match.png) |
 | 11 | AI search + Copilot + fraud | [`phase11-ai-search.png`](docs/screenshots/phase11-ai-search.png) · [`copilot.png`](docs/screenshots/copilot.png) · [`duplicate-image-fraud.png`](docs/screenshots/duplicate-image-fraud.png) · [`fraud-admin.png`](docs/screenshots/fraud-admin.png) |
 | 12 | Trust & Safety V2 | [`tenant-kyc-upload.png`](docs/screenshots/tenant-kyc-upload.png) · [`tenant-kyc-pending.png`](docs/screenshots/tenant-kyc-pending.png) · [`verified-tenant-badge.png`](docs/screenshots/verified-tenant-badge.png) · [`report-block.png`](docs/screenshots/report-block.png) · [`chat-safety-feed.png`](docs/screenshots/chat-safety-feed.png) · [`moderation-reviews.png`](docs/screenshots/moderation-reviews.png) · [`moderation-photos.png`](docs/screenshots/moderation-photos.png) · [`dispute-admin.png`](docs/screenshots/dispute-admin.png) · [`trust-center.png`](docs/screenshots/trust-center.png) · [`audit-trail.png`](docs/screenshots/audit-trail.png) |
-| 12.6–12.8 | Tier-1/2/3 upgrades (chat edit/delete, analytics, RAG Copilot, EN⇄BN UI, trust signals) | UI captured live in the app — capture workflow in [`docs/screenshots/README.md`](docs/screenshots/README.md) |
+| 12.6–12.8 | Tier-1/2/3 upgrades (chat edit/delete, analytics, RAG Copilot, EN⇄BN UI, trust signals) | [`phase12.8-copilot-listing-qa.png`](docs/screenshots/phase12.8-copilot-listing-qa.png) · [`phase12.8-lang-toggle.png`](docs/screenshots/phase12.8-lang-toggle.png) · [`phase12.8-completed-bookings.png`](docs/screenshots/phase12.8-completed-bookings.png) |
+| 12.9 | Tier-4 upgrades (AI tools, comparison, landlord copilot, smart alerts) | [`phase12.9-ai-tools-advisor.png`](docs/screenshots/phase12.9-ai-tools-advisor.png) · [`phase12.9-compare.png`](docs/screenshots/phase12.9-compare.png) · [`phase12.9-landlord-copilot.png`](docs/screenshots/phase12.9-landlord-copilot.png) · [`phase12.9-smart-alerts.png`](docs/screenshots/phase12.9-smart-alerts.png) |
 
 Below, the detailed phase-by-phase screenshots.
 

@@ -22,6 +22,7 @@ import AdminDisputesPanel from "../../components/AdminDisputesPanel/AdminDispute
 import DisputesTab from "../../components/DisputesTab/DisputesTab";
 import AdminTrustCenter from "../../components/AdminTrustCenter/AdminTrustCenter";
 import LandlordInsights from "../../components/LandlordInsights/LandlordInsights";
+import LandlordAiWidget from "../../components/LandlordAiWidget/LandlordAiWidget";
 import PushNotificationCard from "../../components/PushNotificationCard/PushNotificationCard";
 import ReferralCard from "../../components/ReferralCard/ReferralCard";
 import WishlistShareButton from "../../components/WishlistShareButton/WishlistShareButton";
@@ -692,7 +693,14 @@ export default function Dashboard() {
 
       {activeTab === "trust" && isAdmin && <AdminTrustCenter />}
 
-      {activeTab === "insights" && isLandlord && <LandlordInsights />}
+      {activeTab === "insights" && isLandlord && (
+        <>
+          <LandlordInsights />
+          <div className="mt-6">
+            <LandlordAiWidget />
+          </div>
+        </>
+      )}
 
       {selectedRoom && <RoomModal room={selectedRoom} onClose={() => setSelectedRoom(null)} />}
 
