@@ -16,6 +16,7 @@ from config.auth_views import ThrottledLoginView, ThrottledRegisterView
 from config.views import security_txt
 from users import otp_views as users_otp_views
 from users import passkey_views as users_passkey_views
+from users import sms_otp_views as users_sms_otp_views
 
 urlpatterns = [
     # RFC 9116 security.txt — both canonical and convenience paths.
@@ -50,6 +51,17 @@ urlpatterns = [
         "api/v1/auth/otp/confirm-enable/",
         users_otp_views.OTPConfirmEnableView.as_view(),
         name="otp_confirm_enable",
+    ),
+    # Phone (SMS) OTP login (see users/sms_otp_views.py) — gated by SMS_OTP_ENABLED.
+    path(
+        "api/v1/auth/sms/request/",
+        users_sms_otp_views.SmsOtpRequestView.as_view(),
+        name="sms_otp_request",
+    ),
+    path(
+        "api/v1/auth/sms/verify/",
+        users_sms_otp_views.SmsOtpVerifyView.as_view(),
+        name="sms_otp_verify",
     ),
     # WebAuthn / passkeys (see users/passkey_views.py).
     path(

@@ -215,6 +215,38 @@ class OTPChallenge(models.Model):
         return f"OTP for {self.user_id} ({self.purpose}:{self.status})"
 
 
+class SmsOtpChallenge(models.Model):
+    """A single in-flight phone (SMS) login challenge (Phase 13).
+
+    Passwordless sign-in: the user enters a Bangladeshi mobile number, a
+    6-digit code is delivered by SMS, and a correct code signs them in —
+    creating the account on the first successful verification. The code is
+    stored as a SHA-256 hash only; one active challenge per phone number.
+
+    Lifecycle: pending → used | expired (TTL passed) | locked (too many
+    failed attempts). Mirrors ``OTPChallenge``.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        USED = "used", "Used"
+        EXPIRED = "expired", "Expired"
+        LOCKED = "locked", "Locked"
+
+    phone = models.CharField(max_length=16, db_index=True)
+    code_hash = models.CharField(max_length=64)
+    attempts = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"SMS OTP for {self.phone} ({self.status})"
+
+
 class RecoveryCode(models.Model):
     """One-time backup code minted when a user enables 2FA.
 
