@@ -17,6 +17,7 @@ import Layout from "./components/Layout/Layout";
 // Pages — code-split: each page is fetched only when its route is opened.
 const Home = lazy(() => import("./pages/Home/Home"));
 const Rooms = lazy(() => import("./pages/Rooms/Rooms"));
+const AreaRooms = lazy(() => import("./pages/AreaRooms/AreaRooms"));
 const Map = lazy(() => import("./pages/Map/Map"));
 const Chat = lazy(() => import("./pages/Chat/Chat"));
 const Dashboard = lazy(() => import("./pages/Dashboard/Dashboard"));
@@ -58,6 +59,7 @@ export default function App() {
                 <Route element={<Layout />}>
                   <Route path="/" element={<Home />} />
                   <Route path="/rooms" element={<Rooms />} />
+                  <Route path="/rooms/:areaSlug" element={<AreaRooms />} />
                   <Route path="/map" element={<Map />} />
                   <Route path="/chat" element={<Chat />} />
                   <Route path="/roommates" element={<Roommates />} />
