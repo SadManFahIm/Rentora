@@ -6,8 +6,9 @@ referenced from the [🖼️ Screenshots](../../README.md#-screenshots) section
 
 ## How screenshots are captured
 
-Tier-4+ captures are automated with Playwright — `frontend/scripts/capture_tier4_shots.mjs`
-and `capture_tier5_shots.mjs` log in as `admin.demo` against the dev stack
+Tier-4+ captures are automated with Playwright — `frontend/scripts/capture_tier4_shots.mjs`,
+`capture_tier5_shots.mjs` (log in as `admin.demo`) and
+`capture_phase13_shots.mjs` (public pages, no login) run against the dev stack
 (backend :8000, frontend :3001) and capture real UI state. Older captures
 were done manually; the workflow below still applies to both:
 
@@ -28,7 +29,7 @@ were done manually; the workflow below still applies to both:
    production secrets, no private URLs. Dark-mode variants get a
    `-dark` suffix.
 
-## Phase inventory (58 files)
+## Phase inventory (61 files)
 
 | Phase | Files |
 | ----- | ----- |
@@ -43,3 +44,4 @@ were done manually; the workflow below still applies to both:
 | 12.6–12.8 | `phase12.8-copilot-listing-qa.png` (RAG listing Q&A), `phase12.8-lang-toggle.png` (EN⇄BN), `phase12.8-completed-bookings.png` (trust chip) |
 | 12.9 | `phase12.9-ai-tools-advisor.png` (AI advisor), `phase12.9-compare.png` (property comparison), `phase12.9-landlord-copilot.png`, `phase12.9-smart-alerts.png` |
 | 12.10 | `tier5-price-recommendation.png` (per-listing price advice), `tier5-ai-draft.png` (listing form AI draft), `tier5-copilot-photos.png` (Copilot photo answer) |
+| 13 | `phase13-area-page.png` (area SEO landing page), `phase13-whatsapp-share.png` (WhatsApp share), `phase13-sms-login.png` (phone sign-in) |
