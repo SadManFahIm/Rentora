@@ -1,4 +1,4 @@
-import { Star, MapPin, Heart, ShieldCheck } from "lucide-react";
+import { Check, Star, MapPin, Heart, ShieldCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useWishlistStore } from "../../stores/wishlistStore";
 import type { Room } from "../../types";
@@ -10,9 +10,17 @@ import { cn } from "../../lib/utils";
 interface RoomCardProps {
   room: Room;
   onClick: (room: Room) => void;
+  /** Tier 4 — property comparison selection. */
+  compareSelected?: boolean;
+  onToggleCompare?: (room: Room) => void;
 }
 
-export default function RoomCard({ room, onClick }: RoomCardProps) {
+export default function RoomCard({
+  room,
+  onClick,
+  compareSelected = false,
+  onToggleCompare,
+}: RoomCardProps) {
   const { t } = useTranslation();
   const wishlist = useWishlistStore((s) => s.wishlist);
   const toggleWishlist = useWishlistStore((s) => s.toggleWishlist);
@@ -52,6 +60,29 @@ export default function RoomCard({ room, onClick }: RoomCardProps) {
         <div className="absolute left-3 top-3 flex flex-col items-start gap-1.5">
           <TierBadge tier={room.tier} />
         </div>
+        {onToggleCompare && (
+          <button
+            type="button"
+            aria-label={
+              compareSelected
+                ? `Remove ${room.name} from comparison`
+                : `Add ${room.name} to comparison`
+            }
+            aria-pressed={compareSelected}
+            className={`absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center rounded-full shadow-sm transition ${
+              compareSelected
+                ? "bg-indigo-600 text-white"
+                : "bg-white/90 text-gray-600 hover:scale-110"
+            }`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleCompare(room);
+            }}
+            title={compareSelected ? "Remove from comparison" : "Add to comparison"}
+          >
+            <Check className="size-4" />
+          </button>
+        )}
         <button
           className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-sm transition-transform hover:scale-110"
           onClick={(e) => {

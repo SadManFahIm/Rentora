@@ -38,3 +38,7 @@ frontend/src/generated/
 
 # Vite cache
 frontend/.vite/
+
+# Playwright browser E2E artifacts
+frontend/test-results/
+frontend/playwright-report/
