@@ -99,6 +99,24 @@ def _apply_success_side_effects(payment: Payment) -> None:
     SUCCESS transition, so this booking/schedule bookkeeping either commits
     together with the payment or not at all.
     """
+    # Funnel event (Tier 5): a payment is the last conversion step — recorded
+    # server-side on the SUCCESS transition, never from a client that could
+    # be forged or lost. No PII.
+    from analytics.services import record_event
+
+    record_event(
+        payment.user,
+        "payment_completed",
+        category="payment",
+        properties={
+            "payment_type": payment.payment_type,
+            "amount": str(payment.amount),
+            "booking_id": payment.booking_id,
+            "room_id": payment.room_id,
+        },
+        path="/dashboard",
+    )
+
     booking = payment.booking
 
     # Paid-listing promotions: booking is None, but `room` is set. On success
