@@ -3,11 +3,12 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 vi.mock("./api", () => ({
   default: {
     post: vi.fn(),
+    get: vi.fn(),
   },
 }));
 
 import api from "./api";
-import { sendCopilotMessage } from "./copilotService";
+import { getListingShareSummary, sendCopilotMessage } from "./copilotService";
 
 const apiResponse = {
   session_id: "abc123",
@@ -68,5 +69,20 @@ describe("copilotService", () => {
     const res = await sendCopilotMessage("anything", null);
     expect(res.total_count).toBe(2);
     expect(res.listings.length).toBeLessThanOrEqual(res.total_count);
+  });
+
+  it("fetches the share-ready AI summary for a listing", async () => {
+    const summary = {
+      id: 29,
+      title: "Student Room, Uttara Sector 10",
+      price: 8500,
+      area: "Uttara",
+      area_display: "Uttara",
+      summary: "Student Room, Uttara Sector 10 — Uttara · ৳8,500/month",
+    };
+    (api.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ data: summary });
+    const res = await getListingShareSummary(29);
+    expect(res.summary).toContain("Uttara");
+    expect(api.get).toHaveBeenCalledWith("/copilot/share-summary/29/");
   });
 });

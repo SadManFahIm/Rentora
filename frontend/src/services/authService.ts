@@ -110,6 +110,32 @@ export const authService = {
     return { otpEnabled: data.otp_enabled, recoveryCodes: data.recovery_codes };
   },
 
+  // ---- Phone (SMS) OTP login (Phase 13) ----
+
+  /**
+   * POST /auth/sms/request/ — send a 6-digit code to a Bangladeshi mobile
+   * number. Returns the masked number so the UI can confirm where it was sent.
+   */
+  async smsRequest(phone: string): Promise<{
+    success: boolean;
+    phoneMasked: string;
+    expiresIn: number;
+  }> {
+    const { data } = await api.post<{
+      success: boolean;
+      phone_masked: string;
+      expires_in: number;
+    }>("/auth/sms/request/", { phone });
+    return { success: data.success, phoneMasked: data.phone_masked, expiresIn: data.expires_in };
+  },
+
+  /** POST /auth/sms/verify/ — exchange (phone, code) for JWTs (auto-register). */
+  async smsVerify(phone: string, code: string): Promise<User> {
+    const { data } = await api.post<AuthApiResponse>("/auth/sms/verify/", { phone, code });
+    setTokens(data.access, data.refresh);
+    return mapUser(data.user);
+  },
+
   // ---- Passkeys (WebAuthn / FIDO2) ----
 
   /** POST /auth/passkey/register/begin/ → options for the browser ceremony. */
