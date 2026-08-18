@@ -28,7 +28,9 @@ async function login(page) {
     });
     await sleep(1200);
   }
-  const userInput = page.locator("input[placeholder*='email or username'], input[placeholder*='rahim.hossain']").first();
+  const userInput = page
+    .locator("input[placeholder*='email or username'], input[placeholder*='rahim.hossain']")
+    .first();
   const passInput = page.locator("input[type='password']").first();
   if ((await userInput.count()) === 0 || (await passInput.count()) === 0) {
     // fallback: nth inputs
@@ -133,7 +135,9 @@ async function main() {
     btn?.click();
   });
   await sleep(1200);
-  const input = page.locator("input[placeholder*='ask'], textarea[placeholder*='ask'], input:not([type])").last();
+  const input = page
+    .locator("input[placeholder*='ask'], textarea[placeholder*='ask'], input:not([type])")
+    .last();
   if ((await input.count()) > 0) {
     await input.fill("What does this room look like?");
     await input.press("Enter");
