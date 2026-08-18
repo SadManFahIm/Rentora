@@ -399,3 +399,34 @@ def listing_facts(room: Room) -> dict[str, Any]:
         "metro_km": metro,
         "image": (room.images.first().image.url if room.images.exists() else None),
     }
+
+
+def listing_share_summary(room: Room) -> dict[str, Any]:
+    """Compact, share-ready summary of a listing (Phase 13 — WhatsApp reach).
+
+    Deterministic and grounded: built only from the listing's public fields
+    (the same fields the rooms list exposes). Powers the WhatsApp "why this
+    listing" share text so the share link opens pre-filled with real facts —
+    nothing here is invented, and no owner contact details ever leak.
+    """
+    parts = [f"{room.title} — {room.get_area_display()}"]
+    parts.append(f"৳{int(room.price):,}/month")
+    if room.room_type:
+        parts.append(room.get_room_type_display())
+    if room.size_sqft:
+        parts.append(f"{room.size_sqft} sqft")
+    if room.amenities:
+        parts.append("✓ " + ", ".join(str(a) for a in room.amenities[:4]))
+    if room.verified:
+        parts.append("✓ identity-verified listing")
+    if not room.is_available:
+        parts.append("currently unavailable")
+
+    return {
+        "id": room.pk,
+        "title": room.title,
+        "price": float(room.price),
+        "area": room.area,
+        "area_display": room.get_area_display(),
+        "summary": " · ".join(parts),
+    }
