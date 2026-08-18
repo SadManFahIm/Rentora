@@ -95,12 +95,23 @@ async function main() {
   await page.goto(`${BASE}/rooms`, { waitUntil: "networkidle" });
   await sleep(2500);
   // Wait for a real listing card, then click it to open the room modal.
-  await page.locator(".group").first().waitFor({ timeout: 20000 }).catch(() => {});
-  await page.locator(".group").first().click({ timeout: 10000 }).catch(() => {});
+  await page
+    .locator(".group")
+    .first()
+    .waitFor({ timeout: 20000 })
+    .catch(() => {});
+  await page
+    .locator(".group")
+    .first()
+    .click({ timeout: 10000 })
+    .catch(() => {});
   await sleep(2000);
   const shareBtn = page.locator("button:has-text('Share on WhatsApp')");
   if ((await shareBtn.count()) > 0) {
-    await page.locator("[role='dialog']").last().screenshot({ path: `${OUT}phase13-whatsapp-share.png` });
+    await page
+      .locator("[role='dialog']")
+      .last()
+      .screenshot({ path: `${OUT}phase13-whatsapp-share.png` });
     console.log("shot 2 saved (WhatsApp share)");
   } else {
     await page.screenshot({ path: `${OUT}phase13-whatsapp-share.png` });
