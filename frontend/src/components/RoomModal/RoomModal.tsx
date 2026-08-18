@@ -10,6 +10,7 @@ import {
   CalendarCheck,
   Sparkles,
   HandCoins,
+  Loader2,
 } from "lucide-react";
 import { useRoomFraudStatus } from "../../hooks/useFraud";
 import { fraudBadgeLabel } from "../../lib/fraud";
@@ -24,6 +25,7 @@ import SimilarRooms from "../SimilarRooms/SimilarRooms";
 import ReviewsSection from "../ReviewsSection/ReviewsSection";
 import { useCreateBooking } from "../../hooks/useBookings";
 import { useStartDirectChat } from "../../hooks/useChat";
+import { useListingShare } from "../../hooks/useListingShare";
 import { useApp } from "../../context/AppContext";
 import { isAuthenticated } from "../../services/api";
 import { getApiErrorMessage } from "../../services/errors";
@@ -56,6 +58,7 @@ export default function RoomModal({ room, onClose }: RoomModalProps) {
   const [current, setCurrent] = useState<Room | null>(room);
   const createBooking = useCreateBooking();
   const startChat = useStartDirectChat();
+  const { share, sharingId } = useListingShare();
   // Live fraud badge — fetched only when the modal is open for this room.
   const { data: fraud } = useRoomFraudStatus(current?.id ?? null);
 
@@ -256,6 +259,26 @@ export default function RoomModal({ room, onClose }: RoomModalProps) {
                   Draft negotiation
                 </Button>
               </div>
+
+              <Button
+                variant="outline"
+                className="mt-2 w-full text-sm"
+                onClick={() => {
+                  if (!current) return;
+                  void share(current);
+                }}
+                disabled={sharingId === current?.id}
+              >
+                {sharingId === current?.id ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" /> Preparing share…
+                  </>
+                ) : (
+                  <>
+                    <span className="text-base">💬</span> Share on WhatsApp
+                  </>
+                )}
+              </Button>
 
               <div className="mt-6 flex gap-3">
                 <Button

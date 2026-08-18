@@ -9,7 +9,8 @@
     "register": "Register",
     "dashboard": "Dashboard",
     "logout": "Log Out",
-    "menu": "Menu"
+    "menu": "Menu",
+    "areas": "Areas"
   },
   "footer": {
     "tagline": "Bangladesh's most trusted AI-powered room rental platform. Find verified, affordable rooms in Dhaka and beyond.",
@@ -36,7 +37,8 @@
     "removeFromWishlist": "Remove from wishlist",
     "addToWishlist": "Add to wishlist",
     "valueBadge": "Good value",
-    "viewDetails": "View Details"
+    "viewDetails": "View Details",
+    "shareWhatsApp": "Share on WhatsApp"
   },
   "roomModal": {
     "bookNow": "Book Now",
@@ -47,6 +49,9 @@
     "unverifiedListing": "Not Verified",
     "askCopilot": "Ask Copilot about this listing",
     "askCopilotHint": "Price, amenities, area — grounded answers only"
+  },
+  "areaRooms": {
+    "availableIn": "Available rooms in {{area}}"
   },
   "searchFilter": {
     "allAreas": "All Areas",
