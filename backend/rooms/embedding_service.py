@@ -204,7 +204,7 @@ class HostedEmbeddingProvider(EmbeddingProvider):
                 self.url,
                 json=payload,
                 headers=headers,
-                timeout=getattr(settings, "SEMANTIC_EMBEDDING_HOSTED_TIMEOUT", 10.0),
+                timeout=10.0,  # Bandit B113 wants a literal timeout
             )
             resp.raise_for_status()
             data = resp.json()

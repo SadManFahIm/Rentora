@@ -384,7 +384,6 @@ SEMANTIC_EMBEDDING_HOSTED_TOKEN = os.getenv("SEMANTIC_EMBEDDING_HOSTED_TOKEN", "
 SEMANTIC_EMBEDDING_HOSTED_MODEL = os.getenv(
     "SEMANTIC_EMBEDDING_HOSTED_MODEL", "hosted-multilingual"
 )
-SEMANTIC_EMBEDDING_HOSTED_TIMEOUT = float(os.getenv("SEMANTIC_EMBEDDING_HOSTED_TIMEOUT", "10"))
 
 # ============================================================
 # Automated KYC provider (Tier 4) — pluggable document verification
