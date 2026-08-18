@@ -39,6 +39,17 @@ WATERMARK_BAND_FRAC = 0.10  # corner band = 10% of the axis
 WATERMARK_VAR_RATIO = 3.0  # band stddev < body stddev / ratio → overlay
 BODY_VAR_MIN = 18.0  # body must have texture for the overlay test to mean anything
 
+# Tier 5 — text-overlay / repeated-pattern watermark heuristics.
+TEXT_TILE = 48  # px — tile size for the text-region scan
+TEXT_DARK_FRAC = 0.03  # a text tile has ≥3% very-dark pixels (the strokes)
+TEXT_BRIGHT_FRAC = 0.25  # …and ≥25% bright pixels (the photo behind)
+TEXT_TILE_FRAC = 0.03  # fraction of all tiles that must look text-like to flag
+REPEAT_CORNER_FRAC = 0.06  # corner tile = 6% of the axis
+REPEAT_SIM_THRESHOLD = 0.16  # mean abs diff below this → tiles look alike (255-scale)
+REPEAT_MIN_TILES = 4  # at least this many similar tiles across the image
+REPEAT_TILE_STDDEV_MIN = 12.0  # the reference tile must be *distinctive* (not flat/noise)
+REPEAT_MATCH_FRAC = 0.35  # fraction of non-overlapping tiles that must match
+
 _EDITOR_MARKERS = (
     "photoshop",
     "adobe",
@@ -176,6 +187,75 @@ def _body_variance(img: Image.Image) -> float:
     return float(stat.stddev[0])
 
 
+def _text_overlay_score(img: Image.Image) -> float:
+    """Fraction of the image that looks like overlaid text strokes.
+
+    Caption/phone-number overlays are *dark strokes on a bright photo*: a
+    tile containing lettering has both a meaningful share of very dark
+    pixels (the strokes) and a large share of bright pixels (the photo
+    behind them) — a combination natural texture almost never produces
+    (busy noise is uniformly mid-tone, dark rooms have no bright share).
+    Returns a 0..1 fraction of text-like tiles.
+    """
+    gray = img.convert("L")
+    w, h = gray.size
+    tile = TEXT_TILE
+    text_tiles = 0
+    total_tiles = 0
+    for y in range(0, h - tile + 1, tile):
+        for x in range(0, w - tile + 1, tile):
+            hist = gray.crop((x, y, x + tile, y + tile)).histogram()
+            n = tile * tile
+            dark = sum(hist[:80]) / n
+            bright = sum(hist[180:]) / n
+            total_tiles += 1
+            if dark >= TEXT_DARK_FRAC and bright >= TEXT_BRIGHT_FRAC:
+                text_tiles += 1
+    if total_tiles == 0:
+        return 0.0
+    return text_tiles / total_tiles
+
+
+def _repeated_pattern_score(img: Image.Image) -> float:
+    """How much of the image repeats a small corner tile (0..1).
+
+    A tiled/diagonal watermark repeats the same small mark across the photo.
+    We take the top-left corner tile and count how many other positions match
+    it within a similarity threshold — a real photo has no repeats, a tiled
+    watermark has many.
+    """
+    w, h = img.size
+    tw = max(8, int(w * REPEAT_CORNER_FRAC))
+    th = max(8, int(h * REPEAT_CORNER_FRAC))
+    gray = img.convert("L")
+    corner = gray.crop((0, 0, tw, th))
+
+    # The reference must be a *distinctive* mark — a flat or pure-noise tile
+    # would match everything and prove nothing.
+    corner_stddev = float(ImageStat.Stat(corner).stddev[0])
+    if corner_stddev < REPEAT_TILE_STDDEV_MIN:
+        return 0.0
+
+    matches = 0
+    positions = 0
+    step = tw  # non-overlapping tiles — overlap would match by construction
+    for y in range(0, h - th + 1, step):
+        for x in range(0, w - tw + 1, step):
+            if x == 0 and y == 0:
+                continue  # the reference tile itself
+            positions += 1
+            candidate = gray.crop((x, y, x + tw, y + th))
+            diff = ImageChops.difference(corner, candidate)
+            stat = ImageStat.Stat(diff)
+            if stat.mean[0] <= REPEAT_SIM_THRESHOLD * 255:
+                matches += 1
+    if positions == 0:
+        return 0.0
+    if matches < REPEAT_MIN_TILES:
+        return 0.0
+    return matches / positions
+
+
 def analyze_image(path: str) -> ForensicsResult:
     """Run the forensics pipeline over one image file. Never raises for a
     bad/missing file — it returns an unparsed result so callers can treat
@@ -257,6 +337,32 @@ def analyze_image(path: str) -> ForensicsResult:
                 label="Uniform band along the bottom — possible watermark/caption",
                 severity="low",
                 score=min(1.0, 0.35 + body_var / 100.0),
+            )
+        )
+
+    # Tier 5 — text overlay: high-contrast, low-variance strokes typical of
+    # captions / phone-number watermarks stamped across the photo.
+    text_frac = _text_overlay_score(img)
+    if text_frac >= TEXT_TILE_FRAC:
+        result.signals.append(
+            ForensicSignal(
+                key="text_overlay",
+                label=f"~{text_frac:.0%} of the image looks like overlaid text — possible caption/watermark",
+                severity="medium",
+                score=min(1.0, 0.45 + text_frac),
+            )
+        )
+
+    # Tier 5 — repeated-pattern watermark: the same small tile recurs across
+    # the photo (diagonal/tiled marks), which real photos never do.
+    repeat_frac = _repeated_pattern_score(img)
+    if repeat_frac >= 0.3:
+        result.signals.append(
+            ForensicSignal(
+                key="repeated_pattern",
+                label=f"~{repeat_frac:.0%} of the image repeats a small tile — possible tiled watermark",
+                severity="medium",
+                score=min(1.0, 0.5 + repeat_frac / 2),
             )
         )
 
