@@ -61,12 +61,21 @@ One platform, four surfaces — **browse smarter**, **trust the listings**, **se
 | 🛡️ **Fraud Operations** | Auto-scanned listings, risk scores, admin review queue + duplicate-image detection | [`fraud-admin.png`](docs/screenshots/fraud-admin.png) |
 | 🧑‍🤝‍🧑 **Roommate Matching** | Compatible flatmates by budget, area & lifestyle | [`roommates-matching.png`](docs/screenshots/roommates-matching.png) |
 | 🛡️ **Trust & Safety** | Two-sided marketplace integrity — tenant KYC + verified-tenant badge, chat safety engine, report/block, photo & review moderation, disputes + deposit protection, admin Trust Center & audit trail | [`trust-center.png`](docs/screenshots/trust-center.png) |
+| 📱 **Reach** | SMS OTP phone sign-in for the Bangladesh market, one-tap **Share on WhatsApp** with an AI listing summary, per-area SEO landing pages + sitemap, Lighthouse gate in CI | [`phase13-area-page.png`](docs/screenshots/phase13-area-page.png) |
 
-Full gallery (58 screenshots, light + dark, desktop + mobile) in [🖼️ Screenshots](#-screenshots). Live verification notes in [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md).
+Full gallery (61 screenshots, light + dark, desktop + mobile) in [🖼️ Screenshots](#-screenshots). Live verification notes in [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md).
 
 ---
 
 ## 🆕 Changelog
+
+**Phase 13 — Reach (SMS OTP, WhatsApp sharing, area SEO)**
+
+- **SMS OTP sign-in** — phone-first login for the Bangladesh market: `POST /api/v1/auth/sms/request|verify/` with a SHA-256-hashed challenge (TTL 600s, max 5 attempts, 30s resend cooldown), masked-phone responses (`+8801••••78`) and **auto-registration** for new numbers. Provider contract (`users.sms.send_sms`) ships `console` (logs the code — zero-config dev/CI) and `http` (generic gateway POST); **disabled by default** (`SMS_OTP_ENABLED=False` → endpoints answer `503` until a real gateway is plugged in). 19 tests including the disabled→503 path. See [`docs/phase-13-reach.md`](docs/phase-13-reach.md)
+- **WhatsApp listing share with AI summary** — **Share on WhatsApp** on every room card + in the room modal. `GET /api/v1/copilot/share-summary/<id>/` builds a compact, deterministic summary **only from public listing fields** (no owner contact details); the frontend falls back to a client-side summary when the AI call fails, then opens `wa.me/?text=…` pre-filled with the summary + deep link.
+- **Per-area SEO landing pages** — `/rooms/:areaSlug` for 10 Dhaka areas (own `<title>` "Rooms for rent in Dhanmondi, Dhaka", meta description, live room grid, `?room=<id>` deep links), a navbar **Areas** dropdown, `npm run generate:sitemap` → `public/sitemap.xml` (5 core + 10 area routes), and `robots.txt` updated. Honest limits: SPA, not SSR — the area pages are crawlable metadata + sitemap.
+- **Lighthouse gate in CI** — `scripts/lighthouse-gate.mjs` audits the **built** app (chrome-launcher, `--min-score` threshold 70; local run **70/70 PASS**) and a new `lighthouse` CI job uploads the report as an artifact.
+- **Engineering** — 689 backend (was 667) + 333 frontend (was 322) tests, tsc/eslint/prettier clean, migration `users/0010_smsotpchallenge.py`. React Native remains a separate, unfunded track ([`docs/MOBILE_APP_PLAN.md`](docs/MOBILE_APP_PLAN.md)).
 
 **Phase 12 — Trust & Safety V2 (Marketplace Integrity)**
 
@@ -475,6 +484,7 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 | **12.8**   | Tier-3 Upgrades — 🤖 RAG Copilot (listing-grounded Q&A, zero hallucination), 🌐 full EN⇄BN UI toggle, 🧠 production-grade neural embeddings (disk-persisted matrix + prebuild command), 🧪 E2E expansion (trust-flow + map), 👤 tenant behavioral trust signals (completed bookings) | ✅ Shipped |
 | **12.9**   | Tier-4 Upgrades — 🤝 AI Rental Advisor, 💬 AI Negotiation Assistant, 📄 AI Agreement Checker, 🏠 Landlord Copilot, 📊 AI Property Comparison, 📈 Demand Forecasting, 🔔 Smart AI Alerts, 🧠 hosted neural embeddings (HF endpoint), 🪪 automated KYC pre-verification, 🧪 browser-level Playwright E2E | ✅ Shipped |
 | **12.10**  | Tier-5 Upgrades — 📈 conversion funnel fully wired (booking_confirmed + payment_completed server-side), 🖼️ photo forensics v2 (text-overlay + tiled-watermark detection), 💹 per-listing price recommendation (demand forecast + market + interest), 👁️ Copilot image understanding (statistical photo answers), ✍️ AI listing draft (one-click title/description/amenities) | ✅ Shipped |
+| **13**     | Reach — 📱 SMS OTP phone sign-in (BD market, gateway-gated), 🟢 WhatsApp listing share + AI share summary, 🗺️ per-area SEO landing pages + sitemap, ⚡ Lighthouse performance gate in CI | ✅ Shipped |
 
 ---
 
@@ -660,12 +670,12 @@ Rentora/
 
 Quality is enforced **in CI and at commit time** — style or coverage drift fails the pipeline automatically.
 
-### Automated tests (989 total)
+### Automated tests (1022 total)
 
 | Suite             | Count | Gate                                      |
 | ----------------- | ----- | ----------------------------------------- |
-| Backend (Django)  | 667   | ✅ passing · coverage ≥ 50% lines |
-| Frontend (Vitest) | 322   | ✅ passing · coverage ≥ 55% lines         |
+| Backend (Django)  | 689   | ✅ passing · coverage ≥ 50% lines |
+| Frontend (Vitest) | 333   | ✅ passing · coverage ≥ 55% lines         |
 
 ```bash
 # Backend
@@ -848,6 +858,8 @@ Frontend runs at `http://localhost:3000`
 | POST   | `/api/v1/auth/passkey/register/complete/` | Auth   | Verify + store the new passkey (public key only)                                                         |
 | POST   | `/api/v1/auth/passkey/login/begin/`       | Public | Authentication options + `challenge_id` (conditional UI)                                                 |
 | POST   | `/api/v1/auth/passkey/login/complete/`    | Public | Verify the assertion → JWTs (or pending OTP for 2FA)                                                     |
+| POST   | `/api/v1/auth/sms/request/`               | Public | Request an SMS OTP for a phone number (503 while SMS is disabled)                                        |
+| POST   | `/api/v1/auth/sms/verify/`                | Public | Verify the SMS code → JWTs (new numbers auto-register)                                                   |
 
 ### Rooms
 
@@ -993,6 +1005,7 @@ Frontend runs at `http://localhost:3000`
 | ------ | --------------------------------- | ------ | ---------------------------------------------------------------------------------- |
 | POST   | `/api/v1/copilot/chat/`           | Public | Conversational discovery — search mode (intent + listings) or `listing_id`-grounded RAG Q&A over one listing |
 | GET    | `/api/v1/copilot/listing/:id/`    | Public | Grounded public fact card for one listing (the RAG source document)                |
+| GET    | `/api/v1/copilot/share-summary/<id>/` | Public | Deterministic share-ready listing summary (WhatsApp share text)                |
 | POST   | `/api/v1/copilot/advisor/`        | Public | AI Rental Advisor — budget + income → grounded budget plan (rent cap, areas, monthly breakdown) |
 | POST   | `/api/v1/copilot/negotiate/`      | Public | AI Negotiation Assistant — comparable-price counter-offer + draft EN/BN message  |
 | POST   | `/api/v1/copilot/agreement-check/`| Public | AI Rental Agreement Checker — one-sided clauses, advance-payment risk, missing BN-standard fields |
@@ -1183,6 +1196,7 @@ Every shipped phase with its captured screenshots (all in `docs/screenshots/`):
 | 12.6–12.8 | Tier-1/2/3 upgrades (chat edit/delete, analytics, RAG Copilot, EN⇄BN UI, trust signals) | [`phase12.8-copilot-listing-qa.png`](docs/screenshots/phase12.8-copilot-listing-qa.png) · [`phase12.8-lang-toggle.png`](docs/screenshots/phase12.8-lang-toggle.png) · [`phase12.8-completed-bookings.png`](docs/screenshots/phase12.8-completed-bookings.png) |
 | 12.9 | Tier-4 upgrades (AI tools, comparison, landlord copilot, smart alerts) | [`phase12.9-ai-tools-advisor.png`](docs/screenshots/phase12.9-ai-tools-advisor.png) · [`phase12.9-compare.png`](docs/screenshots/phase12.9-compare.png) · [`phase12.9-landlord-copilot.png`](docs/screenshots/phase12.9-landlord-copilot.png) · [`phase12.9-smart-alerts.png`](docs/screenshots/phase12.9-smart-alerts.png) |
 | 12.10 | Tier-5 upgrades (funnel analytics, price recommendation, Copilot vision, AI draft) | [`tier5-price-recommendation.png`](docs/screenshots/tier5-price-recommendation.png) · [`tier5-ai-draft.png`](docs/screenshots/tier5-ai-draft.png) · [`tier5-copilot-photos.png`](docs/screenshots/tier5-copilot-photos.png) |
+| 13 | Reach (SMS OTP, WhatsApp share, area SEO) | [`phase13-area-page.png`](docs/screenshots/phase13-area-page.png) · [`phase13-whatsapp-share.png`](docs/screenshots/phase13-whatsapp-share.png) · [`phase13-sms-login.png`](docs/screenshots/phase13-sms-login.png) |
 
 Below, the detailed phase-by-phase screenshots.
 
@@ -1323,6 +1337,18 @@ Below, the detailed phase-by-phase screenshots.
 **Audit trail** — the read-only trail of every Phase 12 decision (who / when / what / why):
 
 <img width="1440" alt="Audit Trail" src="docs/screenshots/audit-trail.png" />
+
+**Phase 13 — Area SEO landing page** — `/rooms/dhanmondi` renders a crawlable per-area page with its own SEO title ("Rooms for rent in Dhanmondi, Dhaka"), meta description, area intro and the live room grid:
+
+<img width="1440" alt="Phase 13 Area Page" src="docs/screenshots/phase13-area-page.png" />
+
+**Phase 13 — Share on WhatsApp** — the room modal's share button opens a pre-filled WhatsApp message with the deterministic AI listing summary + deep link:
+
+<img width="512" alt="Phase 13 WhatsApp Share" src="docs/screenshots/phase13-whatsapp-share.png" />
+
+**Phase 13 — SMS phone sign-in** — the phone-first login box in the auth dialog (masked number, resend cooldown; the backend SMS endpoints are gateway-gated and answer `503` until enabled):
+
+<img width="512" alt="Phase 13 SMS Login" src="docs/screenshots/phase13-sms-login.png" />
 
 **Home & Listing Pages:**
 
