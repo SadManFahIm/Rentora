@@ -26,7 +26,7 @@ real app state, then committed:
    production secrets, no private URLs. Dark-mode variants get a
    `-dark` suffix.
 
-## Phase inventory (50 files)
+## Phase inventory (58 files)
 
 | Phase | Files |
 | ----- | ----- |
@@ -38,4 +38,5 @@ real app state, then committed:
 | 10 | `phase10-*.png`, `saved-search-match.png` |
 | 11 | `phase11-ai-search.png`, `copilot.png`, `duplicate-image-fraud.png`, `fraud-admin.png`, `fraud-detection.png`, `listing-quality.png` |
 | 12 | `tenant-kyc-*.png`, `verified-tenant-badge.png`, `report-block.png`, `chat-safety-feed.png`, `moderation-*.png`, `dispute-admin.png`, `trust-center.png`, `audit-trail.png`, `verified-badge-dark.png`, `kyc-mobile.png` |
-| 12.6–12.8 | *not yet captured* — Tier-1/2/3 upgrades (chat edit/delete, analytics funnel, RAG Copilot listing Q&A, EN⇄BN toggle, completed-bookings chips) are live in the app; capture with the workflow above and add to the gallery table |
+| 12.6–12.8 | `phase12.8-copilot-listing-qa.png` (RAG listing Q&A), `phase12.8-lang-toggle.png` (EN⇄BN), `phase12.8-completed-bookings.png` (trust chip) |
+| 12.9 | `phase12.9-ai-tools-advisor.png` (AI advisor), `phase12.9-compare.png` (property comparison), `phase12.9-landlord-copilot.png`, `phase12.9-smart-alerts.png` |
