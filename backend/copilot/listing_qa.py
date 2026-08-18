@@ -156,6 +156,22 @@ _ASPECT_KEYWORDS: dict[str, tuple[str, ...]] = {
         "কথা বল",
         "সব",
     ),
+    "photos": (
+        "photo",
+        "photos",
+        "picture",
+        "pictures",
+        "image",
+        "images",
+        "look like",
+        "looks like",
+        "appearance",
+        "ছবি",
+        "কেমন দেখতে",
+        "দেখতে কেমন",
+        "দেখাও",
+        "ছবিগুলো",
+    ),
 }
 
 # Aspects we *cannot* answer from the listing — explicit refusal set so the
@@ -193,11 +209,14 @@ def _detect_aspect(message: str) -> str | None:
     if not hits:
         return None
     # Prefer the most specific aspect when several match; price wins when the
-    # message is about money in any shape.
+    # message is about money in any shape, and explicit photo words beat the
+    # generic "কেমন/describe" fallback.
     if "price" in hits:
         return "price"
     if "amenities" in hits and any(w in lowered for w in _PRICE_WORDS):
         return "price"
+    if "photos" in hits:
+        return "photos"
     return hits[0]
 
 
@@ -281,6 +300,33 @@ def _answer_description(room: Room, _message: str) -> str:
     return room.description.strip() if room.description else "The listing has no description."
 
 
+def _answer_photos(room: Room, _message: str) -> str:
+    """Grounded answer from the listing's real photos (Tier 5).
+
+    Uses deterministic pixel statistics (brightness / colourfulness / tones)
+    and says plainly that this is a statistical description, not a claim
+    about furniture or state.
+    """
+    from .image_profile import listing_image_profile
+
+    profile = listing_image_profile(room)
+    if not profile["available"] or profile["count"] == 0:
+        return "This listing doesn't have any photos to describe yet."
+
+    parts = [f"The listing has {profile['count']} photo(s)."]
+    if profile["brightness"] and profile["colourfulness"]:
+        parts.append(
+            f"The main photo reads as {profile['brightness']} and {profile['colourfulness']}."
+        )
+    if profile["tones"]:
+        parts.append("Dominant tones: " + ", ".join(dict.fromkeys(profile["tones"])) + ".")
+    parts.append(
+        "This is a statistical description of the photo (light and colour) — "
+        "it can't tell you about furniture or condition."
+    )
+    return " ".join(parts)
+
+
 _ASPECT_ANSWERS = {
     "price": _answer_price,
     "area": _answer_area,
@@ -291,6 +337,7 @@ _ASPECT_ANSWERS = {
     "verified": _answer_verified,
     "availability": _answer_availability,
     "description": _answer_description,
+    "photos": _answer_photos,
 }
 
 
