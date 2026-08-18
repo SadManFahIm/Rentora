@@ -9,7 +9,8 @@
     "register": "রেজিস্টার",
     "dashboard": "ড্যাশবোর্ড",
     "logout": "লগ আউট",
-    "menu": "মেনু"
+    "menu": "মেনু",
+    "areas": "এলাকা"
   },
   "footer": {
     "tagline": "বাংলাদেশের সবচেয়ে বিশ্বস্ত AI-চালিত রুম ভাড়া প্ল্যাটফর্ম। ঢাকা ও তার বাইরে যাচাইকৃত, সাশ্রয়ী রুম খুঁজুন।",
@@ -36,7 +37,8 @@
     "removeFromWishlist": "উইশলিস্ট থেকে সরান",
     "addToWishlist": "উইশলিস্টে যোগ করুন",
     "valueBadge": "ভালো দাম",
-    "viewDetails": "বিস্তারিত দেখুন"
+    "viewDetails": "বিস্তারিত দেখুন",
+    "shareWhatsApp": "হোয়াটসঅ্যাপে শেয়ার করুন"
   },
   "roomModal": {
     "bookNow": "বুক করুন",
@@ -47,6 +49,9 @@
     "unverifiedListing": "যাচাইকৃত নয়",
     "askCopilot": "এই লিস্টিং সম্পর্কে কপাইলটকে জিজ্ঞাসা করুন",
     "askCopilotHint": "দাম, সুবিধা, এলাকা — শুধু তথ্যভিত্তিক উত্তর"
+  },
+  "areaRooms": {
+    "availableIn": "{{area}}-তে উপলব্ধ রুম"
   },
   "searchFilter": {
     "allAreas": "সব এলাকা",

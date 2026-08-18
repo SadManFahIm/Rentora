@@ -1,7 +1,10 @@
 # Rentora — public crawl policy
 User-agent: *
 Allow: /
+Disallow: /auth
+Disallow: /dashboard
 
-# SPA: content is rendered client-side; the sitemap will be added at deploy
-# time when the production domain is live.
-# Sitemap: https://rentora.example.com/sitemap.xml
+# SPA: content is rendered client-side; pages also live in the sitemap for
+# crawlers that don't execute JavaScript. Regenerate with `npm run
+# generate:sitemap` (base URL overridable via SITEMAP_BASE_URL at deploy).
+Sitemap: https://rentora.example.com/sitemap.xml

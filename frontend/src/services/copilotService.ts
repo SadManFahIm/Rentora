@@ -89,3 +89,19 @@ export async function getListingFacts(listingId: number): Promise<CopilotListing
   const { data } = await api.get<CopilotListingFacts>(`/copilot/listing/${listingId}/`);
   return data;
 }
+
+/** Share-ready AI summary (Phase 13). Deterministic, public fields only. */
+export interface CopilotShareSummary {
+  id: number;
+  title: string;
+  price: number;
+  area: string;
+  area_display: string;
+  summary: string;
+}
+
+/** GET /copilot/share-summary/<id>/ — compact summary to pre-fill a share. */
+export async function getListingShareSummary(listingId: number): Promise<CopilotShareSummary> {
+  const { data } = await api.get<CopilotShareSummary>(`/copilot/share-summary/${listingId}/`);
+  return data;
+}

@@ -260,6 +260,50 @@ jobs:
         # real-size icons (PNG header check), a maskable icon and sw.js.
         run: node ../scripts/validate-pwa.mjs
 
+  lighthouse:
+    # Performance gate (Phase 13 — Reach): Lighthouse against the built app,
+    # so a bundle regression fails CI instead of reaching users. The JSON
+    # report is uploaded as an artifact for inspection.
+    name: Lighthouse (performance gate)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Start preview server
+        run: |
+          npx vite preview --port 4173 --strictPort &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:4173 >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+
+      - name: Run Lighthouse gate
+        run: node scripts/lighthouse-gate.mjs http://localhost:4173 --min-score 70
+
+      - name: Upload Lighthouse report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse-report
+          path: frontend/scripts/.lighthouse/
+          if-no-files-found: warn
+
   e2e:
     # Cross-app E2E suites (fraud auto-scan x booking, payments/tier
     # promotions, KYC/verified-badge chain). Kept as their own job so an

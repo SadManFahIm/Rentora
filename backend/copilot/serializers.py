@@ -92,6 +92,17 @@ class CopilotListingFactsSerializer(serializers.Serializer):
     image = serializers.CharField(allow_null=True)
 
 
+class CopilotShareSummarySerializer(serializers.Serializer):
+    """Compact share-ready summary (Phase 13). Public fields only."""
+
+    id = serializers.IntegerField()
+    title = serializers.CharField()
+    price = serializers.FloatField()
+    area = serializers.CharField()
+    area_display = serializers.CharField()
+    summary = serializers.CharField()
+
+
 class CopilotChatResponseSerializer(serializers.Serializer):
     """Structured Copilot reply: a human message plus the *retrieved* rooms
     and the interpreted intent (chips) so the UI never parses prose.

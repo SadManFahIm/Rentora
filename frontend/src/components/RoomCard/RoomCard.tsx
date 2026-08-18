@@ -1,6 +1,7 @@
-import { Check, Star, MapPin, Heart, ShieldCheck } from "lucide-react";
+import { Check, Star, MapPin, Heart, ShieldCheck, MessageCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useWishlistStore } from "../../stores/wishlistStore";
+import { useListingShare } from "../../hooks/useListingShare";
 import type { Room } from "../../types";
 import { Card, CardContent } from "../ui/card";
 import { Badge } from "../ui/badge";
@@ -24,6 +25,7 @@ export default function RoomCard({
   const { t } = useTranslation();
   const wishlist = useWishlistStore((s) => s.wishlist);
   const toggleWishlist = useWishlistStore((s) => s.toggleWishlist);
+  const { share, sharingId } = useListingShare();
   const isWishlisted = wishlist.includes(room.id);
 
   const isPremium = room.tier === "premium";
@@ -97,6 +99,22 @@ export default function RoomCard({
               isWishlisted ? "fill-orange-600 text-orange-600" : "text-neutral-500"
             )}
           />
+        </button>
+        <button
+          className="absolute right-3 top-14 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-sm transition-transform hover:scale-110"
+          onClick={(e) => {
+            e.stopPropagation();
+            void share(room);
+          }}
+          disabled={sharingId === room.id}
+          aria-label={t("roomCard.shareWhatsApp")}
+          title={t("roomCard.shareWhatsApp")}
+        >
+          {sharingId === room.id ? (
+            <span className="size-4 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
+          ) : (
+            <MessageCircle className="size-4 text-emerald-600" />
+          )}
         </button>
       </div>
 

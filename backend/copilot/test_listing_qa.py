@@ -11,7 +11,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from copilot.listing_qa import listing_answer, listing_facts
-from copilot.services import chat, listing_facts_for
+from copilot.services import chat, listing_facts_for, share_summary_for
 from rooms.models import Room
 
 User = get_user_model()
@@ -115,6 +115,68 @@ class ListingFactsTests(TestCase):
         room.is_available = False
         room.save()
         self.assertIsNone(listing_facts_for(room.pk))
+
+
+class ListingShareSummaryTests(TestCase):
+    """Share summary is deterministic and grounded in public fields only."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="share_owner", email="share_owner@example.com", password="test12345"
+        )
+        self.room = make_room(self.owner)
+
+    def test_summary_contains_real_facts(self):
+        summary = share_summary_for(self.room.pk)
+        self.assertIsNotNone(summary)
+        self.assertEqual(summary["id"], self.room.pk)
+        self.assertIn("14,000", summary["summary"])
+        self.assertIn("Dhanmondi", summary["summary"])
+        self.assertIn(self.room.title, summary["summary"])
+
+    def test_verified_flag_included(self):
+        summary = share_summary_for(self.room.pk)
+        self.assertIn("verified", summary["summary"])
+
+    def test_never_leaks_private_fields(self):
+        summary = share_summary_for(self.room.pk)
+        for forbidden in ("owner", "contact", "phone", "email"):
+            self.assertNotIn(forbidden, summary)
+
+    def test_missing_listing_returns_none(self):
+        self.assertIsNone(share_summary_for(999999))
+
+    def test_unavailable_listing_returns_none(self):
+        self.room.is_available = False
+        self.room.save()
+        self.assertIsNone(share_summary_for(self.room.pk))
+
+
+class ListingShareSummaryApiTests(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="share_api_owner",
+            email="share_api_owner@example.com",
+            password="test12345",
+        )
+        self.room = make_room(self.owner)
+
+    def test_share_summary_endpoint_public(self):
+        res = self.client.get(f"/api/v1/copilot/share-summary/{self.room.pk}/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["id"], self.room.pk)
+        self.assertIn("summary", res.data)
+        self.assertIn("14,000", res.data["summary"])
+
+    def test_share_summary_endpoint_404_for_missing(self):
+        res = self.client.get("/api/v1/copilot/share-summary/999999/")
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_share_summary_endpoint_404_for_unavailable(self):
+        self.room.is_available = False
+        self.room.save()
+        res = self.client.get(f"/api/v1/copilot/share-summary/{self.room.pk}/")
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
 
 class ListingChatTests(TestCase):
