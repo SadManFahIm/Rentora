@@ -13,11 +13,12 @@ from .serializers import (
     CopilotChatRequestSerializer,
     CopilotChatResponseSerializer,
     CopilotListingFactsSerializer,
+    CopilotShareSummarySerializer,
     LandlordCopilotRequestSerializer,
     NegotiationRequestSerializer,
     RentalAdviceRequestSerializer,
 )
-from .services import chat, listing_facts_for
+from .services import chat, listing_facts_for, share_summary_for
 
 
 class CopilotRateThrottle(UserRateThrottle):
@@ -99,6 +100,36 @@ class CopilotListingFactsView(APIView):
         if facts is None:
             raise Http404("Listing not found or unavailable")
         return Response(CopilotListingFactsSerializer(facts).data)
+
+
+class CopilotShareSummaryView(APIView):
+    """Share-ready AI summary for one listing (Phase 13 — WhatsApp reach).
+
+    Public and deterministic: a compact one-liner built from the listing's
+    public fields (price, area, type, size, amenities, verified state) that
+    the UI pre-fills into the WhatsApp share message — every claim is a real
+    listing field, so the share never exaggerates. 404 when the listing is
+    missing or unavailable.
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    @extend_schema(
+        tags=["Copilot"],
+        summary="Share-ready listing summary (WhatsApp)",
+        description=(
+            "A compact, deterministic summary of one listing used to pre-fill "
+            "the WhatsApp share message. Grounded in the listing's public "
+            "fields only — never invented. 404 when the listing is missing or "
+            "unavailable."
+        ),
+        responses={200: CopilotShareSummarySerializer, 404: None},
+    )
+    def get(self, request, pk: int):
+        summary = share_summary_for(pk)
+        if summary is None:
+            raise Http404("Listing not found or unavailable")
+        return Response(summary)
 
 
 class RentalAdvisorView(APIView):
