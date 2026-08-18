@@ -28,6 +28,34 @@ FUNNEL_STEPS = [
 ]
 
 
+def record_event(
+    user,
+    event: str,
+    category: str = "",
+    properties: dict | None = None,
+    path: str = "",
+    session_id: str = "",
+) -> None:
+    """Server-side event recording.
+
+    The frontend emits most funnel events, but the steps that only happen on
+    the server (a booking being approved, a payment completing) are recorded
+    here so the funnel reflects real conversion without trusting the client.
+    ``user`` may be a User or None (anonymous); never pass PII in
+    ``properties`` — same bounded-payload contract as the capture endpoint.
+    """
+    from .models import Event
+
+    Event.objects.create(
+        user=user if (user is not None and getattr(user, "is_authenticated", False)) else None,
+        event=event,
+        category=category,
+        properties=properties or {},
+        session_id=session_id,
+        path=path,
+    )
+
+
 def _window(days: int):
     now = timezone.now()
     return now - timedelta(days=max(1, min(days, 90))), now
