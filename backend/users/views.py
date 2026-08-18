@@ -587,6 +587,53 @@ class TenantKycView(APIView):
             request=request,
             detail={"doc_type": doc_type, "verification_id": verification.pk},
         )
+
+        # Automated verification provider (Tier 4): when enabled, a provider
+        # may auto-approve at high confidence — still audited, still
+        # overridable by the admin queue. Off by default (safe rollout).
+        from .kyc_provider import run_provider
+
+        provider_result = run_provider(verification)
+        if provider_result is not None and provider_result.approved:
+            from datetime import timedelta
+
+            from django.conf import settings
+
+            if provider_result.confidence >= float(
+                getattr(settings, "KYC_AUTO_APPROVE_MIN_CONFIDENCE", 0.7)
+            ):
+                verification.status = TenantVerification.Status.VERIFIED
+                verification.review_note = (
+                    f"Auto-approved by {provider_result.provider} provider "
+                    f"(confidence {provider_result.confidence:.0%})."
+                )
+                verification.reviewed_at = timezone.now()
+                verification.expires_at = timezone.now() + timedelta(
+                    days=getattr(settings, "KYC_VALIDITY_DAYS", 365)
+                )
+                verification.save(
+                    update_fields=[
+                        "status",
+                        "review_note",
+                        "reviewed_at",
+                        "expires_at",
+                        "updated_at",
+                    ]
+                )
+                request.user.tenant_verified = True
+                request.user.save(update_fields=["tenant_verified"])
+                log_action(
+                    actor=request.user,
+                    action="tenant_kyc.auto_approved",
+                    target=request.user,
+                    request=request,
+                    detail={
+                        "provider": provider_result.provider,
+                        "confidence": provider_result.confidence,
+                        "verification_id": verification.pk,
+                    },
+                )
+
         return Response(
             TenantVerificationSerializer(verification, context={"request": request}).data,
             status=status.HTTP_201_CREATED,

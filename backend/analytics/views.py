@@ -110,3 +110,22 @@ class AnalyticsSummaryView(APIView):
         except (TypeError, ValueError):
             days = 30
         return Response(build_summary(days))
+
+
+class DemandForecastView(APIView):
+    """GET /api/v1/analytics/forecast/?area=Uttara — demand index + 30-day trend.
+
+    Public: demand is estimated from anonymized *counts* (bookings, wishlist
+    saves, listing views) — no PII, no individual user data. Omit ``area``
+    for the full per-area snapshot.
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from .forecast import area_demand, area_demand_summary
+
+        area = request.query_params.get("area", "").strip()
+        if area:
+            return Response(area_demand(area))
+        return Response(area_demand_summary())

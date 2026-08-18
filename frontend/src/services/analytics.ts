@@ -14,7 +14,7 @@ import type { AnalyticsSummary } from "../types";
  * Never pass PII here — the backend bounds every payload.
  */
 
-const EVENTS_ENDPOINT = `${env.API_BASE_URL}/api/v1/analytics/events/`;
+const EVENTS_ENDPOINT = `${env.API_BASE_URL}/analytics/events/`;
 const SESSION_KEY = "rentora_analytics_session";
 
 function getSessionId(): string {

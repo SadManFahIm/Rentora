@@ -9,6 +9,7 @@ import RoomModal from "../../components/RoomModal/RoomModal";
 import SearchFilter from "../../components/SearchFilter/SearchFilter";
 import AIRecommendations from "../../components/AIRecommendations/AIRecommendations";
 import SavedSearchBar from "../../components/SavedSearchBar/SavedSearchBar";
+import CompareDrawer from "../../components/CompareDrawer/CompareDrawer";
 import { Button } from "../../components/ui/button";
 import type { Room, Filters } from "../../types";
 import { cn } from "../../lib/utils";
@@ -36,6 +37,13 @@ export default function Rooms() {
   const [gridView, setGridView] = useState(true);
   const offline = useOfflineCacheStatus();
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  const [compareIds, setCompareIds] = useState<number[]>([]);
+
+  const toggleCompare = (room: Room) => {
+    setCompareIds((ids) =>
+      ids.includes(room.id) ? ids.filter((i) => i !== room.id) : [...ids, room.id].slice(0, 5)
+    );
+  };
   // Set when a URL-initiated change is applied to state, so the reverse sync
   // skips that pass instead of clobbering the URL with stale state.
   const fromUrlRef = useRef(false);
@@ -167,13 +175,27 @@ export default function Rooms() {
         ) : (
           <div className={gridClass}>
             {rooms.map((r) => (
-              <RoomCard key={r.id} room={r} onClick={setSelectedRoom} />
+              <RoomCard
+                key={r.id}
+                room={r}
+                onClick={setSelectedRoom}
+                compareSelected={compareIds.includes(r.id)}
+                onToggleCompare={toggleCompare}
+              />
             ))}
           </div>
         )}
       </div>
 
       {selectedRoom && <RoomModal room={selectedRoom} onClose={() => setSelectedRoom(null)} />}
+
+      {compareIds.length > 0 && (
+        <CompareDrawer
+          roomIds={compareIds}
+          onRemove={(id) => setCompareIds((ids) => ids.filter((i) => i !== id))}
+          onClear={() => setCompareIds([])}
+        />
+      )}
     </>
   );
 }
