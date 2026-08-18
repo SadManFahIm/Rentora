@@ -2,13 +2,14 @@
 // every listing gets real coordinates for the geo/map features.
 import { useState } from "react";
 import { toast } from "sonner";
-import { Building2, Loader2, MapPin } from "lucide-react";
+import { Building2, Loader2, MapPin, Sparkles } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import LocationPicker from "../LocationPicker/LocationPicker";
 import { useCreateRoom } from "../../hooks/useRooms";
+import tier5Service from "../../services/tier5Service";
 import { getApiErrorMessage } from "../../services/errors";
 import type { RoomType, GenderPref } from "../../types";
 
@@ -32,9 +33,35 @@ export default function RoomForm({ open, onClose }: RoomFormProps) {
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [drafting, setDrafting] = useState(false);
 
   const toggleAmenity = (a: string) =>
     setAmenities((prev) => (prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]));
+
+  /** Tier 5: AI draft the listing from the fields filled so far. */
+  const handleDraft = async () => {
+    setError(null);
+    setDrafting(true);
+    try {
+      const draft = await tier5Service.generateDescription({
+        title: title.trim(),
+        room_type: type.toLowerCase(),
+        price: Number(price) || undefined,
+        area,
+        size_sqft: Number(size) || undefined,
+        gender_preference: gender.toLowerCase(),
+        amenities,
+      });
+      if (!title.trim()) setTitle(draft.title);
+      if (!description.trim()) setDescription(draft.description);
+      if (amenities.length === 0) setAmenities(draft.amenities);
+      toast.success("Draft ready — review and edit before publishing.");
+    } catch {
+      setError(getApiErrorMessage(new Error(), "Couldn't draft the listing right now."));
+    } finally {
+      setDrafting(false);
+    }
+  };
 
   const handleSubmit = () => {
     setError(null);
@@ -213,7 +240,24 @@ export default function RoomForm({ open, onClose }: RoomFormProps) {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">Description</label>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="block text-sm font-medium text-foreground">Description</label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs"
+                onClick={handleDraft}
+                disabled={drafting}
+              >
+                {drafting ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="size-3.5 text-orange-600" />
+                )}
+                {drafting ? "Drafting…" : "✨ AI draft"}
+              </Button>
+            </div>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}

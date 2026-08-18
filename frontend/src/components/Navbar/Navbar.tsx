@@ -2,14 +2,16 @@ import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { Menu, X, Sun, Moon, Heart, Bell } from "lucide-react";
+import { Menu, X, Sun, Moon, Heart, Bell, ChevronDown } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { useUiStore } from "../../stores/uiStore";
 import { useWishlistStore } from "../../stores/wishlistStore";
 import { useNotificationStore } from "../../stores/notificationStore";
 import { useLogout } from "../../hooks/useAuth";
 import { useWebSocket } from "../../hooks/useWebSocket";
+import { AREAS_INFO } from "../../data/areas";
 import { mapNotification, type ApiNotification } from "../../services/mappers";
+import tier4Service, { type SmartAlert } from "../../services/tier4Service";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import PwaInstallPrompt from "../PwaInstallPrompt/PwaInstallPrompt";
@@ -41,7 +43,9 @@ export default function Navbar() {
   const { t } = useTranslation();
 
   const [showNotif, setShowNotif] = useState(false);
+  const [areasOpen, setAreasOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [smartAlerts, setSmartAlerts] = useState<SmartAlert[]>([]);
   const navigate = useNavigate();
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -52,6 +56,24 @@ export default function Navbar() {
     "/ws/notifications/",
     { enabled: !!user }
   );
+
+  // Tier 4 Smart AI Alerts: when the dropdown opens, fetch the priority-
+  // ranked feed so the top alert can be surfaced above the plain list.
+  useEffect(() => {
+    if (!showNotif || !user) return;
+    let cancelled = false;
+    tier4Service
+      .smartAlerts()
+      .then((alerts) => {
+        if (!cancelled) setSmartAlerts(alerts);
+      })
+      .catch(() => {
+        if (!cancelled) setSmartAlerts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showNotif, user]);
 
   useEffect(() => {
     if (!notificationEvent || notificationEvent.type !== "notification") return;
@@ -101,6 +123,46 @@ export default function Navbar() {
               {t("nav.dashboard")}
             </NavLink>
           )}
+          <div
+            className="relative"
+            onMouseEnter={() => setAreasOpen(true)}
+            onMouseLeave={() => setAreasOpen(false)}
+          >
+            <button
+              type="button"
+              className={cn(
+                "flex items-center gap-1 rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
+                areasOpen
+                  ? "border border-gray-300 text-gray-900 dark:border-gray-700 dark:text-gray-100"
+                  : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+              )}
+              aria-expanded={areasOpen}
+            >
+              {t("nav.areas")}
+              <ChevronDown
+                className={cn("size-3.5 transition-transform", areasOpen && "rotate-180")}
+              />
+            </button>
+            {areasOpen && (
+              <div className="absolute left-1/2 top-[calc(100%+8px)] z-[150] w-64 -translate-x-1/2 overflow-hidden rounded-2xl border border-gray-200 bg-popover shadow-lg dark:border-gray-800">
+                <div className="border-b border-gray-200 px-4 py-2.5 text-xs font-bold tracking-wide text-muted-foreground uppercase dark:border-gray-800">
+                  Popular areas
+                </div>
+                <div className="grid grid-cols-2 gap-0.5 p-2">
+                  {AREAS_INFO.map((area) => (
+                    <NavLink
+                      key={area.slug}
+                      to={`/rooms/${area.slug}`}
+                      className="rounded-lg px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-muted dark:text-gray-300"
+                      onClick={() => setAreasOpen(false)}
+                    >
+                      {area.area}
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Desktop actions */}
@@ -161,6 +223,21 @@ export default function Navbar() {
                     Mark all read
                   </button>
                 </div>
+                {smartAlerts.length > 0 && smartAlerts[0].priority >= 70 && (
+                  <div className="border-b border-amber-200 bg-amber-500/10 p-3 dark:border-amber-700/40">
+                    <div className="mb-0.5 flex items-center justify-between">
+                      <span className="text-[10px] font-bold tracking-wide text-amber-700 uppercase dark:text-amber-400">
+                        ⚡ Top alert · priority {smartAlerts[0].priority}
+                      </span>
+                    </div>
+                    <div className="text-xs font-semibold text-foreground">
+                      {smartAlerts[0].title}
+                    </div>
+                    <div className="text-[11px] text-gray-600 dark:text-gray-400">
+                      {smartAlerts[0].message} — <i>{smartAlerts[0].reason}</i>
+                    </div>
+                  </div>
+                )}
                 <div className="max-h-80 overflow-y-auto">
                   {notifications.map((n) => (
                     <div

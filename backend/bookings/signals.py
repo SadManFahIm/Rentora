@@ -96,6 +96,18 @@ def notify_on_booking_change(sender, instance: Booking, created: bool, **kwargs)
         return
 
     if instance.status == Booking.Status.APPROVED:
+        # Funnel event (Tier 5): booking confirmed server-side, so the
+        # analytics conversion funnel is accurate even if the client never
+        # fires its own event. No PII — just ids and a path.
+        from analytics.services import record_event
+
+        record_event(
+            instance.tenant,
+            "booking_confirmed",
+            category="booking",
+            properties={"room_id": instance.room_id, "booking_id": instance.pk},
+            path="/dashboard",
+        )
         create_notification(
             user=instance.tenant,
             notification_type=Notification.Type.BOOKING_APPROVED,

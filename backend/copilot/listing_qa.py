@@ -156,6 +156,22 @@ _ASPECT_KEYWORDS: dict[str, tuple[str, ...]] = {
         "কথা বল",
         "সব",
     ),
+    "photos": (
+        "photo",
+        "photos",
+        "picture",
+        "pictures",
+        "image",
+        "images",
+        "look like",
+        "looks like",
+        "appearance",
+        "ছবি",
+        "কেমন দেখতে",
+        "দেখতে কেমন",
+        "দেখাও",
+        "ছবিগুলো",
+    ),
 }
 
 # Aspects we *cannot* answer from the listing — explicit refusal set so the
@@ -193,11 +209,14 @@ def _detect_aspect(message: str) -> str | None:
     if not hits:
         return None
     # Prefer the most specific aspect when several match; price wins when the
-    # message is about money in any shape.
+    # message is about money in any shape, and explicit photo words beat the
+    # generic "কেমন/describe" fallback.
     if "price" in hits:
         return "price"
     if "amenities" in hits and any(w in lowered for w in _PRICE_WORDS):
         return "price"
+    if "photos" in hits:
+        return "photos"
     return hits[0]
 
 
@@ -281,6 +300,33 @@ def _answer_description(room: Room, _message: str) -> str:
     return room.description.strip() if room.description else "The listing has no description."
 
 
+def _answer_photos(room: Room, _message: str) -> str:
+    """Grounded answer from the listing's real photos (Tier 5).
+
+    Uses deterministic pixel statistics (brightness / colourfulness / tones)
+    and says plainly that this is a statistical description, not a claim
+    about furniture or state.
+    """
+    from .image_profile import listing_image_profile
+
+    profile = listing_image_profile(room)
+    if not profile["available"] or profile["count"] == 0:
+        return "This listing doesn't have any photos to describe yet."
+
+    parts = [f"The listing has {profile['count']} photo(s)."]
+    if profile["brightness"] and profile["colourfulness"]:
+        parts.append(
+            f"The main photo reads as {profile['brightness']} and {profile['colourfulness']}."
+        )
+    if profile["tones"]:
+        parts.append("Dominant tones: " + ", ".join(dict.fromkeys(profile["tones"])) + ".")
+    parts.append(
+        "This is a statistical description of the photo (light and colour) — "
+        "it can't tell you about furniture or condition."
+    )
+    return " ".join(parts)
+
+
 _ASPECT_ANSWERS = {
     "price": _answer_price,
     "area": _answer_area,
@@ -291,6 +337,7 @@ _ASPECT_ANSWERS = {
     "verified": _answer_verified,
     "availability": _answer_availability,
     "description": _answer_description,
+    "photos": _answer_photos,
 }
 
 
@@ -351,4 +398,35 @@ def listing_facts(room: Room) -> dict[str, Any]:
         "description": (room.description or "").strip(),
         "metro_km": metro,
         "image": (room.images.first().image.url if room.images.exists() else None),
+    }
+
+
+def listing_share_summary(room: Room) -> dict[str, Any]:
+    """Compact, share-ready summary of a listing (Phase 13 — WhatsApp reach).
+
+    Deterministic and grounded: built only from the listing's public fields
+    (the same fields the rooms list exposes). Powers the WhatsApp "why this
+    listing" share text so the share link opens pre-filled with real facts —
+    nothing here is invented, and no owner contact details ever leak.
+    """
+    parts = [f"{room.title} — {room.get_area_display()}"]
+    parts.append(f"৳{int(room.price):,}/month")
+    if room.room_type:
+        parts.append(room.get_room_type_display())
+    if room.size_sqft:
+        parts.append(f"{room.size_sqft} sqft")
+    if room.amenities:
+        parts.append("✓ " + ", ".join(str(a) for a in room.amenities[:4]))
+    if room.verified:
+        parts.append("✓ identity-verified listing")
+    if not room.is_available:
+        parts.append("currently unavailable")
+
+    return {
+        "id": room.pk,
+        "title": room.title,
+        "price": float(room.price),
+        "area": room.area,
+        "area_display": room.get_area_display(),
+        "summary": " · ".join(parts),
     }

@@ -217,6 +217,7 @@ class RoomViewSet(viewsets.ModelViewSet):
             "geocode",
             "summary",
             "similar_images",
+            "compare",
             "map_intel",
             "map_commute",
             "map_value",
@@ -566,6 +567,42 @@ class RoomViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"])
     def landmarks(self, request):
         return Response(LandmarkSerializer(ALL_LANDMARKS, many=True).data)
+
+    @extend_schema(
+        tags=["Rooms"],
+        summary="Compare listings side by side (AI Property Comparison)",
+        description=(
+            "Pass 2-5 room ids as `ids=1,2,3`. Returns a normalized comparison "
+            "table: per-room fact cards, a column matrix (price, price/sqft, "
+            "area, type, verified, amenities, market position, listing quality) "
+            "and summary takeaways. Public — only public listing fields."
+        ),
+        parameters=[
+            OpenApiParameter(
+                "ids",
+                str,
+                description="Comma-separated room ids (2-5).",
+            )
+        ],
+    )
+    @action(detail=False, methods=["get"], url_path="compare")
+    def compare(self, request):
+        from .compare import compare_rooms
+
+        raw = request.query_params.get("ids", "")
+        ids = [int(x) for x in raw.split(",") if x.strip().isdigit()]
+        if len(ids) < 2 or len(ids) > 5:
+            return Response(
+                {"detail": "Provide between 2 and 5 room ids."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        rooms = list(Room.objects.filter(pk__in=ids, is_available=True))
+        if len(rooms) < 2:
+            return Response(
+                {"detail": "At least two of the requested listings exist and are available."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(compare_rooms(rooms))
 
     @extend_schema(
         tags=["Rooms"],
@@ -1182,6 +1219,86 @@ class RoomViewSet(viewsets.ModelViewSet):
                 },
             }
         )
+
+    @extend_schema(
+        tags=["Rooms"],
+        summary="Per-listing price recommendation (owner/admin)",
+        description=(
+            "Demand-forecast + market + interest signals combined into a "
+            "raise/hold/lower suggestion with a suggested price. Owner or "
+            "admin only — a suggestion to review, never an automatic change."
+        ),
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="price-recommendation",
+        permission_classes=[permissions.IsAuthenticated],
+    )
+    def price_recommendation(self, request, pk=None):
+        room = self.get_object()
+        is_admin = request.user.is_staff or request.user.role == request.user.Role.ADMIN
+        if room.owner_id != request.user.id and not is_admin:
+            return Response(
+                {"detail": "You can only see recommendations for your own listings."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        from .price_recommendation import listing_price_recommendation
+
+        return Response(listing_price_recommendation(room))
+
+    @extend_schema(
+        tags=["Rooms"],
+        summary="AI draft a listing description (authenticated)",
+        description=(
+            "Deterministic auto-draft of a title + description + amenity tags "
+            "from the landlord's own fields (no LLM). Body mirrors the room "
+            "create payload; returns a draft to review, never auto-publishes."
+        ),
+        request=inline_serializer(
+            "GenerateDescriptionRequest",
+            fields={
+                "title": serializers.CharField(required=False, allow_blank=True),
+                "room_type": serializers.CharField(required=False, default="single"),
+                "price": serializers.DecimalField(max_digits=10, decimal_places=2, required=False),
+                "area": serializers.CharField(required=False, default="Dhanmondi"),
+                "size_sqft": serializers.IntegerField(required=False),
+                "gender_preference": serializers.CharField(required=False, default="any"),
+                "amenities": serializers.ListField(
+                    child=serializers.CharField(), required=False, default=list
+                ),
+            },
+        ),
+        responses=inline_serializer(
+            "GenerateDescriptionResponse",
+            fields={
+                "title": serializers.CharField(),
+                "description": serializers.CharField(),
+                "amenities": serializers.ListField(child=serializers.CharField()),
+                "note": serializers.CharField(),
+            },
+        ),
+    )
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="generate-description",
+        permission_classes=[permissions.IsAuthenticated],
+    )
+    def generate_description(self, request):
+        from .description_generator import generate_listing_draft
+
+        data = request.data or {}
+        draft = generate_listing_draft(
+            area=str(data.get("area", "Dhanmondi")),
+            room_type=str(data.get("room_type", "single")),
+            price=float(data["price"]) if data.get("price") not in (None, "") else None,
+            size_sqft=int(data["size_sqft"]) if data.get("size_sqft") not in (None, "") else None,
+            gender_preference=str(data.get("gender_preference", "any")),
+            amenities=list(data.get("amenities") or []),
+            title_hint=str(data.get("title", "")),
+        )
+        return Response(draft)
 
     @extend_schema(
         tags=["Rooms"],

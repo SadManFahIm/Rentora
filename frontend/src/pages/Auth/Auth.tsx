@@ -11,7 +11,13 @@ import {
 } from "@simplewebauthn/browser";
 import { ArrowLeft, Home, KeyRound, Loader2 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
-import { useLogin, usePasskeyLogin, useRegister, useVerifyOtp } from "../../hooks/useAuth";
+import {
+  useLogin,
+  usePasskeyLogin,
+  useRegister,
+  useSmsLogin,
+  useVerifyOtp,
+} from "../../hooks/useAuth";
 import { authService } from "../../services/authService";
 import { getApiErrorMessage } from "../../services/errors";
 import { isOtpPending, type OtpPending } from "../../types";
@@ -75,6 +81,7 @@ export default function Auth() {
   const login = useLogin();
   const register = useRegister();
   const verifyOtp = useVerifyOtp();
+  const smsLogin = useSmsLogin();
   // Referral program: the inviter's ?ref= code travels through the URL on
   // the shared signup link straight into the register payload.
   const refCode = searchParams.get("ref") ?? undefined;
@@ -86,6 +93,49 @@ export default function Auth() {
   const [resending, setResending] = useState(false);
   const [useRecovery, setUseRecovery] = useState(false);
   const passkeyLogin = usePasskeyLogin();
+
+  // Phone (SMS) sign-in (Phase 13): request a 6-digit code, then exchange it.
+  const [smsPhone, setSmsPhone] = useState("");
+  const [smsStep, setSmsStep] = useState<"idle" | "code">("idle");
+  const [smsMasked, setSmsMasked] = useState("");
+  const [smsSending, setSmsSending] = useState(false);
+  const [smsCode, setSmsCode] = useState("");
+  const [smsError, setSmsError] = useState("");
+
+  const sendSmsCode = async () => {
+    setSmsError("");
+    const digits = smsPhone.replace(/[\s-]/g, "");
+    if (!/^(\+?88)?01[3-9]\d{8}$/.test(digits)) {
+      setSmsError("Enter a valid Bangladeshi number (e.g. 01712345678).");
+      return;
+    }
+    setSmsSending(true);
+    try {
+      const res = await authService.smsRequest(smsPhone);
+      setSmsMasked(res.phoneMasked);
+      setSmsStep("code");
+      setSmsCode("");
+    } catch (error) {
+      setSmsError(getApiErrorMessage(error, "Could not send the code."));
+    } finally {
+      setSmsSending(false);
+    }
+  };
+
+  const submitSmsCode = () => {
+    if (smsCode.length !== 6) return;
+    smsLogin.mutate(
+      { phone: smsPhone, code: smsCode },
+      {
+        onSuccess: (user) => {
+          toast.success(`Welcome back, ${user.name}!`);
+          navigate("/dashboard");
+        },
+        onError: (error) =>
+          toast.error(getApiErrorMessage(error, "That code was not accepted. Try again.")),
+      }
+    );
+  };
 
   /** Shared handling for a completed passkey assertion. */
   const finishPasskey = (result: Awaited<ReturnType<typeof authService.passkeyLoginComplete>>) => {
@@ -754,6 +804,93 @@ export default function Auth() {
                     )}
                     Sign in with a passkey
                   </motion.button>
+                )}
+
+                {isLogin && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ ...spring, delay: 0.18 }}
+                    className="flex flex-col gap-3 rounded-xl border border-dashed border-gray-200 p-3.5 dark:border-gray-700"
+                  >
+                    <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                      <span className="text-base">📱</span> Sign in with your phone (SMS)
+                    </div>
+
+                    {smsStep === "code" ? (
+                      <>
+                        <label className="text-sm font-semibold text-muted-foreground">
+                          Enter the 6-digit code
+                        </label>
+                        <Input
+                          value={smsCode}
+                          onChange={(e) =>
+                            setSmsCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                          }
+                          onKeyDown={(e) => e.key === "Enter" && submitSmsCode()}
+                          inputMode="numeric"
+                          autoFocus
+                          maxLength={6}
+                          placeholder="••••••"
+                          className="text-center font-display text-2xl tracking-[0.5em]"
+                          aria-label="6-digit SMS verification code"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          We sent a code to{" "}
+                          <span className="font-semibold text-foreground">{smsMasked}</span>. It
+                          expires in 10 minutes.
+                        </p>
+                        <Button
+                          type="button"
+                          variant="brand"
+                          size="lg"
+                          className="w-full rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 font-semibold text-white shadow-lg shadow-emerald-600/25"
+                          onClick={submitSmsCode}
+                          disabled={smsLogin.isPending || smsCode.length < 6}
+                        >
+                          {smsLogin.isPending ? "Verifying…" : "Verify & Sign In"}
+                        </Button>
+                        <button
+                          type="button"
+                          onClick={() => setSmsStep("idle")}
+                          className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          Use a different number
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <label className="text-sm font-semibold text-muted-foreground">
+                          Bangladeshi mobile number
+                        </label>
+                        <div className="flex gap-2">
+                          <Input
+                            value={smsPhone}
+                            onChange={(e) => setSmsPhone(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && void sendSmsCode()}
+                            inputMode="tel"
+                            autoComplete="tel"
+                            placeholder="01712345678"
+                            aria-label="Phone number"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="shrink-0"
+                            onClick={() => void sendSmsCode()}
+                            disabled={smsSending}
+                          >
+                            {smsSending ? "Sending…" : "Send code"}
+                          </Button>
+                        </div>
+                        {smsError && <p className="text-xs font-medium text-red-600">{smsError}</p>}
+                        <p className="text-xs text-muted-foreground">
+                          No password needed — a one-time code signs you in (and creates your
+                          account if you're new).
+                        </p>
+                      </>
+                    )}
+                  </motion.div>
                 )}
 
                 <p className="text-center text-sm text-muted-foreground">

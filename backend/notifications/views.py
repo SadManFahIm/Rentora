@@ -91,6 +91,37 @@ class NotificationViewSet(
         count = self.get_queryset().filter(is_read=False).count()
         return Response({"count": count})
 
+    @extend_schema(
+        tags=["Notifications"],
+        summary="Smart alert ranking (Tier 4)",
+        description=(
+            "The user's notifications ranked by an explainable priority score: "
+            "safety/financial alerts first, booking next, recency + saved-search "
+            "relevance as boosts. Each item carries `priority` (0-100) and a "
+            "plain-language `reason` so the ranking is transparent."
+        ),
+        responses=inline_serializer(
+            "SmartAlertsResponse",
+            fields={"alerts": serializers.ListField(child=serializers.DictField())},
+        ),
+    )
+    @action(detail=False, methods=["get"], url_path="smart")
+    def smart_alerts(self, request: Request) -> Response:
+        """Return the user's alerts sorted by priority (highest first)."""
+        from .smart_alerts import rank_alerts
+
+        qs = self.get_queryset()[:100]
+        ranked = rank_alerts(qs)
+        by_id = {n.id: NotificationSerializer(n).data for n in qs}
+        alerts = [
+            {**by_id[r["id"]], "priority": r["priority"], "reason": r["reason"]}
+            for r in ranked
+            if r["id"] in by_id
+        ]
+        return Response({"alerts": alerts})
+        count = self.get_queryset().filter(is_read=False).count()
+        return Response({"count": count})
+
 
 class PushSubscriptionView(APIView):
     """Register / unregister a browser Web Push subscription.

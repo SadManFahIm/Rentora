@@ -39,6 +39,36 @@ class CopilotListingSerializer(serializers.Serializer):
     image = serializers.CharField(allow_null=True)
 
 
+class RentalAdviceRequestSerializer(serializers.Serializer):
+    """AI Rental Advisor input — budget is required, everything else optional."""
+
+    budget_max = serializers.FloatField(min_value=0)
+    room_type = serializers.CharField(required=False, default="single")
+    area = serializers.CharField(required=False, allow_blank=True, default="")
+    monthly_income = serializers.FloatField(required=False, allow_null=True, default=None)
+
+
+class NegotiationRequestSerializer(serializers.Serializer):
+    """AI Negotiation Assistant input — listing + optional target price/role."""
+
+    listing_id = serializers.IntegerField()
+    target_price = serializers.FloatField(required=False, allow_null=True, default=None)
+    role = serializers.ChoiceField(choices=["tenant", "landlord"], default="tenant")
+    tone = serializers.ChoiceField(choices=["polite", "friendly", "formal"], default="polite")
+
+
+class AgreementCheckRequestSerializer(serializers.Serializer):
+    """AI Rental Agreement Checker input — paste the agreement text."""
+
+    text = serializers.CharField(min_length=10, max_length=20000)
+
+
+class LandlordCopilotRequestSerializer(serializers.Serializer):
+    """Landlord Copilot input — a listing id the caller owns."""
+
+    listing_id = serializers.IntegerField()
+
+
 class CopilotListingFactsSerializer(serializers.Serializer):
     """Full grounded fact card for one listing (Tier 3 RAG). Public fields
     only — the same data the rooms list exposes, plus deterministic map
@@ -60,6 +90,17 @@ class CopilotListingFactsSerializer(serializers.Serializer):
     description = serializers.CharField()
     metro_km = serializers.FloatField(allow_null=True)
     image = serializers.CharField(allow_null=True)
+
+
+class CopilotShareSummarySerializer(serializers.Serializer):
+    """Compact share-ready summary (Phase 13). Public fields only."""
+
+    id = serializers.IntegerField()
+    title = serializers.CharField()
+    price = serializers.FloatField()
+    area = serializers.CharField()
+    area_display = serializers.CharField()
+    summary = serializers.CharField()
 
 
 class CopilotChatResponseSerializer(serializers.Serializer):
