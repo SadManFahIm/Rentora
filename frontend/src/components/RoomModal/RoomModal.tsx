@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -58,6 +58,14 @@ export default function RoomModal({ room, onClose }: RoomModalProps) {
   const startChat = useStartDirectChat();
   // Live fraud badge — fetched only when the modal is open for this room.
   const { data: fraud } = useRoomFraudStatus(current?.id ?? null);
+
+  // Funnel event (Tier 5): a room being *viewed* is the second conversion
+  // step (after page_view). Fire once per room open.
+  useEffect(() => {
+    if (current?.id != null) {
+      track("room_view", { room_id: current.id });
+    }
+  }, [current?.id]);
 
   const handleBook = () => {
     if (!current) return;
