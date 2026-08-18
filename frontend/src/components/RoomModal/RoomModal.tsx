@@ -9,6 +9,7 @@ import {
   MessageCircle,
   CalendarCheck,
   Sparkles,
+  HandCoins,
 } from "lucide-react";
 import { useRoomFraudStatus } from "../../hooks/useFraud";
 import { fraudBadgeLabel } from "../../lib/fraud";
@@ -74,8 +75,16 @@ export default function RoomModal({ room, onClose }: RoomModalProps) {
   const handleAskCopilot = () => {
     if (!current) return;
     // Tier 3 RAG: open the floating Copilot grounded on this listing — every
-    // answer comes from this listing's facts, never invented.
-    useCopilotStore.getState().openWithListing({ id: current.id, title: current.name });
+    // answer comes from this listing's facts, never invented. Tier 4: also
+    // pass the price so the negotiation assistant can draft an offer.
+    // Close the modal so the floating widget is actually visible above the
+    // dialog overlay (both render at z-50).
+    useCopilotStore.getState().openWithListing({
+      id: current.id,
+      title: current.name,
+      price: current.price,
+    });
+    onClose();
   };
 
   const handleMessageOwner = () => {
@@ -216,10 +225,29 @@ export default function RoomModal({ room, onClose }: RoomModalProps) {
               </div>
 
               {/* Actions */}
-              <Button variant="outline" className="mt-4 w-full text-sm" onClick={handleAskCopilot}>
-                <Sparkles className="size-4 text-orange-500" />
-                {t("roomModal.askCopilot")}
-              </Button>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <Button variant="outline" className="text-sm" onClick={handleAskCopilot}>
+                  <Sparkles className="size-4 text-orange-500" />
+                  {t("roomModal.askCopilot")}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="text-sm"
+                  onClick={() => {
+                    if (!current) return;
+                    useCopilotStore.getState().openWithListing({
+                      id: current.id,
+                      title: current.name,
+                      price: current.price,
+                    });
+                    useCopilotStore.getState().requestAiTool("negotiate");
+                    onClose();
+                  }}
+                >
+                  <HandCoins className="size-4 text-emerald-500" />
+                  Draft negotiation
+                </Button>
+              </div>
 
               <div className="mt-6 flex gap-3">
                 <Button
