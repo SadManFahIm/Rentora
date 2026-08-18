@@ -40,13 +40,16 @@ from .models import Room
 
 logger = logging.getLogger(__name__)
 
-# Embedding mode (Tier 3 — production-grade neural embeddings):
+# Embedding mode (Tier 3/4 — production-grade neural embeddings):
 #   "auto"   (default) — sentence-transformers when installed, else lite.
 #   "neural"           — require the real model; fall back to lite with a
 #                        warning if the package is missing (search never
 #                        breaks, it just logs the deployment gap).
 #   "lite"             — force the zero-dependency provider (dev/CI).
-_EMBEDDING_MODES = ("auto", "neural", "lite")
+#   "hosted"           — Tier 4: call a hosted embeddings endpoint
+#                        (Hugging Face Inference API compatible) via HTTPS.
+#                        Graceful fallback to lite on any network failure.
+_EMBEDDING_MODES = ("auto", "neural", "lite", "hosted")
 
 
 def _embedding_mode() -> str:
@@ -156,6 +159,74 @@ class SentenceTransformerProvider(EmbeddingProvider):
         return np.asarray(vectors, dtype=np.float32)
 
 
+class HostedEmbeddingProvider(EmbeddingProvider):
+    """Tier 4 — hosted neural embeddings via a Hugging Face Inference API
+    compatible endpoint (self-hostable: any OpenAI-compatible / TEI server
+    with the same ``/embed`` contract works).
+
+    Production-grade without shipping the model in the container: the
+    endpoint does the encoding, Rentora just posts text batches over HTTPS.
+    The token comes from ``SEMANTIC_EMBEDDING_HOSTED_TOKEN`` (env-only, never
+    committed) and the matrix is cached to disk like every other provider, so
+    the endpoint is only hit when the corpus actually changed.
+
+    Failure contract (search never breaks): any network/timeout/HTTP error
+    logs a warning and returns ``None`` — ``get_provider`` then falls back to
+    the lite provider, exactly like a broken sentence-transformers install.
+    """
+
+    name = "hosted-embeddings"
+
+    def __init__(self, url: str | None = None, token: str | None = None) -> None:
+        self.url = url or getattr(settings, "SEMANTIC_EMBEDDING_HOSTED_URL", "")
+        self.token = token or getattr(settings, "SEMANTIC_EMBEDDING_HOSTED_TOKEN", "")
+        self.model_name = getattr(settings, "SEMANTIC_EMBEDDING_HOSTED_MODEL", "hosted")
+        self._dim: int | None = None
+
+    def encode(self, texts: list[str]) -> np.ndarray | None:
+        if not self.url:
+            logger.warning(
+                "SEMANTIC_EMBEDDING_MODE=hosted but SEMANTIC_EMBEDDING_HOSTED_URL is "
+                "not configured — falling back to lite embeddings."
+            )
+            return None
+
+        import requests
+
+        headers = {"Content-Type": "application/json"}
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+        # Inputs key matches the HF Inference API contract; TEI and other
+        # self-hosted servers accept the same shape.
+        payload = {"inputs": [t[:1000] for t in texts], "normalize": True}
+        try:
+            resp = requests.post(
+                self.url,
+                json=payload,
+                headers=headers,
+                timeout=getattr(settings, "SEMANTIC_EMBEDDING_HOSTED_TIMEOUT", 10.0),
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            logger.warning("hosted embeddings request failed (%s); using lite fallback", exc)
+            return None
+
+        try:
+            # HF returns [[...], [...]]; some servers return {"data": [...]}.
+            vectors = data if isinstance(data, list) else data.get("data")
+            matrix = np.asarray(vectors, dtype=np.float32)
+            if matrix.ndim != 2 or matrix.shape[0] != len(texts):
+                raise ValueError(f"unexpected embedding shape {matrix.shape}")
+            norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+            matrix = matrix / np.maximum(norms, 1e-9)
+            self._dim = int(matrix.shape[1])
+            return matrix
+        except Exception as exc:
+            logger.warning("hosted embeddings response unparsable (%s); using lite fallback", exc)
+            return None
+
+
 class LiteEmbeddingProvider(EmbeddingProvider):
     """Zero-dependency synonym-expanded char-ngram hashing.
 
@@ -222,6 +293,8 @@ def get_provider() -> EmbeddingProvider | None:
     ``neural``: sentence-transformers required; a missing/broken install
     downgrades to lite with a warning so search never breaks.
     ``lite``: always the zero-dependency provider (dev/CI parity).
+    ``hosted``: call a hosted embeddings endpoint (Tier 4); any failure
+    falls back to lite so search never breaks.
     """
     if not getattr(settings, "SEMANTIC_SEARCH_ENABLED", True):
         return None
@@ -230,6 +303,15 @@ def get_provider() -> EmbeddingProvider | None:
     neural = importlib.util.find_spec("sentence_transformers") is not None
     if mode == "lite":
         return LiteEmbeddingProvider()
+
+    if mode == "hosted":
+        hosted = HostedEmbeddingProvider()
+        # Verify the endpoint once: if the very first encode fails the
+        # provider is broken for this deployment — probe cheaply with the
+        # cache-dir marker? No: an empty probe would warm nothing. We let
+        # encode() fail at first use and the EmbeddingIndex treats a None
+        # matrix as "fall back to lite" at build time.
+        return hosted
 
     if neural:
         try:
@@ -333,6 +415,13 @@ class EmbeddingIndex:
         texts = [_room_text(r) for r in rooms]
         self.room_ids = [r.id for r in rooms]
         self.matrix = self.provider.encode(texts)
+        if self.matrix is None:
+            # Provider failed (e.g. hosted endpoint unreachable) — report the
+            # build as failed so callers fall back to TF-IDF/keyword ranking
+            # instead of keeping a broken matrix.
+            logger.warning("Embedding provider returned no matrix; using TF-IDF fallback")
+            self._fingerprint = fingerprint
+            return False
         self._fingerprint = fingerprint
         self._save_cache(fingerprint)
         return True

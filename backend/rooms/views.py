@@ -217,6 +217,7 @@ class RoomViewSet(viewsets.ModelViewSet):
             "geocode",
             "summary",
             "similar_images",
+            "compare",
             "map_intel",
             "map_commute",
             "map_value",
@@ -566,6 +567,42 @@ class RoomViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"])
     def landmarks(self, request):
         return Response(LandmarkSerializer(ALL_LANDMARKS, many=True).data)
+
+    @extend_schema(
+        tags=["Rooms"],
+        summary="Compare listings side by side (AI Property Comparison)",
+        description=(
+            "Pass 2-5 room ids as `ids=1,2,3`. Returns a normalized comparison "
+            "table: per-room fact cards, a column matrix (price, price/sqft, "
+            "area, type, verified, amenities, market position, listing quality) "
+            "and summary takeaways. Public — only public listing fields."
+        ),
+        parameters=[
+            OpenApiParameter(
+                "ids",
+                str,
+                description="Comma-separated room ids (2-5).",
+            )
+        ],
+    )
+    @action(detail=False, methods=["get"], url_path="compare")
+    def compare(self, request):
+        from .compare import compare_rooms
+
+        raw = request.query_params.get("ids", "")
+        ids = [int(x) for x in raw.split(",") if x.strip().isdigit()]
+        if len(ids) < 2 or len(ids) > 5:
+            return Response(
+                {"detail": "Provide between 2 and 5 room ids."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        rooms = list(Room.objects.filter(pk__in=ids, is_available=True))
+        if len(rooms) < 2:
+            return Response(
+                {"detail": "At least two of the requested listings exist and are available."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(compare_rooms(rooms))
 
     @extend_schema(
         tags=["Rooms"],
