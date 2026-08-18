@@ -32,6 +32,7 @@ import {
   useUploadChatFile,
 } from "../../hooks/useChat";
 import { useWebSocket } from "../../hooks/useWebSocket";
+import { track } from "../../services/analytics";
 import { mapChatMessage, type ApiChatMessage } from "../../services/mappers";
 import type { ChatMessage, ChatRoom, ChatSafetyInfo, ChatUser, ReportCategory } from "../../types";
 import { Button } from "../ui/button";
@@ -362,6 +363,14 @@ export default function ChatWindow() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomParam]);
+
+  // Funnel event (Tier 5): opening a conversation is the third conversion
+  // step. Fire once per room (when the selected room actually changes).
+  useEffect(() => {
+    if (selectedRoomId != null) {
+      track("chat_started", { room_id: selectedRoomId });
+    }
+  }, [selectedRoomId]);
 
   // Reset to the REST-fetched history whenever the room changes / reloads.
   useEffect(() => {
