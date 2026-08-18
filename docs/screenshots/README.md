@@ -6,8 +6,10 @@ referenced from the [🖼️ Screenshots](../../README.md#-screenshots) section
 
 ## How screenshots are captured
 
-Rentora has no screenshot automation yet — captures are done manually with
-real app state, then committed:
+Tier-4+ captures are automated with Playwright — `frontend/scripts/capture_tier4_shots.mjs`
+and `capture_tier5_shots.mjs` log in as `admin.demo` against the dev stack
+(backend :8000, frontend :3001) and capture real UI state. Older captures
+were done manually; the workflow below still applies to both:
 
 1. **Run the stack** — `cd backend && venv/Scripts/python.exe manage.py
    runserver` and `cd frontend && npm run dev` (see the repo README
@@ -40,3 +42,4 @@ real app state, then committed:
 | 12 | `tenant-kyc-*.png`, `verified-tenant-badge.png`, `report-block.png`, `chat-safety-feed.png`, `moderation-*.png`, `dispute-admin.png`, `trust-center.png`, `audit-trail.png`, `verified-badge-dark.png`, `kyc-mobile.png` |
 | 12.6–12.8 | `phase12.8-copilot-listing-qa.png` (RAG listing Q&A), `phase12.8-lang-toggle.png` (EN⇄BN), `phase12.8-completed-bookings.png` (trust chip) |
 | 12.9 | `phase12.9-ai-tools-advisor.png` (AI advisor), `phase12.9-compare.png` (property comparison), `phase12.9-landlord-copilot.png`, `phase12.9-smart-alerts.png` |
+| 12.10 | `tier5-price-recommendation.png` (per-listing price advice), `tier5-ai-draft.png` (listing form AI draft), `tier5-copilot-photos.png` (Copilot photo answer) |
