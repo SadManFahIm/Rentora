@@ -14,6 +14,8 @@ interface RoomCardProps {
   /** Tier 4 — property comparison selection. */
   compareSelected?: boolean;
   onToggleCompare?: (room: Room) => void;
+  /** Phase 14 — AI image-search result: visual match score + reasons. */
+  matchInfo?: { score: number; reasons: string[] } | null;
 }
 
 export default function RoomCard({
@@ -21,6 +23,7 @@ export default function RoomCard({
   onClick,
   compareSelected = false,
   onToggleCompare,
+  matchInfo = null,
 }: RoomCardProps) {
   const { t } = useTranslation();
   const wishlist = useWishlistStore((s) => s.wishlist);
@@ -62,6 +65,15 @@ export default function RoomCard({
         <div className="absolute left-3 top-3 flex flex-col items-start gap-1.5">
           <TierBadge tier={room.tier} />
         </div>
+        {matchInfo && (
+          <span
+            className="absolute bottom-3 left-3 inline-flex items-center gap-1 rounded-full bg-orange-600/95 px-2.5 py-1 text-xs font-bold text-white shadow-sm"
+            title={matchInfo.reasons.join(", ")}
+          >
+            <Star className="size-3 fill-white" />
+            {t("vision.matchScore", { score: matchInfo.score })}
+          </span>
+        )}
         {onToggleCompare && (
           <button
             type="button"

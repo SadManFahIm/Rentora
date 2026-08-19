@@ -15,7 +15,9 @@ from rest_framework import permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.filters import OrderingFilter
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from wishlist.models import Wishlist
@@ -226,9 +228,18 @@ class RoomViewSet(viewsets.ModelViewSet):
             "map_search",
             "area_hierarchy",
             "area_boundaries",
+            "vision_search",
         ):
             return [permissions.AllowAny()]
         if self.action == "create":
+            return [permissions.IsAuthenticated()]
+        if self.action in (
+            "vision_analyze",
+            "vision_analysis",
+            "vision_description",
+        ):
+            # Owner-or-admin is enforced inside each action (admin must be
+            # able to reach the endpoint; IsOwnerOrReadOnly would 403 staff).
             return [permissions.IsAuthenticated()]
         return [permissions.IsAuthenticated(), IsOwnerOrReadOnly()]
 
@@ -1299,6 +1310,335 @@ class RoomViewSet(viewsets.ModelViewSet):
             title_hint=str(data.get("title", "")),
         )
         return Response(draft)
+
+    # ----- Phase 14 — Vision & content AI -----------------------------------
+
+    def _owner_or_admin(self, request, room) -> bool:
+        is_admin = request.user.is_staff or request.user.role == request.user.Role.ADMIN
+        return room.owner_id == request.user.id or is_admin
+
+    @extend_schema(
+        tags=["Rooms"],
+        summary="Vision analysis of a listing's photos (owner/admin)",
+        description=(
+            "Deterministic photo intelligence: lighting / tone / décor / "
+            "framing observations, a caption, the dominant colour palette and "
+            "(with a configured gateway) suggested amenity tags. Statistical "
+            "description of pixels — it cannot name specific furniture. "
+            "Stored on the listing; re-run explicitly to refresh."
+        ),
+        responses=inline_serializer(
+            "VisionAnalysisResponse",
+            fields={
+                "available": serializers.BooleanField(),
+                "reason": serializers.CharField(required=False),
+                "provider": serializers.CharField(required=False),
+                "caption": serializers.CharField(required=False),
+                "observations": serializers.ListField(
+                    child=inline_serializer(
+                        "VisionObservation",
+                        fields={
+                            "kind": serializers.CharField(),
+                            "label": serializers.CharField(),
+                            "confidence": serializers.FloatField(),
+                        },
+                    ),
+                    required=False,
+                ),
+                "suggested_amenities": serializers.ListField(
+                    child=serializers.CharField(), required=False
+                ),
+                "palette": serializers.ListField(
+                    child=inline_serializer(
+                        "VisionColour",
+                        fields={
+                            "hex": serializers.CharField(),
+                            "name": serializers.CharField(),
+                            "share": serializers.FloatField(),
+                        },
+                    ),
+                    required=False,
+                ),
+                "photo_count": serializers.IntegerField(required=False),
+                "note": serializers.CharField(required=False),
+            },
+        ),
+    )
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="vision/analyze",
+        permission_classes=[permissions.IsAuthenticated],
+    )
+    def vision_analyze(self, request, pk=None):
+        room = self.get_object()
+        if not self._owner_or_admin(request, room):
+            return Response(
+                {"detail": "You can only analyse your own listings."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if not settings.VISION_ENABLED:
+            return Response(
+                {"detail": "Vision features are disabled on this deployment."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        from .models import RoomVisionAnalysis
+        from .vision import analyze_listing
+
+        analysis = analyze_listing(room, request)
+        if not analysis.get("available"):
+            return Response(analysis, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        RoomVisionAnalysis.objects.update_or_create(
+            room=room,
+            defaults={
+                "provider": analysis["provider"],
+                "caption": analysis["caption"],
+                "observations": analysis["observations"],
+                "suggested_amenities": analysis["suggested_amenities"],
+                "palette": analysis["palette"],
+                "photo_profiles": analysis["photo_profiles"],
+            },
+        )
+        return Response(analysis)
+
+    @extend_schema(
+        tags=["Rooms"],
+        summary="Stored vision analysis (owner/admin)",
+        description="Return the last stored vision analysis for a listing, "
+        "or 404 when it has never been analysed.",
+        responses=inline_serializer(
+            "VisionAnalysisStoredResponse",
+            fields={
+                "provider": serializers.CharField(),
+                "caption": serializers.CharField(),
+                "observations": serializers.ListField(
+                    child=inline_serializer(
+                        "VisionObservationStored",
+                        fields={
+                            "kind": serializers.CharField(),
+                            "label": serializers.CharField(),
+                            "confidence": serializers.FloatField(),
+                        },
+                    )
+                ),
+                "suggested_amenities": serializers.ListField(child=serializers.CharField()),
+                "palette": serializers.ListField(
+                    child=inline_serializer(
+                        "VisionColourStored",
+                        fields={
+                            "hex": serializers.CharField(),
+                            "name": serializers.CharField(),
+                            "share": serializers.FloatField(),
+                        },
+                    )
+                ),
+                "updated_at": serializers.DateTimeField(),
+            },
+        ),
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="vision",
+        permission_classes=[permissions.IsAuthenticated],
+    )
+    def vision_analysis(self, request, pk=None):
+        room = self.get_object()
+        if not self._owner_or_admin(request, room):
+            return Response(
+                {"detail": "You can only view analysis of your own listings."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        from .models import RoomVisionAnalysis
+
+        analysis = RoomVisionAnalysis.objects.filter(room=room).first()
+        if analysis is None:
+            return Response(
+                {"detail": "No vision analysis stored for this listing yet."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(
+            {
+                "provider": analysis.provider,
+                "caption": analysis.caption,
+                "observations": analysis.observations,
+                "suggested_amenities": analysis.suggested_amenities,
+                "palette": analysis.palette,
+                "updated_at": analysis.updated_at,
+            }
+        )
+
+    @extend_schema(
+        tags=["Rooms"],
+        summary="AI draft from the listing's photos (owner/admin)",
+        description=(
+            "Draft title + description + amenity tags from the listing's real "
+            "fields AND its actual photos (observations + caption + palette). "
+            "Deterministic — every sentence is grounded in real inputs; a "
+            "draft to review, never auto-published."
+        ),
+        responses=inline_serializer(
+            "VisionDescriptionResponse",
+            fields={
+                "title": serializers.CharField(),
+                "description": serializers.CharField(),
+                "amenities": serializers.ListField(child=serializers.CharField()),
+                "observations": serializers.ListField(
+                    child=inline_serializer(
+                        "VisionObservationDescription",
+                        fields={
+                            "kind": serializers.CharField(),
+                            "label": serializers.CharField(),
+                            "confidence": serializers.FloatField(),
+                        },
+                    )
+                ),
+                "note": serializers.CharField(),
+            },
+        ),
+    )
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="vision/description",
+        permission_classes=[permissions.IsAuthenticated],
+    )
+    def vision_description(self, request, pk=None):
+        room = self.get_object()
+        if not self._owner_or_admin(request, room):
+            return Response(
+                {"detail": "You can only draft your own listings."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if not settings.VISION_ENABLED:
+            return Response(
+                {"detail": "Vision features are disabled on this deployment."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        from .description_generator import generate_listing_draft
+        from .vision import analyze_listing
+
+        analysis = analyze_listing(room, request)
+        if not analysis.get("available"):
+            return Response(
+                {"detail": "This listing has no readable photos to draft from."},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        brightness = {p["brightness_label"] for p in analysis["photo_profiles"]}
+        draft = generate_listing_draft(
+            area=str(room.area),
+            room_type=str(room.room_type),
+            price=float(room.price) if room.price is not None else None,
+            size_sqft=room.size_sqft,
+            gender_preference=str(room.gender_preference or "any"),
+            amenities=list(room.amenities or []),
+            title_hint=str(room.title or ""),
+            image_profile={
+                "available": True,
+                "brightness": "bright" if "bright" in brightness else "normal",
+                "colourfulness": analysis["photo_profiles"][0].get("colourfulness_label", "muted"),
+            },
+        )
+        draft["description"] = f"{analysis['caption']} {draft['description']}"
+        draft["observations"] = analysis["observations"]
+        draft["note"] = (
+            "Drafted from your listing details and its actual photos — "
+            "review and edit before publishing."
+        )
+        return Response(draft)
+
+    @extend_schema(
+        tags=["Rooms"],
+        summary="AI image search — upload a photo, find look-alike rooms",
+        description=(
+            "Upload a room photo and get the listings whose photos look most "
+            "similar, ranked by a transparent 0-100 score (50% perceptual "
+            "hash + 25% colour palette + 25% lighting). Deterministic and "
+            "self-hosted; it finds visually similar rooms, not semantic "
+            "object matches."
+        ),
+        request=inline_serializer(
+            "VisionSearchRequest",
+            fields={"image": serializers.ImageField()},
+        ),
+        responses=inline_serializer(
+            "VisionSearchResponse",
+            fields={
+                "matches": serializers.ListField(
+                    child=inline_serializer(
+                        "VisionSearchMatch",
+                        fields={
+                            "room": RoomListSerializer(),
+                            "match_score": serializers.IntegerField(),
+                            "reasons": serializers.ListField(child=serializers.CharField()),
+                        },
+                    )
+                ),
+                "note": serializers.CharField(),
+            },
+        ),
+    )
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="vision/search",
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def vision_search(self, request):
+        # DRF's @action decorator does not accept throttle kwargs — apply the
+        # dedicated vision scope manually so photo uploads can't be scripted.
+        self.throttle_classes = [ScopedRateThrottle]
+        self.throttle_scope = "vision"
+        self.check_throttles(request)
+        if not settings.VISION_ENABLED:
+            return Response(
+                {"detail": "Vision features are disabled on this deployment."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        from config.uploads import validate_image_upload
+
+        image = request.FILES.get("image")
+        if image is None:
+            return Response(
+                {"detail": "An image file is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            validate_image_upload(image)
+        except ValidationError as exc:
+            return Response(
+                {"detail": exc.detail[0] if isinstance(exc.detail, list) else exc.detail},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from .vision import fingerprint_image, image_search
+
+        query_bytes = image.read()
+        if fingerprint_image(query_bytes) is None:
+            return Response(
+                {"detail": "Could not read the uploaded image — try a clear JPEG or PNG."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        matches = image_search(query_bytes)
+        room_ids = [m["room_id"] for m in matches]
+        rooms = list(Room.objects.filter(pk__in=room_ids))
+        by_id = {room.pk: room for room in rooms}
+        payload = []
+        for match in matches:
+            room = by_id.get(match["room_id"])
+            if room is None:
+                continue
+            row = RoomListSerializer(room, context={"request": request}).data
+            row["match_score"] = match["match_score"]
+            row["reasons"] = match["reasons"]
+            payload.append(row)
+        return Response(
+            {
+                "matches": payload,
+                "note": "Visual similarity from your photo — scores blend photo "
+                "composition, colour palette and lighting. Deterministic, no "
+                "external model.",
+            }
+        )
 
     @extend_schema(
         tags=["Rooms"],
