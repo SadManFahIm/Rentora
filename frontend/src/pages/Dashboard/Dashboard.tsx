@@ -34,6 +34,7 @@ import RoomModal from "../../components/RoomModal/RoomModal";
 import RoomForm from "../../components/RoomForm/RoomForm";
 import TierBadge from "../../components/TierBadge/TierBadge";
 import PriceRecommendationCard from "../../components/PriceRecommendationCard/PriceRecommendationCard";
+import VisionCard from "../../components/VisionCard/VisionCard";
 import PromoteModal from "../../components/PromoteModal/PromoteModal";
 import PaymentMethodModal, {
   type PaymentRequest,
@@ -1031,44 +1032,47 @@ function ListingsTab({ onPromote }: { onPromote: (room: Room) => void }) {
           {myRooms.map((room) => (
             <div
               key={room.id}
-              className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-card p-4 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between"
+              className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-card p-4 dark:border-gray-800"
             >
-              <div className="flex items-center gap-3">
-                <img
-                  src={room.img}
-                  alt={room.name}
-                  className="h-16 w-24 shrink-0 rounded-lg object-cover"
-                />
-                <div>
-                  <div className="flex items-center gap-2 font-display text-sm font-bold text-foreground">
-                    {room.name}
-                    <TierBadge tier={room.tier} showFree />
-                  </div>
-                  <div className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
-                    {room.area} • ৳{room.price.toLocaleString()}/mo •{" "}
-                    {room.available ? "Available" : "Unavailable"}
-                  </div>
-                  {room.tierExpiresAt && room.tier !== "free" && (
-                    <div className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                      {room.tier === "premium" ? "Premium" : "Featured"} until{" "}
-                      {new Date(room.tierExpiresAt).toLocaleDateString()}
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={room.img}
+                    alt={room.name}
+                    className="h-16 w-24 shrink-0 rounded-lg object-cover"
+                  />
+                  <div>
+                    <div className="flex items-center gap-2 font-display text-sm font-bold text-foreground">
+                      {room.name}
+                      <TierBadge tier={room.tier} showFree />
                     </div>
-                  )}
+                    <div className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
+                      {room.area} • ৳{room.price.toLocaleString()}/mo •{" "}
+                      {room.available ? "Available" : "Unavailable"}
+                    </div>
+                    {room.tierExpiresAt && room.tier !== "free" && (
+                      <div className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                        {room.tier === "premium" ? "Premium" : "Featured"} until{" "}
+                        {new Date(room.tierExpiresAt).toLocaleDateString()}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <div className="w-72">
+                    <PriceRecommendationCard roomId={room.id} />
+                  </div>
+                  <Button
+                    size="sm"
+                    className="shrink-0 bg-orange-600 text-white hover:bg-orange-700"
+                    onClick={() => onPromote(room)}
+                  >
+                    <Megaphone className="mr-1.5 size-3.5" />
+                    {room.tier === "free" ? "Promote" : "Upgrade"}
+                  </Button>
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <div className="w-72">
-                  <PriceRecommendationCard roomId={room.id} />
-                </div>
-                <Button
-                  size="sm"
-                  className="shrink-0 bg-orange-600 text-white hover:bg-orange-700"
-                  onClick={() => onPromote(room)}
-                >
-                  <Megaphone className="mr-1.5 size-3.5" />
-                  {room.tier === "free" ? "Promote" : "Upgrade"}
-                </Button>
-              </div>
+              <VisionCard room={room} />
             </div>
           ))}
         </div>
