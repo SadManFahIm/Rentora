@@ -49,3 +49,31 @@ class Event(models.Model):
 
     def __str__(self):
         return f"{self.event} @ {self.created_at:%Y-%m-%d %H:%M}"
+
+
+class AreaPriceSnapshot(models.Model):
+    """Weekly price snapshot per (area, room_type) market segment (Phase 15, C6).
+
+    Written by the weekly market-report task (``analytics.tasks.generate_market_report``)
+    from the live ``MarketStat`` table. Snapshots are the *history* behind the
+    rental market report's price-movement column — the current week's numbers
+    always come from live MarketStat, and prior weeks come from these rows.
+    Append-only in practice (upsert per week), never hand-edited.
+    """
+
+    area = models.CharField(max_length=50)
+    room_type = models.CharField(max_length=10)
+    week_start = models.DateField(db_index=True)
+
+    avg_price = models.DecimalField(max_digits=10, decimal_places=2)
+    median_price = models.DecimalField(max_digits=10, decimal_places=2)
+    sample_size = models.IntegerField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("area", "room_type", "week_start")
+        ordering = ["week_start", "area", "room_type"]
+
+    def __str__(self):
+        return f"{self.area}/{self.room_type} @ {self.week_start}"

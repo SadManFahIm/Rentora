@@ -104,6 +104,15 @@ _SUSPICIOUS = [
     "একটা নম্বর দিন, হোয়াটসঅ্যাপে কথা বলি",
     "দুপুরের মধ্যে টাকা পাঠান, নাহলে রুম অন্যকে দিয়ে দেব",
     "Send your bKash PIN to release the booking deposit",
+    # Phase 15, D9 — deep impersonation / advance-fee / off-platform pressure.
+    "I am the site admin and I can approve your booking today",
+    "I work in Rentora support and I have access to your account",
+    "Pay the clearance fee first and your refund will be released",
+    "Transfer the activation fee and the booking will unlock",
+    "Talk to me on WhatsApp or the room will be given to someone else",
+    "আমি সাইটের অ্যাডমিন, আপনার বুকিং আমি অ্যাপ্রুভ করতে পারি",
+    "রিফান্ড রিলিজ করতে আগে ক্লিয়ারেন্স ফি দিতে হবে",
+    "হোয়াটসঅ্যাপে কথা বলুন, না হলে রুমটা পাবেন না",
 ]
 
 # ---------------------------------------------------------------------------

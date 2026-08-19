@@ -202,6 +202,40 @@ def _rapid_listing(room: Room) -> Signal | None:
     return None
 
 
+def _fraud_ring(room: Room) -> Signal | None:
+    """Flag listings whose owner belongs to a coordinated-account ring (Phase 15, D8).
+
+    Reuses the ring graph from ``fraud.services.rings``: a shared phone with
+    another account (strong) or a shared audit IP + same-area listings (weak)
+    links the owner to a ring. Severity follows the link strength; the detail
+    carries the evidence for the admin reviewer. Review aid, never a block.
+    """
+    from .rings import owner_ring_membership
+
+    membership = owner_ring_membership(room.owner)
+    if membership is None:
+        return None
+    severity = (
+        FraudReport.Severity.MEDIUM
+        if membership["strength"] == "strong"
+        else FraudReport.Severity.LOW
+    )
+    return Signal(
+        detector=FraudSignal.Detector.FRAUD_RING,
+        severity=severity,
+        message=(
+            f"Owner is linked to a {membership['member_count']}-account ring "
+            f"({membership['evidence']}). Review the accounts before trusting this listing."
+        ),
+        detail={
+            "member_count": membership["member_count"],
+            "strength": membership["strength"],
+            "evidence": membership["evidence"],
+            "peer_user_ids": membership["peers"],
+        },
+    )
+
+
 # The duplicate-image detector lives in its own module (it reuses the pHash
 # pipeline from rooms/image_search.py) and is imported here — at module level
 # it is a one-way dependency (duplicate_image only imports back lazily inside
@@ -274,6 +308,7 @@ DETECTORS: list[Callable[[Room], Signal | None]] = [
     _missing_images,
     _unverified_owner,
     _rapid_listing,
+    _fraud_ring,
     duplicate_image_signal,
     _image_forensics,
 ]

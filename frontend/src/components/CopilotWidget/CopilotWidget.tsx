@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Bot, Loader2, MessageSquare, Send, Sparkles, X } from "lucide-react";
+import { Bot, Loader2, MessageSquare, Send, Sparkles, Volume2, VolumeX, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useCopilot } from "../../hooks/useCopilot";
+import { useSpeechOutput } from "../../hooks/useSpeechOutput";
 import roomService from "../../services/roomService";
 import { useCopilotStore } from "../../stores/copilotStore";
 import AiToolsPanel from "../AiToolsPanel/AiToolsPanel";
@@ -34,11 +35,28 @@ export default function CopilotWidget() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { t } = useTranslation();
+  // Phase 15 — B3 Copilot voice: reads the last assistant reply aloud in the
+  // UI language. Browser TTS only — nothing is recorded or uploaded.
+  const {
+    supported: ttsSupported,
+    status: ttsStatus,
+    speak,
+    stop,
+  } = useSpeechOutput(t("copilot.ttsLang"));
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
 
   // Auto-scroll to the newest message.
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, isSending]);
+
+  // Stop any in-flight speech when the widget closes or the tools panel opens.
+  useEffect(() => {
+    if (!isOpen || toolsOpen) {
+      stop();
+      setSpeakingId(null);
+    }
+  }, [isOpen, toolsOpen, stop]);
 
   // Tier 3 listing mode: when a page asks the Copilot to talk about a
   // listing, open the widget and seed the grounded listing conversation.
@@ -77,6 +95,23 @@ export default function CopilotWidget() {
       setLoadingRoom(null);
     }
   };
+
+  // Phase 15 — B3: toggle reading a Copilot reply aloud (browser TTS).
+  const speakMessage = (id: string, text: string) => {
+    if (speakingId === id) {
+      stop();
+      setSpeakingId(null);
+      return;
+    }
+    if (!ttsSupported) return;
+    setSpeakingId(id);
+    speak(text);
+  };
+
+  // Clear the highlight once speech finishes (the hook returns to "idle").
+  useEffect(() => {
+    if (ttsStatus === "idle" && speakingId !== null) setSpeakingId(null);
+  }, [ttsStatus, speakingId]);
 
   return (
     <>
@@ -139,7 +174,9 @@ export default function CopilotWidget() {
               <Sparkles className="size-3" />
               AI Tools
             </button>
-            <span className="text-[10px] text-gray-400">advisor · agreement · negotiation</span>
+            <span className="text-[10px] text-gray-400">
+              advisor · agreement · negotiation · support
+            </span>
           </div>
 
           {toolsOpen ? (
@@ -148,7 +185,9 @@ export default function CopilotWidget() {
                 key={initialTool ?? "tools"}
                 listingId={listingMode ? listingContext?.id : undefined}
                 listingPrice={listingContext?.price}
-                initialTool={(initialTool as "advisor" | "agreement" | "negotiate") ?? "advisor"}
+                initialTool={
+                  (initialTool as "advisor" | "agreement" | "negotiate" | "support") ?? "advisor"
+                }
               />
             </div>
           ) : (
@@ -194,6 +233,27 @@ export default function CopilotWidget() {
                   >
                     {m.text}
                   </div>
+
+                  {/* Phase 15 — B3: read the reply aloud (browser TTS). */}
+                  {m.role === "assistant" && (
+                    <button
+                      type="button"
+                      onClick={() => speakMessage(m.id, m.text)}
+                      disabled={!ttsSupported}
+                      aria-label={
+                        speakingId === m.id ? t("copilot.stopSpeaking") : t("copilot.speak")
+                      }
+                      title={speakingId === m.id ? t("copilot.stopSpeaking") : t("copilot.speak")}
+                      className="flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800"
+                    >
+                      {speakingId === m.id ? (
+                        <VolumeX className="size-3" />
+                      ) : (
+                        <Volume2 className="size-3" />
+                      )}
+                      {speakingId === m.id ? t("copilot.stopSpeaking") : t("copilot.speak")}
+                    </button>
+                  )}
 
                   {/* Intent chips ("what AI understood") */}
                   {m.role === "assistant" && m.intent && m.intent.hints.length > 0 && (

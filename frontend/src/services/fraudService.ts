@@ -106,6 +106,14 @@ export const fraudService = {
     return data;
   },
 
+  /** GET /fraud/rings/ — admin-only coordinated-account rings, computed
+   * live from shared phones / shared IPs + same-area listings. A ring is a
+   * review queue, never an automatic block. */
+  async getRings(): Promise<FraudRingsOverview> {
+    const { data } = await api.get<FraudRingsOverview>("/fraud/rings/");
+    return data;
+  },
+
   /** POST /fraud/rooms/{roomId}/scan/ — re-run the detector (owner/admin). */
   async scanRoom(roomId: number): Promise<FraudReport> {
     const { data } = await api.post<ApiReport>(`/fraud/rooms/${roomId}/scan/`);
@@ -139,6 +147,55 @@ export interface FraudAuditEntry {
   room_id: number | null;
   target_id: string;
   created_at: string;
+}
+
+// ---- Phase 15 — D8 coordinated-account rings (admin desk view) ----
+
+export interface FraudRingMember {
+  user_id: number;
+  username: string;
+  email: string;
+  role: string;
+  nid_verified: boolean;
+  tenant_verified: boolean;
+  phone: string;
+  connected_to: number[];
+  listings_count: number;
+}
+
+export interface FraudRingEdge {
+  users: [number, number];
+  strength: "strong" | "weak";
+  evidence: string;
+}
+
+export interface FraudRingFlaggedRoom {
+  room_id: number;
+  title: string;
+  area: string;
+  owner_id: number;
+  severity: string;
+  score: number;
+}
+
+export interface FraudRing {
+  ring_id: number;
+  member_count: number;
+  score: number;
+  strong_edges: number;
+  weak_edges: number;
+  member_scores: Record<string, number>;
+  members: FraudRingMember[];
+  edges: FraudRingEdge[];
+  flagged_rooms: FraudRingFlaggedRoom[];
+}
+
+export interface FraudRingsOverview {
+  rings: FraudRing[];
+  ring_count: number;
+  user_count: number;
+  as_of: string;
+  note: string;
 }
 
 export default fraudService;

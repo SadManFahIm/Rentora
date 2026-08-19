@@ -6,6 +6,7 @@ from .views import (
     BlockUserView,
     ChatRoomViewSet,
     ChatSafetyEventsView,
+    ChatTranslateView,
     ChatUploadView,
     MessageViewSet,
     OnlineStatusView,
@@ -34,6 +35,7 @@ urlpatterns = [
     path("online-status/", OnlineStatusView.as_view(), name="chat-online-status"),
     path("upload/", ChatUploadView.as_view(), name="chat-upload"),
     path("safety/events/", ChatSafetyEventsView.as_view(), name="chat-safety-events"),
+    path("translate/", ChatTranslateView.as_view(), name="chat-translate"),
     # Report / block (Phase 12.4).
     path("reports/", ReportCreateView.as_view(), name="chat-report-create"),
     path("reports/admin/", ReportListView.as_view(), name="chat-report-list"),

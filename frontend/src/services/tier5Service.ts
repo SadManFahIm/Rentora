@@ -23,6 +23,14 @@ export interface PriceRecommendation {
     interest_30d: { bookings_30d: number; wishlist_30d: number; total: number };
   };
   note: string;
+  // Phase 15 — C7 dynamic pricing v2 (always present; nullable values when
+  // nothing is grounded — the API never invents a figure).
+  version?: 2;
+  dynamic_price?: number | null;
+  demand_momentum_pct?: number | null;
+  window?: { min: number; max: number } | null;
+  valid_until?: string | null;
+  drivers?: { factor: string; effect: "raise" | "hold" | "lower"; detail: string }[];
 }
 
 export interface ListingDraftRequest {

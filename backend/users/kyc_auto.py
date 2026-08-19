@@ -197,6 +197,22 @@ def auto_screen(verification) -> dict:
         reasons.append(f"{failed} prior unsuccessful verification attempts")
         score -= PENALTY_REPEAT_ATTEMPTS
 
+    # 6. OCR auto-extraction (Phase 15, C4): when an OCR provider is
+    # configured, a structurally valid NID number extracted from the document
+    # earns a small, explainable boost. Structural only — it never claims the
+    # document belongs to this user, and an admin always decides.
+    ocr: dict | None = None
+    if doc_ok and not _is_pdf(path):
+        from .kyc_ocr import ocr_score_boost, ocr_screen
+
+        screen = ocr_screen(verification)
+        if screen["extracted"] is not None:
+            ocr = screen["extracted"]
+            score += ocr_score_boost(ocr)
+            reasons.append(
+                f"OCR extracted a structurally valid NID number (confidence: {ocr['confidence']})"
+            )
+
     score = max(0, min(100, score))
     if score >= APPROVE_SCORE and doc_ok and not needs_review:
         result = "recommend_approve"
@@ -207,4 +223,5 @@ def auto_screen(verification) -> dict:
         "score": score,
         "result": result,
         "reasons": reasons,
+        "ocr": ocr,
     }

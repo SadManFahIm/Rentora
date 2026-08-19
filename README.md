@@ -70,6 +70,18 @@ Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 
 ## 🆕 Changelog
 
+**Phase 15 — Communication & Trust AI**
+
+- **Chat translation (B1)** — auto-detects source language, translates chat messages EN↔BN with Google Translate fallback; quality flag (`full`/`phrase`/`none`) shown honestly in the UI
+- **Support copilot (B2)** — grounded FAQ matcher against help library; returns answer + Bangla translation + matched keywords; honest fallback when no article matches
+- **Voice TTS (B3)** — Web Speech API integration on copilot assistant replies; respect `speechSynthesis` availability with feature-detection guard
+- **KYC OCR (C4)** — auto-extracts NID number, name, DOB from uploaded verification documents with confidence score; displayed in TenantKycCard with honesty note
+- **Review summary (C5)** — AI-generated summary of room reviews with sentiment breakdown (positive/neutral/negative %) and topic tags; shown in ReviewsSection
+- **Market report (C6)** — weekly area-level rental analytics (median price, WoW movement, index); AdminAnalyticsPanel visualization; email distribution to opted-in landlords
+- **Dynamic pricing v2 (C7)** — demand-momentum-adjusted price windows with area-specific factor drivers; replaces static v1 with time-series-informed recommendations
+- **Fraud rings (D8)** — detects coordinated accounts via shared phone (strong link) and shared audit IP + same area (weak link); flagged rings surfaced in AdminFraudPanel
+- **Bug fix** — fixed SQLite `DISTINCT` + `ORDER BY` gotcha in `market_report.py` and `forecast.py`; added `.order_by("area")` to deduplicate area rows
+
 **Phase 14 — AI v3: Vision & Content AI**
 
 - **Photo intelligence** — `rooms/vision.py` fingerprints a listing's photos (pHash + 64-bucket colour histogram + brightness + palette, Pillow-only, offline) and derives honest, confidence-scored observations: lighting, tone, décor, composition. `POST /api/v1/rooms/<id>/vision/analyze/` stores a `RoomVisionAnalysis` (OneToOne), `GET /vision/` serves it, `POST /vision/description/` drafts a copy-ready title + description from the **actual photos** (reuses the AI draft pipeline with the vision image profile), and suggested amenity tags can be **reviewed then applied** to the listing. Object-level tags need an optional `http` vision gateway (`VISION_PROVIDER=http`) with graceful fallback; every response carries the honesty note that this is statistical pixel vision, not object recognition. See [`docs/phase-14-ai-v3.md`](docs/phase-14-ai-v3.md)

@@ -17,6 +17,7 @@ from .serializers import (
     LandlordCopilotRequestSerializer,
     NegotiationRequestSerializer,
     RentalAdviceRequestSerializer,
+    SupportRequestSerializer,
 )
 from .services import chat, listing_facts_for, share_summary_for
 
@@ -130,6 +131,38 @@ class CopilotShareSummaryView(APIView):
         if summary is None:
             raise Http404("Listing not found or unavailable")
         return Response(summary)
+
+
+class SupportCopilotView(APIView):
+    """AI Support Copilot (Phase 15 — B2).
+
+    Deterministic retrieval over a curated bilingual (EN + BN) help corpus;
+    answers are pre-written and grounded in live platform facts (tier
+    prices, durations). When nothing in the corpus matches, the transparent
+    fallback is returned with ``grounded: false`` — the assistant never
+    fabricates an answer. Public, like the Copilot chat.
+    """
+
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [CopilotRateThrottle]
+
+    @extend_schema(
+        tags=["Copilot"],
+        summary="Support Copilot — answer a help question (EN/BN)",
+        description=(
+            "Free-text help question in Bangla or English. Returns the "
+            "matched help article (title + answer in both languages), the "
+            "matched keywords, and `grounded` — false when no article "
+            "matched (transparent fallback)."
+        ),
+        request=SupportRequestSerializer,
+    )
+    def post(self, request):
+        serializer = SupportRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        from .support import support_answer
+
+        return Response(support_answer(serializer.validated_data["message"]))
 
 
 class RentalAdvisorView(APIView):
