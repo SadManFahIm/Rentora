@@ -27,5 +27,7 @@ ignore = [
 "*/migrations/*.py" = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF"]
 # Tests are allowed some leniency.
 "*/tests.py" = ["E501"]
+# Test fixtures intentionally use Bangla digits (NID numbers, review counts).
+"*/test_*.py" = ["RUF001"]
 # Bangla digit aliases (সেক্টর ৪ etc.) are intentional data, not confusables.
 "rooms/dhaka_areas.py" = ["RUF001"]

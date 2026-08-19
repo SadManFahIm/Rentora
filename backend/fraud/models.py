@@ -61,6 +61,7 @@ class FraudSignal(models.Model):
         DESCRIPTION_SIMILARITY = "description_similarity", "Description Similarity"
         DUPLICATE_IMAGE = "duplicate_image", "Duplicate Image"
         MANIPULATED_IMAGE = "manipulated_image", "Manipulated Image"
+        FRAUD_RING = "fraud_ring", "Fraud Ring"
 
     report = models.ForeignKey(FraudReport, on_delete=models.CASCADE, related_name="signals")
     detector = models.CharField(max_length=30, choices=Detector.choices)

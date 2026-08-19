@@ -129,3 +129,58 @@ class DemandForecastView(APIView):
         if area:
             return Response(area_demand(area))
         return Response(area_demand_summary())
+
+
+@extend_schema(
+    tags=["Analytics"],
+    summary="Rental market report (public)",
+    description=(
+        "Public, read-only. The weekly per-area market digest: current prices, "
+        "demand direction, 30-day forecast, availability and price movement "
+        "versus the previous weekly snapshot. The first week is a baseline "
+        "(`baseline: true`) with no movement."
+    ),
+)
+class MarketReportView(APIView):
+    """GET /api/v1/analytics/market-report/ — the latest market digest."""
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from .market_report import build_report
+
+        return Response(build_report())
+
+
+@extend_schema(
+    tags=["Analytics"],
+    summary="Generate market report now (admin)",
+    description=(
+        "Admin only. Writes this week's price snapshot and emails opted-in "
+        "subscribers immediately. Normally the weekly Celery beat task does "
+        "this on Monday mornings."
+    ),
+)
+class MarketReportGenerateView(APIView):
+    """POST /api/v1/analytics/market-report/generate/ — admin trigger."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        if not (request.user.is_staff or getattr(request.user, "role", "") == "admin"):
+            return Response(
+                {"detail": "Admin access required."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        from .market_report import generate_report
+
+        report = generate_report()
+        return Response(
+            {
+                "ok": True,
+                "week_label": report["week_label"],
+                "areas": len(report["areas"]),
+                "baseline": report["baseline"],
+                "subscribed_emails": report.get("emails_sent", 0),
+            }
+        )

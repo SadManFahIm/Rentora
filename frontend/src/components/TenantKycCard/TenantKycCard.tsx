@@ -5,6 +5,7 @@ import {
   Clock,
   FileUp,
   Loader2,
+  ScanText,
   ShieldCheck,
   UploadCloud,
 } from "lucide-react";
@@ -169,6 +170,48 @@ export default function TenantKycCard() {
             </span>
           </li>
         </ul>
+      )}
+
+      {/* Phase 15 — C4: AI NID auto-extract (OCR). Shown only when the
+          pre-screen actually extracted a NID number, with the honesty note
+          that this is structural — not proof the ID belongs to the user. */}
+      {verification?.autoScreenDetail?.ocr?.nid_number && (
+        <div className="mt-4 rounded-xl border border-indigo-200/70 bg-indigo-50/60 p-3.5 dark:border-indigo-800/50 dark:bg-indigo-950/30">
+          <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+            <ScanText className="size-3.5" /> AI auto-extract from your upload
+          </div>
+          <div className="flex flex-wrap gap-1.5 text-xs">
+            {verification.autoScreenDetail.ocr.name && (
+              <span className="rounded-full bg-white px-2.5 py-1 font-medium text-foreground shadow-sm dark:bg-gray-900">
+                {verification.autoScreenDetail.ocr.name}
+              </span>
+            )}
+            {verification.autoScreenDetail.ocr.date_of_birth && (
+              <span className="rounded-full bg-white px-2.5 py-1 font-medium text-foreground shadow-sm dark:bg-gray-900">
+                DOB {verification.autoScreenDetail.ocr.date_of_birth}
+              </span>
+            )}
+            <span className="rounded-full bg-white px-2.5 py-1 font-mono font-medium text-foreground shadow-sm dark:bg-gray-900">
+              NID ···{verification.autoScreenDetail.ocr.nid_number.slice(-4)}
+            </span>
+            <span
+              className={cn(
+                "inline-flex items-center rounded-full px-2.5 py-1 font-semibold",
+                verification.autoScreenDetail.ocr.confidence === "high"
+                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                  : verification.autoScreenDetail.ocr.confidence === "medium"
+                    ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                    : "bg-gray-500/10 text-gray-500"
+              )}
+            >
+              {verification.autoScreenDetail.ocr.confidence} confidence
+            </span>
+          </div>
+          <p className="mt-2 text-[10px] leading-relaxed text-gray-500 dark:text-gray-400">
+            Auto-extracted from the document image to speed up review. It only proves the document
+            contains these details — it does not confirm the ID belongs to you.
+          </p>
+        </div>
       )}
     </div>
   );

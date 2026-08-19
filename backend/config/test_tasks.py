@@ -7,6 +7,7 @@ class CeleryWiringTests(TestCase):
     def test_tasks_are_registered(self):
         # Import the task modules first, exactly like a real worker would
         # (autodiscovery alone is timing-sensitive inside the test runner).
+        import analytics.tasks  # noqa: F401
         import fraud.tasks  # noqa: F401
         import payments.tasks  # noqa: F401
         import pricing.tasks  # noqa: F401
@@ -20,10 +21,12 @@ class CeleryWiringTests(TestCase):
             "pricing.tasks.update_market_stats",
             "fraud.tasks.scan_all_rooms",
             "fraud.tasks.scan_room",
+            "fraud.tasks.detect_rings",
             "payments.tasks.send_payment_reminders",
             "users.tasks.alert_kyc_sla_breaches",
             "savedsearches.tasks.check_saved_searches",
             "savedsearches.tasks.send_saved_search_digests",
+            "analytics.tasks.generate_market_report",
         ]:
             with self.subTest(task=task_name):
                 self.assertIn(task_name, app.tasks)
@@ -43,6 +46,8 @@ class CeleryWiringTests(TestCase):
                 "alert-kyc-sla-breaches",
                 "check-saved-searches",
                 "send-saved-search-digests",
+                "generate-market-report",
+                "detect-fraud-rings",
             },
         )
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import {
   BadgeCheck,
@@ -6,6 +7,7 @@ import {
   Check,
   CheckCheck,
   Flag,
+  Languages,
   Loader2,
   MoreVertical,
   Paperclip,
@@ -33,6 +35,7 @@ import {
 } from "../../hooks/useChat";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { track } from "../../services/analytics";
+import chatService, { type TranslateResult } from "../../services/chatService";
 import { mapChatMessage, type ApiChatMessage } from "../../services/mappers";
 import type { ChatMessage, ChatRoom, ChatSafetyInfo, ChatUser, ReportCategory } from "../../types";
 import { Button } from "../ui/button";
@@ -300,6 +303,7 @@ function ReportUserDialog({
 
 export default function ChatWindow() {
   const { user } = useApp();
+  const { i18n } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const roomParam = searchParams.get("room");
 
@@ -330,6 +334,12 @@ export default function ChatWindow() {
     messagePreview?: string;
   } | null>(null);
   const [confirmBlockOpen, setConfirmBlockOpen] = useState(false);
+  // Phase 15 — B1 live translation: per-message cache of the server's
+  // EN⇄BN translation (the server reports `quality` so we never present an
+  // untranslated sentence as translated), plus which message is being
+  // translated right now.
+  const [translations, setTranslations] = useState<Record<number, TranslateResult>>({});
+  const [translatingId, setTranslatingId] = useState<number | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const typingClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -542,6 +552,35 @@ export default function ChatWindow() {
       });
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  // Phase 15 — B1: translate a message into the viewer's UI language (the
+  // server detects the source). Toggling again hides the cached translation.
+  // Quality "none" is shown honestly (toast with the server's note) instead
+  // of pretending the message was translated.
+  const handleTranslate = async (message: ChatMessage) => {
+    if (translations[message.id]) {
+      setTranslations((prev) => {
+        const next = { ...prev };
+        delete next[message.id];
+        return next;
+      });
+      return;
+    }
+    const target = i18n.language?.startsWith("bn") ? "bn" : "en";
+    setTranslatingId(message.id);
+    try {
+      const result = await chatService.translateMessage(message.content, target);
+      if (result.quality === "none" || !result.translated.trim()) {
+        toast.info(result.note || "Nothing could be translated in this message.");
+        return;
+      }
+      setTranslations((prev) => ({ ...prev, [message.id]: result }));
+    } catch {
+      toast.error("Couldn't translate this message right now.");
+    } finally {
+      setTranslatingId(null);
     }
   };
 
@@ -851,6 +890,18 @@ export default function ChatWindow() {
                           )}
                         </div>
                       )}
+                      {/* Phase 15 — B1: the translated version of the message,
+                          shown under the bubble with an honest quality note. */}
+                      {translations[m.id] && !deleted && (
+                        <div className="mt-1 max-w-full rounded-2xl rounded-bl-sm border border-dashed border-orange-300/70 bg-orange-50/70 px-3 py-2 text-sm leading-relaxed text-foreground dark:border-orange-800/50 dark:bg-orange-950/30">
+                          {translations[m.id].translated}
+                          <div className="mt-0.5 text-[10px] text-gray-500 dark:text-gray-400">
+                            {translations[m.id].quality === "phrase"
+                              ? translations[m.id].note
+                              : `Translated · ${translations[m.id].provider}`}
+                          </div>
+                        </div>
+                      )}
                       <div
                         className={cn(
                           "mt-1 flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400",
@@ -862,6 +913,27 @@ export default function ChatWindow() {
                           minute: "2-digit",
                         })}
                         {m.editedAt && !deleted && <span className="italic">(edited)</span>}
+                        {m.messageType === "text" && !blocked && !deleted && (
+                          <button
+                            type="button"
+                            onClick={() => void handleTranslate(m)}
+                            disabled={translatingId === m.id}
+                            aria-label={
+                              translations[m.id] ? "Show original message" : "Translate message"
+                            }
+                            title={
+                              translations[m.id] ? "Show original" : "Translate to my language"
+                            }
+                            className="flex items-center gap-1 rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-foreground disabled:opacity-50 dark:hover:bg-gray-800"
+                          >
+                            {translatingId === m.id ? (
+                              <Loader2 className="size-3 animate-spin" />
+                            ) : (
+                              <Languages className="size-3" />
+                            )}
+                            {translations[m.id] ? "original" : "translate"}
+                          </button>
+                        )}
                         {mine && !deleted ? (
                           <>
                             <MessageStatusIcon status={m.status} />

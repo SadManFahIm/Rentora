@@ -63,6 +63,12 @@ class AgreementCheckRequestSerializer(serializers.Serializer):
     text = serializers.CharField(min_length=10, max_length=20000)
 
 
+class SupportRequestSerializer(serializers.Serializer):
+    """AI Support Copilot input — a free-text help question (EN or BN)."""
+
+    message = serializers.CharField(min_length=1, max_length=500)
+
+
 class LandlordCopilotRequestSerializer(serializers.Serializer):
     """Landlord Copilot input — a listing id the caller owns."""
 

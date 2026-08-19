@@ -62,7 +62,7 @@ interface ApiTenantVerification {
   expires_at: string | null;
   auto_screen_score: number | null;
   auto_screen_result: "recommend_approve" | "recommend_review" | null;
-  auto_screen_detail: { reasons: string[] };
+  auto_screen_detail: { reasons: string[]; ocr?: TenantVerification["autoScreenDetail"]["ocr"] };
 }
 
 interface ApiTenantKycApplication {

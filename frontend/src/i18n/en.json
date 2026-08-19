@@ -71,7 +71,10 @@
     "open": "Open Rentora Copilot",
     "close": "Close Rentora Copilot",
     "listingMode": "Talking about this listing — grounded answers only",
-    "send": "Send message"
+    "send": "Send message",
+    "speak": "Read aloud",
+    "stopSpeaking": "Stop reading",
+    "ttsLang": "bn-BD"
   },
   "trust": {
     "identityVerified": "Identity Verified",
