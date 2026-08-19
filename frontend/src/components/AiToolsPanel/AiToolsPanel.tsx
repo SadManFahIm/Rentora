@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ClipboardCheck, HandCoins, Loader2, Wand2 } from "lucide-react";
+import { ClipboardCheck, HandCoins, LifeBuoy, Loader2, Wand2 } from "lucide-react";
+import { sendSupportQuestion, type SupportAnswer } from "../../services/copilotService";
 import tier4Service, {
   type AgreementCheck,
   type NegotiationDraft,
@@ -9,7 +10,7 @@ import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 
-type Tool = "advisor" | "agreement" | "negotiate";
+type Tool = "advisor" | "agreement" | "negotiate" | "support";
 
 interface AiToolsPanelProps {
   listingId?: number;
@@ -21,6 +22,7 @@ const TOOLS: { id: Tool; label: string; icon: typeof Wand2 }[] = [
   { id: "advisor", label: "Rental Advisor", icon: Wand2 },
   { id: "agreement", label: "Agreement Checker", icon: ClipboardCheck },
   { id: "negotiate", label: "Negotiation", icon: HandCoins },
+  { id: "support", label: "Support", icon: LifeBuoy },
 ];
 
 /**
@@ -59,7 +61,94 @@ export default function AiToolsPanel({
         {tool === "advisor" && <AdvisorTab />}
         {tool === "agreement" && <AgreementTab />}
         {tool === "negotiate" && <NegotiateTab listingId={listingId} listingPrice={listingPrice} />}
+        {tool === "support" && <SupportTab />}
       </div>
+    </div>
+  );
+}
+
+/* -------------------------------- Support -------------------------------- */
+
+function SupportTab() {
+  const [question, setQuestion] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<SupportAnswer | null>(null);
+  const [error, setError] = useState("");
+
+  const run = async () => {
+    if (question.trim().length < 3) return;
+    setLoading(true);
+    setError("");
+    try {
+      setResult(await sendSupportQuestion(question));
+    } catch {
+      setError("Couldn't reach support right now — try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3 text-sm">
+      <p className="font-semibold text-foreground">Ask the support Copilot</p>
+      <textarea
+        rows={3}
+        placeholder="Ask in Bangla or English — e.g. “ডিপোজিট ফেরত পাব কীভাবে?”"
+        value={question}
+        onChange={(e) => setQuestion(e.target.value)}
+        aria-label="Support question"
+        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-foreground placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/40 dark:border-gray-600 dark:bg-gray-900"
+      />
+      <Button
+        type="button"
+        size="sm"
+        onClick={run}
+        disabled={loading || question.trim().length < 3}
+      >
+        {loading ? <Loader2 className="size-3.5 animate-spin" /> : "Get answer"}
+      </Button>
+      {error && <p className="text-xs text-rose-600">{error}</p>}
+      {result && (
+        <div className="space-y-2 text-xs">
+          <div
+            className={cn(
+              "rounded-lg px-2.5 py-2 font-semibold",
+              result.grounded
+                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+            )}
+          >
+            {result.grounded ? result.title : `${result.title} (no exact match)`}
+          </div>
+          <div className="rounded-lg border border-gray-100 p-2.5 dark:border-gray-800">
+            <b className="text-foreground">English</b>
+            <p className="mt-1 leading-relaxed text-gray-700 dark:text-gray-300">{result.answer}</p>
+          </div>
+          <div className="rounded-lg border border-gray-100 p-2.5 dark:border-gray-800">
+            <b className="text-foreground">বাংলা</b>
+            <p className="mt-1 leading-relaxed text-gray-700 dark:text-gray-300">
+              {result.answer_bn}
+            </p>
+          </div>
+          {result.grounded && result.matched_keywords && result.matched_keywords.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {result.matched_keywords.slice(0, 3).map((k) => (
+                <span
+                  key={k}
+                  className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                >
+                  {k}
+                </span>
+              ))}
+            </div>
+          )}
+          <p className="text-[10px] text-gray-400">
+            {result.grounded
+              ? "Answered from the help library — grounded in live platform facts."
+              : "No article matched — this is the transparent fallback, not an invented answer."}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

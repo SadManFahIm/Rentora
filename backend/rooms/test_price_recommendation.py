@@ -139,3 +139,58 @@ class PriceRecommendationTests(APITestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["room_id"], self.room.pk)
+
+    # ---- Phase 15 C7 — dynamic pricing v2 ----------------------------------
+
+    def test_v2_shape_and_ttl(self):
+        out = listing_price_recommendation(self.room)
+        self.assertEqual(out["version"], 2)
+        self.assertIn("dynamic_price", out)
+        self.assertIn("window", out)
+        self.assertIn("valid_until", out)
+        self.assertEqual(len(out["drivers"]), 3)
+        self.assertEqual(
+            {d["factor"] for d in out["drivers"]},
+            {"area_demand", "market_position", "interest_velocity"},
+        )
+        # TTL is ~24h in the future.
+
+        from django.utils.dateparse import parse_datetime
+
+        valid_until = parse_datetime(out["valid_until"])
+        self.assertLess(valid_until - timezone.now(), timedelta(hours=25))
+
+    def test_dynamic_price_none_when_nothing_grounded(self):
+        Room.objects.filter(pk=self.room.pk).update(area="Mirpur")
+        self.room.refresh_from_db()
+        out = listing_price_recommendation(self.room)
+        self.assertIsNone(out["dynamic_price"])
+        self.assertIsNone(out["demand_momentum_pct"])
+        # The window still anchors honestly around the current price.
+        self.assertEqual(out["window"]["min"] < self.room.price < out["window"]["max"], True)
+
+    def test_window_centered_and_bounded(self):
+        out = listing_price_recommendation(self.room)
+        center = (out["window"]["min"] + out["window"]["max"]) / 2
+        anchor = out["dynamic_price"] or float(self.room.price)
+        self.assertAlmostEqual(center, anchor, delta=150)  # ৳100 rounding slack
+        self.assertLess(out["window"]["min"], out["window"]["max"])
+        self.assertGreaterEqual(
+            out["window"]["min"],
+            self.room.price * 0.92,  # never beyond ±8%
+        )
+
+    def test_dynamic_price_bounded_to_8pct(self):
+        self._seed_demand()
+        self.room.price = 9000
+        self.room.save()
+        out = listing_price_recommendation(self.room)
+        if out["dynamic_price"] is not None:
+            self.assertLessEqual(out["dynamic_price"], 9000 * 1.08)
+            self.assertGreaterEqual(out["dynamic_price"], 9000 * 0.92)
+
+    def test_momentum_grounded_when_demand_exists(self):
+        self._seed_demand()
+        out = listing_price_recommendation(self.room)
+        self.assertIsNotNone(out["demand_momentum_pct"])
+        self.assertLessEqual(abs(out["demand_momentum_pct"]), 3.0)

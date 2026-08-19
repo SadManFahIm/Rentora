@@ -11,6 +11,7 @@ interface ApiReviewSummary {
   total_reviews: number;
   counts_per_star: Record<"1" | "2" | "3" | "4" | "5", number>;
   recent: ApiReviewItem[];
+  ai_summary?: ReviewSummary["aiSummary"];
 }
 
 interface ApiReviewItem {
@@ -55,6 +56,7 @@ export const reviewService = {
       totalReviews: data.total_reviews,
       countsPerStar: data.counts_per_star,
       recent: data.recent.map(mapReviewItem),
+      aiSummary: data.ai_summary,
     };
   },
 

@@ -1,0 +1,67 @@
+{% extends "emails/base_email.html" %}
+{% block content %}
+  <h2 style="margin: 0 0 12px; font-size: 18px; color: #0f172a;">
+    Rental Market Report — {{ report.week_label }}
+  </h2>
+  <p style="margin: 0 0 20px;">Hi {{ user.first_name|default:user.username }},</p>
+  <p style="margin: 0 0 20px;">
+    Here's the weekly snapshot of listed-room prices, demand and availability across
+    Rentora's areas ({{ report.areas|length }} analyzed).
+  </p>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-spacing: 0; border-collapse: collapse;">
+    <tr style="background: #0f172a; color: #ffffff;">
+      <th style="padding: 8px 12px; text-align: left; font-size: 12px;">Area</th>
+      <th style="padding: 8px 12px; text-align: right; font-size: 12px;">Avg price</th>
+      <th style="padding: 8px 12px; text-align: right; font-size: 12px;">Median</th>
+      <th style="padding: 8px 12px; text-align: center; font-size: 12px;">Demand</th>
+      <th style="padding: 8px 12px; text-align: center; font-size: 12px;">Change</th>
+      <th style="padding: 8px 12px; text-align: center; font-size: 12px;">Availability</th>
+    </tr>
+    {% for area in report.areas %}
+      <tr style="border-bottom: 1px solid #e2e8f0;">
+        <td style="padding: 10px 12px; font-weight: 600; color: #0f172a;">{{ area.area }}</td>
+        <td style="padding: 10px 12px; text-align: right; color: #334155;">
+          {% if area.avg_price %}৳{{ area.avg_price|floatformat:0 }}<span style="font-size: 11px; color: #94a3b8;">/mo</span>{% else %}<span style="color: #94a3b8;">—</span>{% endif %}
+        </td>
+        <td style="padding: 10px 12px; text-align: right; color: #64748b;">
+          {% if area.median_price %}৳{{ area.median_price|floatformat:0 }}{% else %}<span style="color: #94a3b8;">—</span>{% endif %}
+        </td>
+        <td style="padding: 10px 12px; text-align: center; color: #64748b;">
+          {% if area.demand_index %}{{ area.demand_index }}/100
+            {% if area.direction == "rising" %}<span style="color: #16a34a;"> ▲</span>
+            {% elif area.direction == "falling" %}<span style="color: #dc2626;"> ▼</span>{% endif %}
+          {% else %}<span style="color: #94a3b8;">—</span>{% endif %}
+        </td>
+        <td style="padding: 10px 12px; text-align: center; color: #64748b;">
+          {% if area.price_change_pct is not None %}
+            {% if area.price_change_pct > 0 %}<span style="color: #dc2626;">+{{ area.price_change_pct }}%</span>
+            {% elif area.price_change_pct < 0 %}<span style="color: #16a34a;">{{ area.price_change_pct }}%</span>
+            {% else %}<span>0%</span>{% endif %}
+          {% else %}<span style="color: #94a3b8;">baseline</span>{% endif %}
+        </td>
+        <td style="padding: 10px 12px; text-align: center; color: #64748b;">{{ area.availability_pct }}%</td>
+      </tr>
+    {% endfor %}
+  </table>
+
+  {% if report.highlights %}
+    <p style="margin: 20px 0 8px; font-size: 13px; color: #0f172a; font-weight: 600;">Highlights</p>
+    <ul style="margin: 0 0 20px; padding-left: 20px;">
+      {% for item in report.highlights %}
+        <li style="font-size: 13px; color: #475569; margin-bottom: 6px;">{{ item.text }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  <p style="margin: 20px 0 0;">
+    <a href="{{ frontend_url }}/analytics" style="background: #f97316; color: #ffffff; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; display: inline-block;">
+      Open market report
+    </a>
+  </p>
+  <p style="margin: 16px 0 0; font-size: 12px; color: #94a3b8;">
+    Automatic digest of live listing prices and anonymized demand counts. You're getting
+    this because you subscribed to the weekly market report. Turn it off any time from
+    your account settings.
+  </p>
+{% endblock %}

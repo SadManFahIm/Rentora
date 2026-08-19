@@ -10,6 +10,7 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from celery.schedules import crontab
 from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
 
@@ -234,6 +235,9 @@ REST_FRAMEWORK = {
         "user": "1000/hour",
         "auth": "10/hour",
         "chat_upload": "30/hour",
+        # Chat translation — bounded per user; with an http gateway this is
+        # real quota spend, so it gets its own scope.
+        "chat_translate": "120/hour",
         # Analytics capture is fire-and-forget but still bounded — a busy
         # visitor is fine, a scripted flood filling the event store is not.
         "analytics": "300/hour",
@@ -402,6 +406,20 @@ KYC_PROVIDER = os.getenv("KYC_PROVIDER", "")
 KYC_AUTO_APPROVE_MIN_CONFIDENCE = float(os.getenv("KYC_AUTO_APPROVE_MIN_CONFIDENCE", "0.7"))
 # How long an auto-approved verification stays valid.
 KYC_VALIDITY_DAYS = int(os.getenv("KYC_VALIDITY_DAYS", "365"))
+
+# ============================================================
+# KYC OCR auto-extraction (Phase 15, C4) — see users/kyc_ocr.py
+# ============================================================
+# ON by default: the OCR layer runs on every upload and stores whatever it
+# parses in auto_screen_detail. But KYC_OCR_PROVIDER defaults to "none"
+# (no extraction happens without a gateway) — wire an OCR gateway to make it
+# extract NID number / name / DOB from the scanned document. The extracted
+# fields are *structural* (format checks only) and only add a small,
+# explainable score boost — an admin always decides.
+KYC_OCR_ENABLED = os.getenv("KYC_OCR_ENABLED", "True") == "True"
+KYC_OCR_PROVIDER = os.getenv("KYC_OCR_PROVIDER", "none")
+KYC_OCR_GATEWAY_URL = os.getenv("KYC_OCR_GATEWAY_URL", "")
+KYC_OCR_GATEWAY_API_KEY = os.getenv("KYC_OCR_GATEWAY_API_KEY", "")
 # Where the precomputed embedding matrix is persisted (production-grade
 # warm cache — see `manage.py prebuild_embeddings`). Defaults to
 # MEDIA_ROOT/embeddings; point this at a persistent volume in production.
@@ -474,6 +492,20 @@ CHAT_SAFETY_ML_ENABLED = os.getenv("CHAT_SAFETY_ML_ENABLED", "True") == "True"
 CHAT_SAFETY_ML_FLAG_CONFIDENCE = float(os.getenv("CHAT_SAFETY_ML_FLAG_CONFIDENCE", "0.60"))
 # Posterior threshold: suspicious >= this boosts a rule-based medium to high.
 CHAT_SAFETY_ML_BOOST_CONFIDENCE = float(os.getenv("CHAT_SAFETY_ML_BOOST_CONFIDENCE", "0.85"))
+
+# ============================================================
+# Chat live translation EN⇄BN (Phase 15, B1) — see chat/translation.py
+# ============================================================
+# Deterministic phrase-table core by default (zero external deps, works in
+# CI/dev). CHAT_TRANSLATE_PROVIDER=http additionally POSTs the text to a
+# machine-translation gateway (CHAT_TRANSLATE_GATEWAY_URL) and falls back to
+# the phrase core on any gateway failure. The phrase core also feeds the
+# safety engine's cross-lingual scan (chat/safety.detect_crosslingual), which
+# never consults the gateway.
+CHAT_TRANSLATE_ENABLED = os.getenv("CHAT_TRANSLATE_ENABLED", "True") == "True"
+CHAT_TRANSLATE_PROVIDER = os.getenv("CHAT_TRANSLATE_PROVIDER", "phrase")
+CHAT_TRANSLATE_GATEWAY_URL = os.getenv("CHAT_TRANSLATE_GATEWAY_URL", "")
+CHAT_TRANSLATE_GATEWAY_API_KEY = os.getenv("CHAT_TRANSLATE_GATEWAY_API_KEY", "")
 
 # ============================================================
 # ClamAV virus scanning for chat uploads (Tier 2) — see chat/antivirus.py
@@ -702,6 +734,13 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TIMEZONE = "Asia/Dhaka"
 
+# ============================================================
+# Rental market report (Phase 15, C6) — see analytics/market_report.py
+# ============================================================
+# Master switch for the weekly market-report task (snapshot + subscriber
+# emails). The public GET endpoint stays read-only regardless.
+MARKET_REPORT_ENABLED = os.getenv("MARKET_REPORT_ENABLED", "True") == "True"
+
 # Scheduled maintenance (only effective with a real broker + `celery beat`):
 CELERY_BEAT_SCHEDULE = {
     "expire-listing-tiers": {
@@ -731,6 +770,16 @@ CELERY_BEAT_SCHEDULE = {
     "alert-kyc-sla-breaches": {
         "task": "users.tasks.alert_kyc_sla_breaches",
         "schedule": 86400.0,  # daily — flag review queues stuck >48h / slipping
+    },
+    # Phase 15, C6 — weekly rental market report (Monday 06:00 Asia/Dhaka).
+    "generate-market-report": {
+        "task": "analytics.tasks.generate_market_report",
+        "schedule": crontab(minute=0, hour=6, day_of_week=1),
+    },
+    # Phase 15, D8 — weekly fraud-ring recompute + re-scan (Monday 02:00).
+    "detect-fraud-rings": {
+        "task": "fraud.tasks.detect_rings",
+        "schedule": crontab(minute=0, hour=2, day_of_week=1),
     },
 }
 

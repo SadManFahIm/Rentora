@@ -8,10 +8,12 @@ from .views import (
     LandlordCopilotView,
     NegotiationAssistantView,
     RentalAdvisorView,
+    SupportCopilotView,
 )
 
 urlpatterns = [
     path("chat/", CopilotChatView.as_view(), name="copilot-chat"),
+    path("support/", SupportCopilotView.as_view(), name="copilot-support"),
     path(
         "listing/<int:pk>/",
         CopilotListingFactsView.as_view(),

@@ -111,3 +111,48 @@ describe("chatService report/block (Phase 12.4)", () => {
     expect(report.actionTaken).toBe("warn");
   });
 });
+
+describe("chatService translateMessage (Phase 15 — B1)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("posts text + target and maps the honest quality fields", async () => {
+    (api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: {
+        translated: "ভাড়া কত?",
+        source_lang: "en",
+        target_lang: "bn",
+        quality: "phrase",
+        provider: "phrase",
+        note: "Phrase-based translation — some parts may be approximate.",
+      },
+    });
+    const result = await chatService.translateMessage("How much is the rent?", "bn");
+    expect(api.post).toHaveBeenCalledWith("/chat/translate/", {
+      text: "How much is the rent?",
+      target: "bn",
+    });
+    expect(result.translated).toBe("ভাড়া কত?");
+    expect(result.sourceLang).toBe("en");
+    expect(result.targetLang).toBe("bn");
+    expect(result.quality).toBe("phrase");
+    expect(result.provider).toBe("phrase");
+    expect(result.note).toContain("approximate");
+  });
+
+  it("surfaces quality none when the core matched nothing", async () => {
+    (api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: {
+        translated: "How much is the rent?",
+        source_lang: "en",
+        target_lang: "bn",
+        quality: "none",
+        provider: "phrase",
+        note: "No matching phrase found.",
+      },
+    });
+    const result = await chatService.translateMessage("How much is the rent?", "bn");
+    expect(result.quality).toBe("none");
+  });
+});

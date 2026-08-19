@@ -206,12 +206,15 @@ class ReviewViewSet(viewsets.ModelViewSet):
                 "total_reviews": serializers.IntegerField(),
                 "counts_per_star": serializers.DictField(child=serializers.IntegerField()),
                 "recent": ReviewSerializer(many=True),
+                "ai_summary": serializers.DictField(),
             },
         ),
     )
     @action(detail=False, methods=["get"], url_path="summary")
     def summary(self, request):
-        """Rating breakdown + recent reviews for ``?room=<id>``."""
+        """Rating breakdown + recent reviews for ``?room=<id>``, plus an
+        automatic AI summary (Phase 15, C5): a Bengali statistical summary,
+        the sentiment distribution and the most-discussed topics."""
         room_id = request.query_params.get("room")
         if not room_id:
             return Response(
@@ -226,6 +229,10 @@ class ReviewViewSet(viewsets.ModelViewSet):
         recent = ReviewSerializer(
             reviews[:10], many=True, context=self.get_serializer_context()
         ).data
+
+        from .review_summary import analyze_reviews
+
+        ai_summary = analyze_reviews(reviews)
         return Response(
             {
                 "room": int(room_id),
@@ -233,6 +240,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
                 "total_reviews": agg["total"],
                 "counts_per_star": per_star,
                 "recent": recent,
+                "ai_summary": ai_summary,
             }
         )
 

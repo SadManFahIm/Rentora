@@ -218,6 +218,85 @@ DETECTORS: list[dict] = [
             ),
         ],
     },
+    # Phase 15, D9 — deep impersonation: a staff claim *plus* a claim of
+    # authority to act on the account/booking (approve, cancel, refund,
+    # release, verify…). Bare "I am admin" is already caught by the
+    # `impersonation` detector; this one targets the escalation: "I am the
+    # admin and I can approve your booking".
+    {
+        "key": "staff_impersonation_deep",
+        "label": "Deep staff impersonation (authority claim)",
+        "risk": "high",
+        "patterns": [
+            re.compile(
+                r"\b(admin|moderator|support|official|staff)\b[^\n]{0,40}"
+                r"\b(approve|approval|cancel|refund|release|verify|activate|unlock|access|authorize|suspend)\b",
+                re.IGNORECASE,
+            ),
+            re.compile(
+                r"\b(i am|this is|im|i'm)\s+(the\s+)?(site|platform|website)\s+(admin|moderator|owner)\b",
+                re.IGNORECASE,
+            ),
+            re.compile(
+                r"(অ্যাডমিন|সাপোর্ট|অফিসিয়াল|স্টাফ)[^\n]{0,40}"
+                r"(অ্যাপ্রুভ|ক্যানসেল|রিফান্ড|রিলিজ|ভেরিফাই|অ্যাক্সেস|অ্যাকাউন্ট|বুকিং|সাসপেন্ড)",
+            ),
+            re.compile(r"(সাইটের|প্ল্যাটফর্মের)\s*(অ্যাডমিন|মডারেটর|মালিক)"),
+        ],
+    },
+    # Phase 15, D9 — advance-fee-for-outcome scams: pay a fee to unlock a
+    # refund / release / clearance / verification. The classic "pay to get
+    # your money back" trap.
+    {
+        "key": "scam_advance",
+        "label": "Advance-fee / fee-for-refund scam",
+        "risk": "high",
+        "patterns": [
+            re.compile(
+                r"\b(pay|send|deposit|transfer|remit)\b[^\n]{0,30}\b(fee|charges?|amount)\b"
+                r"[^\n]{0,30}\b(release|refund|clearance|processing|activation|verification|withdrawal)\b",
+                re.IGNORECASE,
+            ),
+            re.compile(
+                r"\b(release|refund|clearance|processing|activation|verification)\b"
+                r"[^\n]{0,30}\b(fee|charg?|payment|টাকা|ফি)\b",
+                re.IGNORECASE,
+            ),
+            re.compile(
+                r"(ফি|টাকা জমা|টাকা পাঠান)[^\n]{0,30}(রিফান্ড|রিলিজ|ক্লিয়ারেন্স|প্রসেসিং|অ্যাক্টিভেশন)",
+            ),
+            re.compile(r"(রিফান্ড|রিলিজ|ক্লিয়ারেন্স)[^\n]{0,30}(ফি|টাকা)"),
+        ],
+    },
+    # Phase 15, D9 — pressure to move off-platform *with a consequence*:
+    # "talk on WhatsApp or the room is gone". Combines the off-platform vector
+    # with the urgency lever scammers use to close fast.
+    {
+        "key": "external_contact_pressure",
+        "label": "Off-platform contact under pressure",
+        "risk": "medium",
+        "patterns": [
+            re.compile(
+                r"\b(whatsapp|telegram|viber|imo|wechat)\b[^\n]{0,40}\b(or|otherwise|else)\b",
+                re.IGNORECASE,
+            ),
+            re.compile(
+                r"\b(talk|chat|message|contact|msg)\b[^\n]{0,30}\b(whatsapp|telegram|viber|imo|wechat)\b"
+                r"[^\n]{0,40}\b(or|otherwise|else)\b",
+                re.IGNORECASE,
+            ),
+            re.compile(
+                r"(কথা বলি|কথা বলুন|যোগাযোগ|মেসেজ|চ্যাট)[^\n]{0,30}"
+                r"(হোয়াটসঅ্যাপে?|টেলিগ্রামে?|ভাইবারে?|ইমোতে?)"
+                r"[^\n]{0,30}(না হলে|নাহলে|নইলে|অথবা)",
+            ),
+            re.compile(
+                r"(হোয়াটসঅ্যাপে?|টেলিগ্রামে?|ভাইবারে?|ইমোতে?)[^\n]{0,30}"
+                r"(কথা বলি|কথা বলুন|যোগাযোগ|মেসেজ|চ্যাট)"
+                r"[^\n]{0,30}(না হলে|নাহলে|নইলে|অথবা)",
+            ),
+        ],
+    },
 ]
 
 
@@ -256,14 +335,65 @@ def _max_risk(hits: list[DetectorHit]) -> str:
     return max(hits, key=lambda h: RISK_ORDER.index(h.risk)).risk
 
 
+def detect_crosslingual(content: str) -> list[DetectorHit]:
+    """Run the detectors over the original text and — when the text is Bangla
+    and the phrase-table core can normalize it to English — over the
+    normalized version too (Phase 15, B1).
+
+    Hits are merged by detector key: the higher risk wins and fragments are
+    unioned, so an English-only pattern (e.g. ``western union``) can catch a
+    Bengali payload that the Bengali patterns alone would miss. This is the
+    chat-translation module's contribution to the safety engine: translation
+    is used to *re-read* the message, never to change what the sender wrote.
+    Pure function — no I/O, no DB, no network (the phrase core is
+    deterministic and the gateway is deliberately never consulted here).
+    """
+    hits = {h.key: h for h in detect(content)}
+
+    from .translation import detect_language, translate_phrase
+
+    if detect_language(content) != "bn":
+        return list(hits.values())
+
+    normalized = translate_phrase(content, "en")
+    if normalized.quality != "phrase":
+        return list(hits.values())
+
+    for h in detect(normalized.translated):
+        existing = hits.get(h.key)
+        if existing is None or RISK_ORDER.index(h.risk) > RISK_ORDER.index(existing.risk):
+            hits[h.key] = h
+    return list(hits.values())
+
+
+def _contextual_escalation(hits: list[DetectorHit], chat_room, sender) -> bool:
+    """Phase 15, D9 — an authority claim only makes sense from someone with
+    authority. If a sender claims to be staff/admin in a real conversation
+    but is not actually staff (or a room admin), the claim is an active
+    attack: escalate the risk by one level.
+
+    ``chat_room``/``sender`` are optional — without them there is no context
+    to judge against, so the check is skipped (pure detection stays hermetic).
+    """
+    if chat_room is None or sender is None:
+        return False
+    authority_keys = {"impersonation", "staff_impersonation_deep"}
+    if not ({h.key for h in hits} & authority_keys):
+        return False
+    # A genuine staff/admin sender claiming authority is legitimate — only
+    # non-authorised senders get escalated.
+    return not (sender.is_staff or getattr(sender, "role", "") == "admin")
+
+
 def assess_message(content: str, chat_room=None, sender=None) -> Assessment:
-    """Assess one message: run the detectors, then escalate for *repeated*
-    suspicious behaviour by the same sender in the same room.
+    """Assess one message: run the detectors (including the cross-lingual
+    scan), then escalate for *repeated* suspicious behaviour by the same
+    sender in the same room.
 
     ``chat_room``/``sender`` are optional — without them the repetition check
     is skipped (pure detection), which keeps the unit tests hermetic.
     """
-    hits = detect(content)
+    hits = detect_crosslingual(content)
     risk = _max_risk(hits)
 
     # Multiple *distinct* high-risk signals together (e.g. impersonation +
@@ -271,6 +401,11 @@ def assess_message(content: str, chat_room=None, sender=None) -> Assessment:
     # high is a warning to review, a stack of them is an active attack.
     if len({h.key for h in hits if h.risk == "high"}) >= 2:
         risk = "critical"
+
+    # Phase 15, D9 — deep impersonation in a real conversation by a
+    # non-authorised sender is treated as an active attack.
+    if _contextual_escalation(hits, chat_room, sender):
+        risk = RISK_ORDER[min(RISK_ORDER.index(risk) + 1, len(RISK_ORDER) - 1)]
 
     # Learned layer (Tier 2): a deterministic Naive-Bayes model trained on
     # real rental-conversation patterns sits on top of the rules. If it is

@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 
 import { useAnalyticsSummary } from "../../hooks/useAnalytics";
+import MarketReportCard from "../MarketReportCard/MarketReportCard";
 
 function StepRow({
   step,
@@ -65,6 +66,9 @@ export default function AdminAnalyticsPanel() {
   const steps = data.funnelSteps;
   return (
     <div className="space-y-4">
+      {/* Phase 15 — C6 weekly rental market digest (public data, admin tools). */}
+      <MarketReportCard />
+
       <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
         <BarChart3 className="size-4" /> Last {data.days} days · first-party, self-hosted
       </div>
