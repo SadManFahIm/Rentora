@@ -7,10 +7,12 @@ referenced from the [🖼️ Screenshots](../../README.md#-screenshots) section
 ## How screenshots are captured
 
 Tier-4+ captures are automated with Playwright — `frontend/scripts/capture_tier4_shots.mjs`,
-`capture_tier5_shots.mjs` (log in as `admin.demo`) and
-`capture_phase13_shots.mjs` (public pages, no login) run against the dev stack
-(backend :8000, frontend :3001) and capture real UI state. Older captures
-were done manually; the workflow below still applies to both:
+`capture_tier5_shots.mjs` (log in as `admin.demo`),
+`capture_phase13_shots.mjs` (public pages, no login) and
+`capture_phase14_shots.mjs` (logs in as the `rahim.hossain` demo landlord for
+the vision panel, then captures the public image-search flow) run against the
+dev stack (backend :8000, frontend :3001) and capture real UI state. Older
+captures were done manually; the workflow below still applies to both:
 
 1. **Run the stack** — `cd backend && venv/Scripts/python.exe manage.py
    runserver` and `cd frontend && npm run dev` (see the repo README
@@ -29,7 +31,7 @@ were done manually; the workflow below still applies to both:
    production secrets, no private URLs. Dark-mode variants get a
    `-dark` suffix.
 
-## Phase inventory (61 files)
+## Phase inventory (64 files)
 
 | Phase | Files |
 | ----- | ----- |
@@ -45,3 +47,4 @@ were done manually; the workflow below still applies to both:
 | 12.9 | `phase12.9-ai-tools-advisor.png` (AI advisor), `phase12.9-compare.png` (property comparison), `phase12.9-landlord-copilot.png`, `phase12.9-smart-alerts.png` |
 | 12.10 | `tier5-price-recommendation.png` (per-listing price advice), `tier5-ai-draft.png` (listing form AI draft), `tier5-copilot-photos.png` (Copilot photo answer) |
 | 13 | `phase13-area-page.png` (area SEO landing page), `phase13-whatsapp-share.png` (WhatsApp share), `phase13-sms-login.png` (phone sign-in) |
+| 14 | `phase14-vision-panel.png` (photo intelligence on a listing), `phase14-image-search-dialog.png` (image search upload), `phase14-image-search-results.png` (look-alike results with match badges) |

@@ -240,6 +240,9 @@ REST_FRAMEWORK = {
         # Reports are moderation actions — a tight dedicated scope stops one
         # user from flooding the admin queue (see chat.views.ReportRateThrottle).
         "report": "10/hour",
+        # Public image search — photo uploads are CPU-bound (fingerprinting);
+        # a dedicated scope stops a scripted flood burning the worker.
+        "vision": "30/minute",
         # Payment initiation is deliberately much tighter than the general
         # "user" scope — there's no legitimate reason to start dozens of
         # payment sessions an hour, and it's a prime target for abuse/testing
@@ -624,6 +627,23 @@ SMS_SENDER_ID = os.getenv("SMS_SENDER_ID", "")
 SMS_OTP_TTL_SECONDS = int(os.getenv("SMS_OTP_TTL_SECONDS", "600"))
 SMS_OTP_MAX_ATTEMPTS = int(os.getenv("SMS_OTP_MAX_ATTEMPTS", "5"))
 SMS_OTP_RESEND_COOLDOWN_SECONDS = int(os.getenv("SMS_OTP_RESEND_COOLDOWN_SECONDS", "30"))
+
+# ============================================================
+# Vision & content AI (Phase 14 — AI v3, rooms app)
+# ============================================================
+# Master switch for the deterministic photo pipeline (analysis, drafts,
+# image search). Local-only by default — no external calls are made.
+VISION_ENABLED = os.getenv("VISION_ENABLED", "True") == "True"
+# Provider: "heuristic" (default) derives lighting/tone/décor/framing
+# observations from pixels, self-hosted; "http" additionally POSTs the
+# listing photos to a configured vision gateway for a caption + object-level
+# amenity tags, falling back to heuristic on any gateway failure.
+VISION_PROVIDER = os.getenv("VISION_PROVIDER", "heuristic")
+VISION_GATEWAY_URL = os.getenv("VISION_GATEWAY_URL", "")
+VISION_GATEWAY_API_KEY = os.getenv("VISION_GATEWAY_API_KEY", "")
+VISION_GATEWAY_MODEL = os.getenv("VISION_GATEWAY_MODEL", "")
+# Image search: how many visual matches to return.
+VISION_SEARCH_TOP_K = int(os.getenv("VISION_SEARCH_TOP_K", "8"))
 
 # ============================================================
 # WebAuthn / Passkeys (users app)

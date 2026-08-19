@@ -172,3 +172,26 @@ class RoomImageHash(models.Model):
 
     def __str__(self) -> str:
         return f"hash {self.phash_hex} for {self.room.title}"
+
+
+class RoomVisionAnalysis(models.Model):
+    """Stored vision analysis of a listing's photos (Phase 14 — AI v3).
+
+    The deterministic photo pipeline (lighting / tones / décor / framing
+    observations + caption + palette) is cached here so the dashboard panel
+    renders instantly and re-analysis is explicit. ``suggested_amenities``
+    are never applied automatically — the landlord reviews them.
+    """
+
+    room = models.OneToOneField(Room, on_delete=models.CASCADE, related_name="vision_analysis")
+    provider = models.CharField(max_length=16, default="heuristic")
+    caption = models.TextField(blank=True, default="")
+    observations = models.JSONField(default=list)
+    suggested_amenities = models.JSONField(default=list)
+    palette = models.JSONField(default=list)
+    photo_profiles = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f"vision ({self.provider}) for {self.room.title}"
