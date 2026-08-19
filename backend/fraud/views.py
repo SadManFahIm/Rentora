@@ -65,6 +65,31 @@ class FraudAuditLogView(APIView):
         )
 
 
+class FraudRingsView(APIView):
+    """Admin-only coordinated-account rings — the Trust & Safety desk view.
+
+    Computed live from real platform data (shared phones, shared audit IPs +
+    same-area listings). A ring is a review queue, never an automatic block.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Fraud"],
+        summary="Fraud rings",
+        description="Admin-only connected groups of coordinated accounts with evidence.",
+    )
+    def get(self, request):
+        if not (request.user.is_staff or request.user.role == "admin"):
+            return Response(
+                {"detail": "Admin access required."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        from .services.rings import detect_rings
+
+        return Response(detect_rings())
+
+
 class RoomFraudStatusView(APIView):
     """Public fraud status for one room — drives the 'under review' badge."""
 

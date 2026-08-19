@@ -39,6 +39,7 @@ class UserSerializer(serializers.ModelSerializer):
             "date_of_birth",
             "otp_enabled",
             "digest_emails_enabled",
+            "market_report_emails_enabled",
             "date_joined",
         ]
         read_only_fields = ["id", "date_joined", "nid_verified", "tenant_verified"]
@@ -70,6 +71,7 @@ class CustomUserDetailsSerializer(UserDetailsSerializer):
             "date_of_birth",
             "otp_enabled",
             "digest_emails_enabled",
+            "market_report_emails_enabled",
             "passkeys",
             "trust_signals",
         )

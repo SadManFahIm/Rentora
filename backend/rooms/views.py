@@ -1236,8 +1236,10 @@ class RoomViewSet(viewsets.ModelViewSet):
         summary="Per-listing price recommendation (owner/admin)",
         description=(
             "Demand-forecast + market + interest signals combined into a "
-            "raise/hold/lower suggestion with a suggested price. Owner or "
-            "admin only — a suggestion to review, never an automatic change."
+            "raise/hold/lower suggestion with a suggested price, a dynamic "
+            "price (incl. demand-trend momentum, ±8% bounded), a safe test "
+            "window and a 24h validity. Owner or admin only — a suggestion "
+            "to review, never an automatic change."
         ),
     )
     @action(

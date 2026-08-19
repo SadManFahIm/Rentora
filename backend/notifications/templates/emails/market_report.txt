@@ -1,0 +1,16 @@
+Rental Market Report — {{ report.week_label }}
+
+Hi {{ user.first_name|default:user.username }},
+
+Here's the weekly snapshot of listed-room prices, demand and availability
+across Rentora's areas ({{ report.areas|length }} analyzed).
+
+{% for area in report.areas %}- {{ area.area }}: avg ৳{{ area.avg_price|default:"—"|floatformat:0 }}/mo{% if area.price_change_pct is not None %} ({{ area.price_change_pct }}% vs last week){% else %} (baseline){% endif %}, demand {{ area.demand_index|default:"—" }}/100, {{ area.availability_pct }}% available
+{% endfor %}
+{% if report.highlights %}Highlights:
+{% for item in report.highlights %}  - {{ item.text }}
+{% endfor %}{% endif %}Open the full report: {{ frontend_url }}/analytics
+
+Automatic digest of live listing prices and anonymized demand counts. You're
+getting this because you subscribed to the weekly market report. Turn it off
+any time from your account settings.

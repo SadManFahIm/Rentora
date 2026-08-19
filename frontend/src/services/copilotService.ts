@@ -90,6 +90,27 @@ export async function getListingFacts(listingId: number): Promise<CopilotListing
   return data;
 }
 
+/** One matched help article (Phase 15 — B2 Support Copilot). The answer is a
+ * pre-written, human-reviewed doc optionally rendered with live platform
+ * facts; `grounded: false` is the transparent fallback when nothing matched
+ * — the assistant never fabricates an answer. */
+export interface SupportAnswer {
+  topic: string;
+  title: string;
+  title_bn: string;
+  answer: string;
+  answer_bn: string;
+  grounded: boolean;
+  matched_keywords?: string[];
+}
+
+/** POST /copilot/support/ — ask the support Copilot a help question (EN/BN).
+ * Public, throttled. */
+export async function sendSupportQuestion(message: string): Promise<SupportAnswer> {
+  const { data } = await api.post<SupportAnswer>("/copilot/support/", { message });
+  return data;
+}
+
 /** Share-ready AI summary (Phase 13). Deterministic, public fields only. */
 export interface CopilotShareSummary {
   id: number;
