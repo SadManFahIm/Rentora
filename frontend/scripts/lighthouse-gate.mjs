@@ -3,11 +3,13 @@
  *
  * Runs Lighthouse against a running frontend and fails the build when the
  * Performance score falls below a threshold, so a bad bundle never ships
- * silently. Usage:
+ * silently. Three passes are run and the median score is used — a single
+ * Lighthouse audit swings several points between identical runs, so the
+ * median gives a stable gate. Usage:
  *
  *   node scripts/lighthouse-gate.mjs [url] [--min-score N] [--out DIR]
  *
- * Defaults: url http://localhost:5173, min-score 70, JSON report written to
+ * Defaults: url http://localhost:5173, min-score 70, JSON reports written to
  * scripts/.lighthouse/. Lighthouse launches a local Chrome via
  * chrome-launcher (its own dependency) — no manual Chrome setup needed.
  * Exit code 0 on pass, 1 on fail (CI fails the job).
@@ -20,6 +22,7 @@ import lighthouse from "lighthouse";
 import { launch as launchChrome } from "chrome-launcher";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const RUNS = 3;
 
 function parseArgs(argv) {
   const url = argv.find((a) => a.startsWith("http")) ?? "http://localhost:5173";
@@ -32,38 +35,51 @@ function parseArgs(argv) {
   return { url, minScore, outDir };
 }
 
-async function run(url, minScore, outDir) {
-  const chrome = await launchChrome({
-    chromeFlags: ["--headless=new", "--no-sandbox", "--disable-dev-shm-usage"],
+function median(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+}
+
+async function auditOnce(url, port) {
+  const runnerResult = await lighthouse(url, {
+    port,
+    output: "json",
+    logLevel: "info",
+    onlyCategories: ["performance"],
   });
+  if (!runnerResult) throw new Error(`Lighthouse returned no result for ${url}`);
+  return runnerResult.lhr;
+}
 
-  let runnerResult;
-  try {
-    runnerResult = await lighthouse(url, {
-      port: chrome.port,
-      output: "json",
-      logLevel: "info",
-      onlyCategories: ["performance"],
-    });
-  } finally {
-    await chrome.kill();
-  }
-
-  if (!runnerResult) {
-    console.error("Lighthouse returned no result for", url);
-    process.exit(1);
-  }
-
-  const score = Math.round((runnerResult.lhr.categories.performance.score ?? 0) * 100);
+async function run(url, minScore, outDir) {
   await mkdir(outDir, { recursive: true });
-  const reportPath = path.join(outDir, `lighthouse-${Date.now()}.json`);
-  await writeFile(reportPath, JSON.stringify(runnerResult.lhr, null, 2), "utf8");
+  const scores = [];
+  const reports = [];
 
-  console.log(`Lighthouse performance score: ${score} (threshold ${minScore})`);
-  console.log(`Report: ${reportPath}`);
+  for (let i = 0; i < RUNS; i += 1) {
+    const chrome = await launchChrome({
+      chromeFlags: ["--headless=new", "--no-sandbox", "--disable-dev-shm-usage"],
+    });
+    try {
+      const lhr = await auditOnce(url, chrome.port);
+      const score = Math.round((lhr.categories.performance.score ?? 0) * 100);
+      scores.push(score);
+      const reportPath = path.join(outDir, `lighthouse-${Date.now()}-run${i + 1}.json`);
+      await writeFile(reportPath, JSON.stringify(lhr, null, 2), "utf8");
+      reports.push(reportPath);
+      console.log(`  run ${i + 1}/${RUNS}: performance score ${score}`);
+    } finally {
+      await chrome.kill();
+    }
+  }
+
+  const score = median(scores);
+  console.log(`Lighthouse performance score: ${score} (median of ${RUNS}, threshold ${minScore})`);
+  reports.forEach((p) => console.log(`Report: ${p}`));
 
   if (score < minScore) {
-    console.error(`FAIL: performance score ${score} < ${minScore}.`);
+    console.error(`FAIL: median performance score ${score} < ${minScore}.`);
     process.exit(1);
   }
   console.log("PASS: performance gate met.");
