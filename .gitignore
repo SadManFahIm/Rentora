@@ -45,3 +45,6 @@ frontend/playwright-report/
 
 # Lighthouse gate reports (local runs)
 frontend/scripts/.lighthouse/
+
+# Logs (local runserver/vite output)
+*.log
