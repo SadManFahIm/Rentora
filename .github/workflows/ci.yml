@@ -114,7 +114,6 @@ jobs:
     # read-only GITHUB_TOKEN so commenting may fail there — never fail CI for it.
     name: Schema drift (API diff comment)
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
     permissions:
       contents: read
       pull-requests: write
@@ -138,8 +137,10 @@ jobs:
           pip install -r requirements.txt
 
       - name: Dump base schema (worktree at base SHA)
+        # On PRs the base is the target branch; on pushes it is the commit the
+        # push was based on (github.event.before), so the gate also runs on main.
         run: |
-          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          BASE_SHA="${{ github.event.pull_request.base.sha || github.event.before }}"
           git worktree add /tmp/base "$BASE_SHA"
           (cd /tmp/base/backend && python manage.py spectacular --file /tmp/base-schema.json --format openapi-json 2>/dev/null)
           git worktree remove /tmp/base --force
@@ -436,7 +437,6 @@ jobs:
     name: Coverage summary
     runs-on: ubuntu-latest
     needs: [backend, frontend]
-    if: github.event_name == 'pull_request'
     permissions:
       contents: read
       pull-requests: write
@@ -486,11 +486,10 @@ jobs:
     name: Coverage history
     runs-on: ubuntu-latest
     needs: [backend, frontend]
-    # Runs on both main pushes AND pull requests; each branch gets its own
-    # history file (history-<branch>.csv) on the coverage-history branch.
-    # Fork PRs get a read-only GITHUB_TOKEN (no contents:write), so they skip
-    # the job instead of failing — mirroring the coverage-summary behaviour.
-    if: github.event.pull_request == null || github.event.pull_request.head.repo.full_name == github.repository
+    # Runs on PRs and pushes alike; each branch gets its own history file
+    # (history-<branch>.csv) on the coverage-history branch. Fork PRs have a
+    # read-only GITHUB_TOKEN, so the deploy push is continue-on-error there
+    # (the history is still generated and validated locally).
     concurrency:
       group: coverage-history-${{ github.head_ref || github.ref }}
       cancel-in-progress: true
@@ -534,6 +533,9 @@ jobs:
           python3 scripts/coverage_history.py coverage/backend/coverage.xml coverage/frontend/cobertura-coverage.xml coverage-site
 
       - name: Deploy to coverage-history branch
+        # Fork PRs get a read-only GITHUB_TOKEN and cannot push to the
+        # coverage-history branch — report the attempt without failing the job.
+        continue-on-error: true
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
