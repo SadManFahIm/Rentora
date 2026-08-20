@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from datetime import timedelta
 
-from django.db.models import Count
+from django.db.models import Count, Max
 from django.utils import timezone
 
 # The rental conversion funnel, in order. Steps without data simply show 0 —
@@ -112,3 +112,21 @@ def build_summary(days: int = 30) -> dict:
         "funnel_steps": FUNNEL_STEPS,
         "note": "Funnel counts distinct authenticated users per step.",
     }
+
+
+def build_taxonomy() -> dict:
+    """Event taxonomy for the admin: every event name with its category,
+    total count, and first/last occurrence. Retention window is unbounded —
+    taxonomy is about the schema of events seen, not a period summary."""
+    from .models import Event
+
+    rows = list(
+        Event.objects.values("event", "category")
+        .annotate(
+            count=Count("id"),
+            first_seen=Max("created_at"),
+            last_seen=Max("created_at"),
+        )
+        .order_by("event", "category")
+    )
+    return {"events": rows, "total_events": sum(r["count"] for r in rows)}

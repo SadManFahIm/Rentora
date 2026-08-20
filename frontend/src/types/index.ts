@@ -20,6 +20,13 @@ export interface Room {
   rating: number;
   reviews: number;
   img: string;
+  /** Phase 16 — optimized WebP variants of the primary image (srcset). */
+  imgVariants?: {
+    thumbnail?: string;
+    small?: string;
+    medium?: string;
+    large?: string;
+  };
   amenities: string[];
   gender: GenderPref;
   available: boolean;

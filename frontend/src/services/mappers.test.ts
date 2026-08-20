@@ -100,6 +100,39 @@ describe("mapRoom", () => {
     expect(room.img).toBe("https://img.example/first.jpg");
   });
 
+  it("maps optimized WebP variants from the primary image", () => {
+    const room = mapRoom(
+      apiRoom({
+        images: [
+          {
+            id: 1,
+            image: "https://img.example/orig.jpg",
+            is_primary: true,
+            created_at: "t",
+            variants: {
+              thumbnail: "https://img.example/v_thumb.webp",
+              small: "https://img.example/v_small.webp",
+              medium: "https://img.example/v_medium.webp",
+              large: "https://img.example/v_large.webp",
+            },
+          },
+        ],
+      })
+    );
+    expect(room.img).toBe("https://img.example/orig.jpg");
+    expect(room.imgVariants?.medium).toBe("https://img.example/v_medium.webp");
+    expect(room.imgVariants?.large).toBe("https://img.example/v_large.webp");
+  });
+
+  it("omits variants when the backend has not generated them", () => {
+    const room = mapRoom(
+      apiRoom({
+        images: [{ id: 1, image: "https://img.example/a.jpg", created_at: "t" }],
+      })
+    );
+    expect(room.imgVariants).toBeUndefined();
+  });
+
   it("uses the username when the owner has no name parts", () => {
     const room = mapRoom(apiRoom({ owner: { ...apiRoom().owner, first_name: "", last_name: "" } }));
     expect(room.owner).toBe("rahim.hossain");

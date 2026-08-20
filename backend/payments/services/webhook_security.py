@@ -45,11 +45,14 @@ def verify_hmac_signature(
 
 
 def get_client_ip(request) -> str:
-    """Best-effort client IP, preferring a proxy-set X-Forwarded-For."""
-    forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-    return request.META.get("REMOTE_ADDR", "")
+    """Client IP, honouring the deployment's trusted-proxy config.
+
+    Delegates to ``config.ip`` so the webhook IP allowlist and the rate
+    limiters resolve the *same* address for a request behind a proxy.
+    """
+    from config.ip import get_client_ip as _resolve
+
+    return _resolve(request)
 
 
 def check_webhook_ip(request, *, allowlist: list[str], sandbox: bool, gateway: str) -> bool:

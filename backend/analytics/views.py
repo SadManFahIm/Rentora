@@ -8,11 +8,12 @@ from django.db import transaction
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status
 from rest_framework.response import Response
-from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
+from config.throttling import TrustedUserRateThrottle
+
 from .models import MAX_PROPERTIES_KEYS, MAX_PROPERTY_LEN, Event
-from .services import build_summary
+from .services import build_summary, build_taxonomy
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ _SESSION_MAX_LEN = 64
 _PATH_MAX_LEN = 300
 
 
-class AnalyticsCaptureRateThrottle(UserRateThrottle):
+class AnalyticsCaptureRateThrottle(TrustedUserRateThrottle):
     """A busy visitor can generate a lot of events — but a hard cap still
     stops a scripted flood from filling the store. Scope rate lives in
     ``DEFAULT_THROTTLE_RATES['analytics']``."""
@@ -110,6 +111,29 @@ class AnalyticsSummaryView(APIView):
         except (TypeError, ValueError):
             days = 30
         return Response(build_summary(days))
+
+
+@extend_schema(
+    tags=["Analytics"],
+    summary="Event taxonomy (admin)",
+    description=(
+        "Admin only. The full event taxonomy — every event name with its "
+        "category, lifetime count, and first/last occurrence. Used to audit "
+        "what the product captures and keep the store bounded."
+    ),
+)
+class AnalyticsTaxonomyView(APIView):
+    """GET /api/v1/analytics/taxonomy/ — admin audit of captured event schema."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if not (request.user.is_staff or getattr(request.user, "role", "") == "admin"):
+            return Response(
+                {"detail": "Admin access required."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return Response(build_taxonomy())
 
 
 class DemandForecastView(APIView):

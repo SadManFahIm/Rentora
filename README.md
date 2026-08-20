@@ -70,6 +70,17 @@ Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 
 ## 🆕 Changelog
 
+**Phase 16 — Hardening & Scale**
+
+- **Embeddings & pgvector (vendor-guarded)** — `embeddings/` app: `vector(384)` field on PostgreSQL with a JSON-text fallback so SQLite dev/CI stays green, content-hash dedupe, HNSW index, `index_room`/`remove_room`/`backfill_rooms` tasks + `backfill_embeddings` command; smart-search `_vector_rank` seam and public `GET /api/v1/rooms/{id}/similar/`. Controlled by `VECTOR_SEARCH_ENABLED` (default off)
+- **Feature flags + A/B experiments** — `feature_flags/` (cache-backed `is_enabled`, staff CRUD at `/api/v1/flags/`, `sync_flags` seeder) and `experiments/` (deterministic bucketing, persisted assignments, idempotent exposure/conversion wired to the analytics event store, throttled API at `/api/v1/experiments/`)
+- **Image pipeline / CDN** — `images/` app generating WebP variants (320/640/960/1280), content-hash filenames for immutable 1-year browser caching, upload hardening (magic-bytes + bomb-guard decode, 128–8000 px bounds, 5 MB cap, max 10 images/listing); KYC/tenant documents moved to **private storage** (out of the public media root); frontend renders `srcset` WebP variants with lazy loading
+- **Redis hardening** — `KEY_PREFIX` namespacing, connection-pool/socket timeouts + `protocol=2`, channel-layer prefix; **chat presence re-architected to a self-healing lease model** (per-connection heartbeats, TTL expiry — a crashed worker can no longer leave users stuck "online"); bKash grant-token **single-flight lock**; booking create overlap re-checked under `select_for_update` (closes the double-booking race)
+- **Rate limiting / abuse** — proxy-aware client-IP resolution (`NUM_PROXIES`, XFF opt-in), trusted throttle classes wired site-wide, `experiments` scope actually enforced (was a no-op), 429 envelope verified
+- **Celery reliability** — broker retry on startup, ack-late + reject-on-worker-lost, soft/hard time limits, default retry policy; prod warns loudly if the broker URL is missing
+- **App hardening** — `/health/` liveness endpoint (DB probe, no auth/throttle), `X-Request-ID` correlation middleware, 10 MB request body limits
+- **Engineering** — 4 new apps (`embeddings`, `feature_flags`, `experiments`, `images`), ~12 migrations, **960 backend tests passing**, frontend tsc/eslint clean. See [`docs/phase-16-hardening.md`](docs/phase-16-hardening.md)
+
 **Phase 15 — Monetization 2.0 (Revenue)**
 
 - **Landlord SaaS — subscriptions & entitlements** — plan catalog (monthly/yearly), self-serve checkout via SSLCommerz/bKash with **server-side pricing**, subscription activation tied to a confirmed payment (atomic), cancel-at-period-end + renewal, and **entitlements enforced server-side** (`SUBSCRIPTION_FREE_FEATURES`); the AI price-prediction v2 endpoint is gated behind `price_prediction_basic` with a graceful free-tier fallback. See [`docs/phase-15-monetization-2.0.md`](docs/phase-15-monetization-2.0.md)

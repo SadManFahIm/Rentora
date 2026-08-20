@@ -1,3 +1,5 @@
+from contextlib import suppress
+
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from drf_spectacular.utils import extend_schema_field
@@ -119,10 +121,27 @@ class RoomProximityMixin(serializers.Serializer):
 
 
 class RoomImageSerializer(serializers.ModelSerializer):
+    """Image row + its optimized WebP variants (Phase 16).
+
+    ``variants`` maps size_key → absolute URL (e.g. ``{"thumbnail": ...,
+    "large": ...}``) for the frontend's ``srcset``. Empty until the variant
+    pipeline has run for this image.
+    """
+
+    variants = serializers.SerializerMethodField()
+
     class Meta:
         model = RoomImage
-        fields = ["id", "image", "is_primary", "created_at"]
-        read_only_fields = ["id", "created_at"]
+        fields = ["id", "image", "is_primary", "created_at", "variants"]
+        read_only_fields = ["id", "created_at", "variants"]
+
+    def get_variants(self, obj) -> dict[str, str]:
+        try:
+            from images.services import variant_urls
+
+            return variant_urls("room_image", obj.pk)
+        except Exception:
+            return {}
 
 
 class RoomOwnerSerializer(serializers.ModelSerializer):
@@ -399,10 +418,25 @@ class RoomCreateUpdateSerializer(serializers.ModelSerializer):
         return instance
 
     def _save_images(self, room, uploaded_images):
+        from config.uploads import MAX_ROOM_IMAGES
+        from images.services import ensure_variants_for_file
+
+        current = room.images.count()
+        if current + len(uploaded_images) > MAX_ROOM_IMAGES:
+            raise serializers.ValidationError(
+                {
+                    "uploaded_images": f"A listing can have at most {MAX_ROOM_IMAGES} images "
+                    f"({current} already attached)."
+                }
+            )
         has_primary = room.images.filter(is_primary=True).exists()
         for i, image_file in enumerate(uploaded_images):
-            RoomImage.objects.create(
+            image = RoomImage.objects.create(
                 room=room,
                 image=image_file,
                 is_primary=(not has_primary and i == 0),
             )
+            # Best-effort optimization: variants make cards/galleries faster.
+            # Failure never fails the room write — the original still serves.
+            with suppress(Exception):
+                ensure_variants_for_file("room_image", image.pk, image.image)

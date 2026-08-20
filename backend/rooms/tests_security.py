@@ -12,8 +12,6 @@ deployment half (DEBUG=False, HTTPS-only headers, restricted CORS) is enforced
 by ``config/settings/prod.py`` and the CI security job.
 """
 
-import base64
-
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
@@ -25,10 +23,21 @@ from users.models import KycDocument
 
 User = get_user_model()
 
-# A 1x1 transparent PNG — valid for Pillow, valid image upload.
-_PNG = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
-)
+
+# A valid 128x128 PNG — meets the Phase 16 minimum-dimension guard (rejects
+# sub-thumbnail uploads) and is fully decodable by Pillow.
+def _make_png(width=128, height=128) -> bytes:
+    from io import BytesIO
+
+    from PIL import Image
+
+    img = Image.new("RGB", (width, height), (120, 180, 90))
+    buffer = BytesIO()
+    img.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+_PNG = _make_png()
 
 
 def make_user(username, **kwargs):
