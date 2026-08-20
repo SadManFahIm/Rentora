@@ -3,6 +3,8 @@ import uuid
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
+from config.storage import private_media_storage
+
 
 class User(AbstractUser):
     class Role(models.TextChoices):
@@ -113,7 +115,10 @@ class KycDocument(models.Model):
     doc_type = models.CharField(max_length=10, choices=DocType.choices)
     # FileField (not ImageField) so PDF scans are accepted too — admins
     # preview the file in-browser (images render inline, PDFs via viewer).
-    file = models.FileField(upload_to="kyc_documents/%Y/%m/")
+    # Stored in PRIVATE media (config/storage.PrivateMediaStorage), outside the
+    # public MEDIA_ROOT, and only ever served through the authenticated
+    # document endpoint.
+    file = models.FileField(upload_to="kyc_documents/%Y/%m/", storage=private_media_storage)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
     review_note = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -159,8 +164,12 @@ class TenantVerification(models.Model):
     doc_type = models.CharField(max_length=10, choices=KycDocument.DocType.choices, blank=True)
     # FileField (not ImageField) so PDF scans are accepted too. Files are
     # renamed to a UUID on upload so an original filename containing an NID
-    # number never reaches storage, logs, or error reports.
-    file = models.FileField(upload_to="tenant_kyc/%Y/%m/", blank=True)
+    # number never reaches storage, logs, or error reports. Stored in PRIVATE
+    # media (never the public MEDIA_ROOT) and served only via the auth-gated
+    # document endpoint.
+    file = models.FileField(
+        upload_to="tenant_kyc/%Y/%m/", blank=True, storage=private_media_storage
+    )
     review_note = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

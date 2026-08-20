@@ -53,6 +53,7 @@ class CeleryWiringTests(TestCase):
                 "detect-fraud-rings",
                 "process-subscription-renewals",
                 "send-subscription-reminders",
+                "purge-expired-analytics",
             },
         )
 
