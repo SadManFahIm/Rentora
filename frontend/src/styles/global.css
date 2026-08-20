@@ -29,7 +29,7 @@
   }
   *::-webkit-scrollbar-thumb {
     background: var(--color-brand);
-    border-radius: 2px;
+    border-radius: var(--radius-sm);
   }
 }
 
@@ -46,8 +46,8 @@
   padding: 0 9px;
   border: none;
   border-radius: 999px 999px 999px 5px;
-  background: #ea580c;
-  color: #fff;
+  background: var(--color-brand, #ea580c);
+  color: var(--color-brand-foreground, #fff);
   font-size: 11px;
   font-weight: 800;
   line-height: 1;
@@ -70,19 +70,19 @@
   margin-left: -5px;
   border-left: 5px solid transparent;
   border-right: 5px solid transparent;
-  border-top: 6px solid #ea580c;
+  border-top: 6px solid var(--color-brand, #ea580c);
 }
 .map-marker--premium {
-  background: #f59e0b;
+  background: var(--color-warning, #f59e0b);
 }
 .map-marker--premium::after {
-  border-top-color: #f59e0b;
+  border-top-color: var(--color-warning, #f59e0b);
 }
 .map-marker--featured {
-  background: #3b82f6;
+  background: var(--color-brand, #3b82f6);
 }
 .map-marker--featured::after {
-  border-top-color: #3b82f6;
+  border-top-color: var(--color-brand, #3b82f6);
 }
 .map-marker--active {
   z-index: 999;
@@ -99,9 +99,12 @@
 }
 
 .maplibregl-popup-content {
-  border-radius: 12px;
+  border-radius: var(--radius-lg, 12px);
   padding: 0;
   box-shadow: 0 8px 30px rgb(0 0 0 / 0.18);
+  background: var(--color-card, #ffffff);
+  color: var(--color-card-foreground, #111827);
+  border: 1px solid var(--color-border, #e5e7eb);
 }
 /* Dark popup card — MapLibre defaults to a white card, which flashes and
    washes out on the dark basemap. Match the app's surface tokens instead. */
@@ -122,16 +125,16 @@
   font-family: var(--font-display, inherit);
   font-size: 16px;
   font-weight: 800;
-  color: #ea580c;
+  color: var(--color-brand, #ea580c);
 }
 .map-popup__price span {
   font-size: 11px;
   font-weight: 500;
-  color: var(--color-muted, #6b7280);
+  color: var(--color-muted-foreground, #6b7280);
 }
 /* Brighter price on the dark popup card — orange-600 sinks into #111827. */
 :is(.dark, [data-theme="dark"]) .map-popup__price {
-  color: #fb923c;
+  color: var(--color-brand-muted, #fb923c);
 }
 .map-popup__name {
   margin-top: 2px;
@@ -142,7 +145,7 @@
 .map-popup__meta {
   margin-top: 2px;
   font-size: 11px;
-  color: var(--color-muted, #6b7280);
+  color: var(--color-muted-foreground, #6b7280);
 }
 .map-popup__dist {
   display: flex;
@@ -151,7 +154,7 @@
   margin-top: 4px;
   font-size: 11px;
   font-weight: 600;
-  color: #0d9488;
+  color: var(--color-success, #0d9488);
 }
 .map-popup__metro {
   display: flex;
@@ -160,15 +163,13 @@
   margin-top: 4px;
   font-size: 11px;
   font-weight: 600;
-  color: #7c3aed;
+  color: var(--color-info, #7c3aed);
 }
-/* Brighter accent lines on the dark popup card so the violet/teal stay
-   readable against #111827 (the class-based dark toggle applies here). */
 :is(.dark, [data-theme="dark"]) .map-popup__dist {
-  color: #2dd4bf;
+  color: var(--color-success, #2dd4bf);
 }
 :is(.dark, [data-theme="dark"]) .map-popup__metro {
-  color: #a78bfa;
+  color: var(--color-info, #a78bfa);
 }
 .map-popup__value {
   display: flex;
@@ -177,10 +178,10 @@
   margin-top: 4px;
   font-size: 11px;
   font-weight: 600;
-  color: #b45309;
+  color: var(--color-warning, #b45309);
 }
 :is(.dark, [data-theme="dark"]) .map-popup__value {
-  color: #fbbf24;
+  color: var(--color-warning, #fbbf24);
 }
 .map-destination-pin {
   display: flex;
@@ -189,14 +190,14 @@
   width: 34px;
   height: 34px;
   border-radius: 9999px;
-  background: rgba(13, 148, 136, 0.92);
+  background: var(--color-success, rgba(13, 148, 136, 0.92));
   border: 2px solid #fff;
   box-shadow: 0 2px 10px rgba(13, 148, 136, 0.45);
   font-size: 16px;
   cursor: default;
 }
 :is(.dark, [data-theme="dark"]) .map-destination-pin {
-  border-color: #134e4a;
+  border-color: var(--color-border);
 }
 .map-popup__dirs {
   display: flex;
@@ -205,8 +206,8 @@
 }
 .map-popup__dir {
   flex: 1;
-  border-radius: 8px;
-  background: #0d9488;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-success, #0d9488);
   padding: 6px 4px;
   font-size: 10px;
   font-weight: 700;
@@ -214,40 +215,23 @@
   text-align: center;
   text-decoration: none;
   white-space: nowrap;
-  transition: background 0.15s ease;
+  transition: opacity 0.15s ease;
 }
 .map-popup__dir:hover {
-  background: #0f766e;
+  opacity: 0.9;
 }
 .map-popup__dir:nth-child(2) {
-  background: #2563eb;
-}
-.map-popup__dir:nth-child(2):hover {
-  background: #1d4ed8;
+  background: var(--color-info, #2563eb);
 }
 .map-popup__dir:nth-child(3) {
-  background: #7c3aed;
-}
-.map-popup__dir:nth-child(3):hover {
-  background: #6d28d9;
+  background: var(--color-brand, #ea580c);
 }
 .map-popup__cta {
   margin-top: 6px;
   font-size: 11px;
   font-weight: 700;
-  color: #ea580c;
+  color: var(--color-brand, #ea580c);
 }
-/* The app toggles dark mode via a `.dark` class on <html> (Tailwind class
-   strategy), so popup theming follows the app toggle — not the OS setting. */
-:is(.dark, [data-theme="dark"]) .maplibregl-popup-content {
-  background: #111827;
-  color: #f3f4f6;
-}
-/* Nearby-landmark chips inside listing popups (Phase 7 v3) — compact,
-   scannable badges (🚇 7 min Metro · 🎓 12 min University). Clicking one
-   flies the map to the place + starts a radius search. Buttons don't inherit
-   popup text colour, so explicit colours per theme (same class-toggle the
-   rest of the popup uses). */
 .map-popup__nearby {
   margin-top: 8px;
 }
@@ -257,7 +241,7 @@
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #6b7280;
+  color: var(--color-muted-foreground, #6b7280);
 }
 .map-popup__chips {
   display: flex;
@@ -269,29 +253,29 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-border, #e5e7eb);
   border-radius: 9999px;
-  background: #ffffff;
+  background: var(--color-surface, #ffffff);
   padding: 2px 8px;
   font-size: 10.5px;
   font-weight: 600;
   line-height: 1.5;
-  color: #111827;
+  color: var(--foreground, #111827);
   cursor: pointer;
   transition:
     border-color 0.15s ease,
     color 0.15s ease;
 }
 .map-popup__chip:hover {
-  border-color: #0d9488;
-  color: #0d9488;
+  border-color: var(--color-brand, #ea580c);
+  color: var(--color-brand, #ea580c);
 }
 :is(.dark, [data-theme="dark"]) .map-popup__chip {
-  border-color: #374151;
-  background: #1f2937;
-  color: #e5e7eb;
+  border-color: var(--color-border, #374151);
+  background: var(--color-surface-subtle, #1f2937);
+  color: var(--foreground, #e5e7eb);
 }
 :is(.dark, [data-theme="dark"]) .map-popup__chip:hover {
-  border-color: #2dd4bf;
-  color: #2dd4bf;
+  border-color: var(--color-brand, #ea580c);
+  color: var(--color-brand, #ea580c);
 }
