@@ -573,7 +573,10 @@ class TenantKycView(APIView):
         screen = auto_screen(verification)
         verification.auto_screen_score = screen["score"]
         verification.auto_screen_result = screen["result"]
-        verification.auto_screen_detail = {"reasons": screen["reasons"]}
+        verification.auto_screen_detail = {
+            "reasons": screen["reasons"],
+            "ocr": screen.get("ocr"),
+        }
         verification.save(
             update_fields=["auto_screen_score", "auto_screen_result", "auto_screen_detail"]
         )

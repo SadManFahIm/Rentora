@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { LayoutGrid, List, SearchX, Sparkles } from "lucide-react";
+import { Camera, LayoutGrid, List, SearchX, Sparkles, X } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useRooms, useSmartRooms } from "../../hooks/useRooms";
 import { useOfflineCacheStatus } from "../../hooks/useOfflineCacheStatus";
 import RoomCard from "../../components/RoomCard/RoomCard";
@@ -10,8 +11,10 @@ import SearchFilter from "../../components/SearchFilter/SearchFilter";
 import AIRecommendations from "../../components/AIRecommendations/AIRecommendations";
 import SavedSearchBar from "../../components/SavedSearchBar/SavedSearchBar";
 import CompareDrawer from "../../components/CompareDrawer/CompareDrawer";
+import ImageSearchDialog from "../../components/ImageSearchDialog/ImageSearchDialog";
 import { Button } from "../../components/ui/button";
 import type { Room, Filters } from "../../types";
+import type { VisionMatch } from "../../services/visionService";
 import { cn } from "../../lib/utils";
 
 const DEFAULT_FILTERS: Filters = {
@@ -29,6 +32,7 @@ const DEFAULT_FILTERS: Filters = {
 };
 
 export default function Rooms() {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [filters, setFilters] = useState<Filters>(() => ({
     ...DEFAULT_FILTERS,
@@ -38,6 +42,8 @@ export default function Rooms() {
   const offline = useOfflineCacheStatus();
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [compareIds, setCompareIds] = useState<number[]>([]);
+  const [imageSearchOpen, setImageSearchOpen] = useState(false);
+  const [imageMatches, setImageMatches] = useState<VisionMatch[] | null>(null);
 
   const toggleCompare = (room: Room) => {
     setCompareIds((ids) =>
@@ -133,6 +139,15 @@ export default function Rooms() {
           <div className="flex gap-2">
             <Button
               variant="outline"
+              className="gap-1.5 rounded-lg"
+              onClick={() => setImageSearchOpen(true)}
+              aria-label={t("vision.imageSearch")}
+            >
+              <Camera className="size-4 text-orange-600" />
+              <span className="hidden sm:inline">{t("vision.imageSearch")}</span>
+            </Button>
+            <Button
+              variant="outline"
               size="icon"
               aria-label="Grid view"
               className={cn(
@@ -160,7 +175,43 @@ export default function Rooms() {
 
         <AIRecommendations />
 
-        {isLoading ? (
+        {imageMatches !== null ? (
+          <>
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-orange-300 bg-orange-50 px-4 py-2.5 dark:border-orange-900 dark:bg-orange-950/40">
+              <p className="flex items-center gap-2 text-sm font-medium text-orange-800 dark:text-orange-300">
+                <Sparkles className="size-4" />
+                {t("vision.matches", { count: imageMatches.length })}
+              </p>
+              <button
+                type="button"
+                onClick={() => setImageMatches(null)}
+                className="flex items-center gap-1 rounded-full bg-white/70 px-3 py-1 text-xs font-semibold text-orange-700 transition hover:bg-white dark:bg-gray-900/60 dark:text-orange-300"
+              >
+                <X className="size-3" />
+                {t("vision.clear")}
+              </button>
+            </div>
+            {imageMatches.length === 0 ? (
+              <div className="flex flex-col items-center px-5 py-15 text-center text-gray-600 dark:text-gray-400">
+                <SearchX className="mb-4 size-12" />
+                <h3 className="mb-2 font-display text-lg font-bold text-foreground">
+                  {t("vision.noMatches")}
+                </h3>
+              </div>
+            ) : (
+              <div className={gridClass}>
+                {imageMatches.map((r) => (
+                  <RoomCard
+                    key={r.id}
+                    room={r}
+                    onClick={setSelectedRoom}
+                    matchInfo={{ score: r.match_score, reasons: r.reasons }}
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        ) : isLoading ? (
           <div className={gridClass}>
             {Array.from({ length: 6 }).map((_, i) => (
               <RoomCardSkeleton key={i} />
@@ -196,6 +247,12 @@ export default function Rooms() {
           onClear={() => setCompareIds([])}
         />
       )}
+
+      <ImageSearchDialog
+        open={imageSearchOpen}
+        onClose={() => setImageSearchOpen(false)}
+        onResult={setImageMatches}
+      />
     </>
   );
 }

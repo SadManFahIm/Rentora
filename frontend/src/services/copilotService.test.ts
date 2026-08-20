@@ -8,7 +8,7 @@ vi.mock("./api", () => ({
 }));
 
 import api from "./api";
-import { getListingShareSummary, sendCopilotMessage } from "./copilotService";
+import { getListingShareSummary, sendCopilotMessage, sendSupportQuestion } from "./copilotService";
 
 const apiResponse = {
   session_id: "abc123",
@@ -84,5 +84,46 @@ describe("copilotService", () => {
     const res = await getListingShareSummary(29);
     expect(res.summary).toContain("Uttara");
     expect(api.get).toHaveBeenCalledWith("/copilot/share-summary/29/");
+  });
+});
+
+describe("supportCopilot (Phase 15 — B2)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const apiSupport = {
+    topic: "security_deposit",
+    title: "Security deposit",
+    title_bn: "সিকিউরিটি ডিপোজিট",
+    answer: "The security deposit amount is set by the landlord…",
+    answer_bn: "সিকিউরিটি ডিপোজিটের পরিমাণ বাড়িওয়ালা ঠিক করেন…",
+    grounded: true,
+    matched_keywords: ["deposit"],
+  };
+
+  it("posts a question and returns the bilingual grounded answer", async () => {
+    (api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ data: apiSupport });
+    const res = await sendSupportQuestion("ডিপোজিট ফেরত পাব কীভাবে?");
+    expect(api.post).toHaveBeenCalledWith("/copilot/support/", {
+      message: "ডিপোজিট ফেরত পাব কীভাবে?",
+    });
+    expect(res.grounded).toBe(true);
+    expect(res.title).toBe("Security deposit");
+    expect(res.answer_bn).toContain("বাড়িওয়ালা");
+  });
+
+  it("surfaces the transparent fallback (grounded: false) unmocked", async () => {
+    (api.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: {
+        topic: "general",
+        title: "How can I help?",
+        title_bn: "কীভাবে সাহায্য করতে পারি?",
+        answer: "I couldn't match that to a help article yet…",
+        answer_bn: "আপনার প্রশ্নটি এখনো কোনো হেল্প আর্টিকেলে মেলাতে পারিনি…",
+        grounded: false,
+      },
+    });
+    const res = await sendSupportQuestion("xyz nonsense");
+    expect(res.grounded).toBe(false);
+    expect(res.matched_keywords).toBeUndefined();
   });
 });

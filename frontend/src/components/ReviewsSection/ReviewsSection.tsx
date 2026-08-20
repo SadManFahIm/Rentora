@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MessageSquareReply, Star } from "lucide-react";
+import { MessageSquareReply, Sparkles, Star } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../ui/button";
 import reviewService from "../../services/reviewService";
@@ -80,6 +80,45 @@ export default function ReviewsSection({ roomId, isOwner }: ReviewsSectionProps)
           })}
         </div>
       </div>
+
+      {/* Phase 15 — C5: automatic AI review summary (bilingual, statistical,
+          with the same reliability note the backend attaches). */}
+      {summary.aiSummary && summary.aiSummary.review_count > 0 && (
+        <div className="mb-6 rounded-xl border border-indigo-200/70 bg-indigo-50/60 p-4 dark:border-indigo-800/50 dark:bg-indigo-950/30">
+          <div className="mb-2 flex items-center gap-2">
+            <Sparkles className="size-4 text-indigo-600 dark:text-indigo-400" />
+            <h4 className="font-display text-sm font-bold text-foreground">AI review summary</h4>
+          </div>
+          <p className="text-sm leading-relaxed text-foreground">{summary.aiSummary.summary_bn}</p>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {summary.aiSummary.sentiment.overall && (
+              <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-foreground shadow-sm dark:bg-gray-900">
+                Overall: {summary.aiSummary.sentiment.overall}
+              </span>
+            )}
+            <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+              Positive {summary.aiSummary.sentiment.positive_pct}%
+            </span>
+            <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400">
+              Neutral {summary.aiSummary.sentiment.neutral_pct}%
+            </span>
+            <span className="rounded-full bg-red-500/10 px-2.5 py-1 text-xs font-semibold text-red-600 dark:text-red-400">
+              Negative {summary.aiSummary.sentiment.negative_pct}%
+            </span>
+            {summary.aiSummary.topics.map((topic) => (
+              <span
+                key={topic.topic}
+                className="rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+              >
+                {topic.label_bn} · {topic.count}
+              </span>
+            ))}
+          </div>
+          <p className="mt-2 text-[10px] text-gray-500 dark:text-gray-400">
+            {summary.aiSummary.note}
+          </p>
+        </div>
+      )}
 
       {/* Recent reviews */}
       <div className="space-y-4">

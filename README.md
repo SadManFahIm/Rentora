@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-989%20(667%20BE%20%2B%20322%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-1058%20(716%20BE%20%2B%20342%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -62,12 +62,32 @@ One platform, four surfaces — **browse smarter**, **trust the listings**, **se
 | 🧑‍🤝‍🧑 **Roommate Matching** | Compatible flatmates by budget, area & lifestyle | [`roommates-matching.png`](docs/screenshots/roommates-matching.png) |
 | 🛡️ **Trust & Safety** | Two-sided marketplace integrity — tenant KYC + verified-tenant badge, chat safety engine, report/block, photo & review moderation, disputes + deposit protection, admin Trust Center & audit trail | [`trust-center.png`](docs/screenshots/trust-center.png) |
 | 📱 **Reach** | SMS OTP phone sign-in for the Bangladesh market, one-tap **Share on WhatsApp** with an AI listing summary, per-area SEO landing pages + sitemap, Lighthouse gate in CI | [`phase13-area-page.png`](docs/screenshots/phase13-area-page.png) |
+| 👁️ **AI Vision** | **Photo intelligence** — analyze a listing's photos (caption, palette, observations), AI draft title + description from the actual photos, suggested amenity tags (review-then-apply), and **AI image search** ("upload a photo, find rooms that look like it") with match scores | [`phase14-vision-panel.png`](docs/screenshots/phase14-vision-panel.png) |
 
-Full gallery (61 screenshots, light + dark, desktop + mobile) in [🖼️ Screenshots](#-screenshots). Live verification notes in [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md).
+Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screenshots](#-screenshots). Live verification notes in [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md).
 
 ---
 
 ## 🆕 Changelog
+
+**Phase 15 — Communication & Trust AI**
+
+- **Chat translation (B1)** — auto-detects source language, translates chat messages EN↔BN with Google Translate fallback; quality flag (`full`/`phrase`/`none`) shown honestly in the UI
+- **Support copilot (B2)** — grounded FAQ matcher against help library; returns answer + Bangla translation + matched keywords; honest fallback when no article matches
+- **Voice TTS (B3)** — Web Speech API integration on copilot assistant replies; respect `speechSynthesis` availability with feature-detection guard
+- **KYC OCR (C4)** — auto-extracts NID number, name, DOB from uploaded verification documents with confidence score; displayed in TenantKycCard with honesty note
+- **Review summary (C5)** — AI-generated summary of room reviews with sentiment breakdown (positive/neutral/negative %) and topic tags; shown in ReviewsSection
+- **Market report (C6)** — weekly area-level rental analytics (median price, WoW movement, index); AdminAnalyticsPanel visualization; email distribution to opted-in landlords
+- **Dynamic pricing v2 (C7)** — demand-momentum-adjusted price windows with area-specific factor drivers; replaces static v1 with time-series-informed recommendations
+- **Fraud rings (D8)** — detects coordinated accounts via shared phone (strong link) and shared audit IP + same area (weak link); flagged rings surfaced in AdminFraudPanel
+- **Bug fix** — fixed SQLite `DISTINCT` + `ORDER BY` gotcha in `market_report.py` and `forecast.py`; added `.order_by("area")` to deduplicate area rows
+
+**Phase 14 — AI v3: Vision & Content AI**
+
+- **Photo intelligence** — `rooms/vision.py` fingerprints a listing's photos (pHash + 64-bucket colour histogram + brightness + palette, Pillow-only, offline) and derives honest, confidence-scored observations: lighting, tone, décor, composition. `POST /api/v1/rooms/<id>/vision/analyze/` stores a `RoomVisionAnalysis` (OneToOne), `GET /vision/` serves it, `POST /vision/description/` drafts a copy-ready title + description from the **actual photos** (reuses the AI draft pipeline with the vision image profile), and suggested amenity tags can be **reviewed then applied** to the listing. Object-level tags need an optional `http` vision gateway (`VISION_PROVIDER=http`) with graceful fallback; every response carries the honesty note that this is statistical pixel vision, not object recognition. See [`docs/phase-14-ai-v3.md`](docs/phase-14-ai-v3.md)
+- **AI image search** — `POST /api/v1/rooms/vision/search/` (public, throttled 30/min): upload any room photo, get look-alike listings ranked **50% phash + 25% histogram + 25% brightness** with match scores and reasons; the rooms grid shows `88% match` badges.
+- **Frontend** — `VisionCard` panel in the landlord dashboard (My Listings) with palette swatches, evidence chips, Apply tags, AI draft + copy; Image search dialog on `/rooms` with photo preview and results mode; all strings in English + বাংলা.
+- **Engineering** — 716 backend (was 689) + 342 frontend (was 333) tests, tsc/eslint/prettier clean, migration `rooms/0007_roomvisionanalysis.py`, 3 new Playwright screenshots (`capture_phase14_shots.mjs`).
 
 **Phase 13 — Reach (SMS OTP, WhatsApp sharing, area SEO)**
 
@@ -485,6 +505,7 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 | **12.9**   | Tier-4 Upgrades — 🤝 AI Rental Advisor, 💬 AI Negotiation Assistant, 📄 AI Agreement Checker, 🏠 Landlord Copilot, 📊 AI Property Comparison, 📈 Demand Forecasting, 🔔 Smart AI Alerts, 🧠 hosted neural embeddings (HF endpoint), 🪪 automated KYC pre-verification, 🧪 browser-level Playwright E2E | ✅ Shipped |
 | **12.10**  | Tier-5 Upgrades — 📈 conversion funnel fully wired (booking_confirmed + payment_completed server-side), 🖼️ photo forensics v2 (text-overlay + tiled-watermark detection), 💹 per-listing price recommendation (demand forecast + market + interest), 👁️ Copilot image understanding (statistical photo answers), ✍️ AI listing draft (one-click title/description/amenities) | ✅ Shipped |
 | **13**     | Reach — 📱 SMS OTP phone sign-in (BD market, gateway-gated), 🟢 WhatsApp listing share + AI share summary, 🗺️ per-area SEO landing pages + sitemap, ⚡ Lighthouse performance gate in CI | ✅ Shipped |
+| **14**     | AI v3 Vision & Content — 👁️ photo intelligence (caption/palette/observations from actual photos), ✍️ AI draft title + description from photos, 🏷️ suggested amenity tags (review-then-apply), 📷 AI image search ("upload a photo, find rooms that look like it") with match scores | ✅ Shipped |
 
 ---
 
@@ -670,12 +691,12 @@ Rentora/
 
 Quality is enforced **in CI and at commit time** — style or coverage drift fails the pipeline automatically.
 
-### Automated tests (1022 total)
+### Automated tests (1058 total)
 
 | Suite             | Count | Gate                                      |
 | ----------------- | ----- | ----------------------------------------- |
-| Backend (Django)  | 689   | ✅ passing · coverage ≥ 50% lines |
-| Frontend (Vitest) | 333   | ✅ passing · coverage ≥ 55% lines         |
+| Backend (Django)  | 716   | ✅ passing · coverage ≥ 50% lines |
+| Frontend (Vitest) | 342   | ✅ passing · coverage ≥ 55% lines         |
 
 ```bash
 # Backend
@@ -886,6 +907,10 @@ Frontend runs at `http://localhost:3000`
 | GET       | `/api/v1/rooms/:id/similar-images/` | Public | Rooms whose primary photo looks like this one (pHash) |
 | GET       | `/api/v1/rooms/:id/price-recommendation/` | Owner/Admin | Per-listing raise/hold/lower price suggestion (demand + market + interest) |
 | POST      | `/api/v1/rooms/generate-description/` | Auth | Deterministic AI draft — title + description + amenity tags for a listing |
+| POST      | `/api/v1/rooms/:id/vision/analyze/` | Owner/Admin | Run + store photo intelligence (caption, palette, observations, suggested tags) |
+| GET       | `/api/v1/rooms/:id/vision/` | Owner/Admin | The stored vision analysis (404 before first run) |
+| POST      | `/api/v1/rooms/:id/vision/description/` | Owner/Admin | AI draft title + description + tags **from the listing's photos** |
+| POST      | `/api/v1/rooms/vision/search/` | Public (30/min) | Upload a photo → look-alike listings with `match_score` + reasons |
 
 **Text filters:** `?area=Dhanmondi&room_type=studio&price__gte=5000&price__lte=15000&is_available=true&q=cozy&ordering=-price&owner=3`
 
@@ -1197,6 +1222,7 @@ Every shipped phase with its captured screenshots (all in `docs/screenshots/`):
 | 12.9 | Tier-4 upgrades (AI tools, comparison, landlord copilot, smart alerts) | [`phase12.9-ai-tools-advisor.png`](docs/screenshots/phase12.9-ai-tools-advisor.png) · [`phase12.9-compare.png`](docs/screenshots/phase12.9-compare.png) · [`phase12.9-landlord-copilot.png`](docs/screenshots/phase12.9-landlord-copilot.png) · [`phase12.9-smart-alerts.png`](docs/screenshots/phase12.9-smart-alerts.png) |
 | 12.10 | Tier-5 upgrades (funnel analytics, price recommendation, Copilot vision, AI draft) | [`tier5-price-recommendation.png`](docs/screenshots/tier5-price-recommendation.png) · [`tier5-ai-draft.png`](docs/screenshots/tier5-ai-draft.png) · [`tier5-copilot-photos.png`](docs/screenshots/tier5-copilot-photos.png) |
 | 13 | Reach (SMS OTP, WhatsApp share, area SEO) | [`phase13-area-page.png`](docs/screenshots/phase13-area-page.png) · [`phase13-whatsapp-share.png`](docs/screenshots/phase13-whatsapp-share.png) · [`phase13-sms-login.png`](docs/screenshots/phase13-sms-login.png) |
+| 14 | AI v3 Vision & Content (photo intelligence, AI image search) | [`phase14-vision-panel.png`](docs/screenshots/phase14-vision-panel.png) · [`phase14-image-search-dialog.png`](docs/screenshots/phase14-image-search-dialog.png) · [`phase14-image-search-results.png`](docs/screenshots/phase14-image-search-results.png) |
 
 Below, the detailed phase-by-phase screenshots.
 
@@ -1349,6 +1375,18 @@ Below, the detailed phase-by-phase screenshots.
 **Phase 13 — SMS phone sign-in** — the phone-first login box in the auth dialog (masked number, resend cooldown; the backend SMS endpoints are gateway-gated and answer `503` until enabled):
 
 <img width="512" alt="Phase 13 SMS Login" src="docs/screenshots/phase13-sms-login.png" />
+
+**Phase 14 — Photo intelligence** — the landlord dashboard's per-listing panel: analyzed caption, dominant-colour palette, evidence observations, suggested amenity tags (review-then-apply) and the AI draft title + description generated from the actual photos:
+
+<img width="1216" alt="Phase 14 Vision Panel" src="docs/screenshots/phase14-vision-panel.png" />
+
+**Phase 14 — AI image search** — upload any room photo (preview included) and Rentora finds listings that look like it:
+
+<img width="448" alt="Phase 14 Image Search Dialog" src="docs/screenshots/phase14-image-search-dialog.png" />
+
+**Phase 14 — Image search results** — look-alike listings ranked by perceptual similarity, each card carrying its match score badge with the reasons in the tooltip:
+
+<img width="1440" alt="Phase 14 Image Search Results" src="docs/screenshots/phase14-image-search-results.png" />
 
 **Home & Listing Pages:**
 

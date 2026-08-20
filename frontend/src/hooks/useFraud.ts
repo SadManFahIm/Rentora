@@ -59,6 +59,15 @@ export function useFraudAuditLog() {
   });
 }
 
+/** Phase 15 — D8: admin-only coordinated-account rings (review queue). */
+export function useFraudRings() {
+  return useQuery({
+    queryKey: [...fraudKeys.all, "rings"] as const,
+    queryFn: () => fraudService.getRings(),
+    retry: false,
+  });
+}
+
 /** Re-scan a room (owner/admin). */
 export function useScanRoom() {
   const queryClient = useQueryClient();

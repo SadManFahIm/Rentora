@@ -148,7 +148,7 @@ def area_demand(area: str) -> dict[str, Any]:
 
 def area_demand_summary() -> dict[str, Any]:
     """Demand snapshot for every area with listings — the map/overview view."""
-    areas = list(Room.objects.values_list("area", flat=True).distinct())
+    areas = list(Room.objects.order_by("area").values_list("area", flat=True).distinct())
     rows = [area_demand(a) for a in areas]
     rising = [r["area"] for r in rows if r.get("direction") == "rising"]
     falling = [r["area"] for r in rows if r.get("direction") == "falling"]
