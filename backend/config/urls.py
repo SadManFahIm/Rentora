@@ -109,6 +109,12 @@ urlpatterns = [
     path("api/v1/moderation/", include("moderation.urls")),
     path("api/v1/disputes/", include("disputes.urls")),
     path("api/v1/audit/", include("audit.urls")),
+    path("api/v1/subscriptions/", include("subscriptions.urls")),
+    path("api/v1/monetization/", include("monetization.urls")),
+    path("api/v1/brokers/", include("brokers.urls")),
+    path("api/v1/corporate/", include("corporate.urls")),
+    path("api/v1/marketplace/", include("marketplace.urls")),
+    path("api/v1/partner-services/", include("partner_services.urls")),
 ]
 
 if settings.DEBUG:
