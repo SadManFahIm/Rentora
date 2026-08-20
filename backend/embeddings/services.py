@@ -223,11 +223,13 @@ class EmbeddingService:
         from django.db import connection as conn
 
         params: list[object] = []
+        # nosec B608: fully parameterized SQL; only the framework-derived table
+        # name is interpolated (never user input), all values go through %s.
         sql = f"""
             SELECT entity_id, 1 - (vector <=> %s::vector) AS score
             FROM {Embedding._meta.db_table}
             WHERE model = %s
-        """
+        """  # nosec B608
         params.extend([json.dumps(query_vec), self.model])
         if candidate_ids:
             placeholders = ", ".join(["%s"] * len(candidate_ids))

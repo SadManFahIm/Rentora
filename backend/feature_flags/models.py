@@ -63,7 +63,9 @@ class FeatureFlag(models.Model):
         return True
 
     def in_rollout(self, ident: str) -> bool:
-        bucket = int(hashlib.md5(f"{self.key}:{ident}".encode()).hexdigest()[:8], 16) % 100
+        # nosec B324: MD5 here is deterministic bucketing (stable rollout split),
+        # not a security primitive — collisions only affect bucket spread.
+        bucket = int(hashlib.md5(f"{self.key}:{ident}".encode()).hexdigest()[:8], 16) % 100  # nosec B324
         return bucket < self.rollout_percentage
 
 
