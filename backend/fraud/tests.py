@@ -442,6 +442,7 @@ class DetectorRegistrationTests(TestCase):
                 "_missing_images",
                 "_unverified_owner",
                 "_rapid_listing",
+                "_fraud_ring",
                 "duplicate_image_signal",
                 "_image_forensics",
             },

@@ -297,3 +297,10 @@ class ReportActionSerializer(serializers.Serializer):
 
     action = serializers.ChoiceField(choices=["dismiss", "warn", "suspend", "escalate"])
     note = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class TranslateRequestSerializer(serializers.Serializer):
+    """Request payload for the chat translation endpoint (Phase 15 — B1)."""
+
+    text = serializers.CharField(min_length=1, max_length=4000)
+    target = serializers.ChoiceField(choices=["en", "bn"])

@@ -29,6 +29,19 @@ export interface UploadedChatFile {
   messageType: ChatMessageType;
 }
 
+/** Result of POST /chat/translate/ (Phase 15 — B1). The backend never
+ * presents an untranslated sentence as translated: `quality` is `full`
+ * (gateway), `phrase` (deterministic phrase core) or `none` (nothing
+ * matched), and `provider` tells which engine produced the text. */
+export interface TranslateResult {
+  translated: string;
+  sourceLang: string;
+  targetLang: string;
+  quality: "full" | "phrase" | "none";
+  provider: string;
+  note: string;
+}
+
 export const chatService = {
   /** GET /chat/rooms/ — chat rooms the current user belongs to. */
   async getRooms(): Promise<ChatRoom[]> {
@@ -93,6 +106,27 @@ export const chatService = {
       { headers: { "Content-Type": "multipart/form-data" } }
     );
     return { fileUrl: data.file_url, messageType: data.message_type as ChatMessageType };
+  },
+
+  /** POST /chat/translate/ — EN⇄BN translation of a chat message. The target
+   * is the viewer's own language; the server detects the source. Throttled. */
+  async translateMessage(text: string, target: "en" | "bn"): Promise<TranslateResult> {
+    const { data } = await api.post<{
+      translated: string;
+      source_lang: string;
+      target_lang: string;
+      quality: string;
+      provider: string;
+      note: string;
+    }>("/chat/translate/", { text, target });
+    return {
+      translated: data.translated,
+      sourceLang: data.source_lang,
+      targetLang: data.target_lang,
+      quality: data.quality as TranslateResult["quality"],
+      provider: data.provider,
+      note: data.note,
+    };
   },
 
   /** GET /chat/safety/events/ — admin feed of chat-safety assessments

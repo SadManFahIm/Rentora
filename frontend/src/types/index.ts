@@ -781,6 +781,16 @@ export type TenantVerificationStatus =
 
 export type TenantKycDecision = "approved" | "rejected" | "needs_review";
 
+/** Structured fields auto-extracted from a NID image by the OCR pre-screen
+ * (Phase 15 — C4). Structural only: it says the document contains a valid
+ * NID number/name/DOB, never that the document belongs to the uploader. */
+export interface NidOcrExtract {
+  nid_number: string;
+  name: string | null;
+  date_of_birth: string | null;
+  confidence: "high" | "medium" | "low";
+}
+
 /** The tenant's own verification record (owner or admin only). */
 export interface TenantVerification {
   id: number;
@@ -798,7 +808,7 @@ export interface TenantVerification {
   /** Automated pre-screening (Tier 2) — recommendation for the admin queue. */
   autoScreenScore: number | null;
   autoScreenResult: "recommend_approve" | "recommend_review" | null;
-  autoScreenDetail: { reasons: string[] };
+  autoScreenDetail: { reasons: string[]; ocr?: NidOcrExtract | null };
 }
 
 /** One applicant in the admin tenant-verification queue. */
@@ -924,6 +934,20 @@ export interface RoomInsights {
   };
 }
 
+/** Sentiment + topic breakdown of a room's reviews (Phase 15 — C5). */
+export interface ReviewAiSummary {
+  summary_bn: string;
+  sentiment: {
+    positive_pct: number;
+    neutral_pct: number;
+    negative_pct: number;
+    overall: string;
+  };
+  topics: { topic: string; label_bn: string; count: number }[];
+  review_count: number;
+  note: string;
+}
+
 /** Rating breakdown + recent reviews (GET /reviews/summary/?room=). */
 export interface ReviewSummary {
   room: number;
@@ -931,6 +955,7 @@ export interface ReviewSummary {
   totalReviews: number;
   countsPerStar: Record<"1" | "2" | "3" | "4" | "5", number>;
   recent: ReviewItem[];
+  aiSummary?: ReviewAiSummary;
 }
 
 export interface ReviewItem {

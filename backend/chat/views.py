@@ -6,6 +6,7 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.storage import default_storage
 from django.shortcuts import get_object_or_404
@@ -32,6 +33,7 @@ from .serializers import (
     ReportActionSerializer,
     ReportCreateSerializer,
     ReportSerializer,
+    TranslateRequestSerializer,
 )
 from .utils import (
     blocked_with_any,
@@ -401,6 +403,14 @@ class ChatUploadRateThrottle(UserRateThrottle):
     scope = "chat_upload"
 
 
+class ChatTranslateRateThrottle(UserRateThrottle):
+    """Translation calls hit the gateway (when configured) — a dedicated
+    scope keeps one user from burning quota. Rate lives in
+    DEFAULT_THROTTLE_RATES."""
+
+    scope = "chat_translate"
+
+
 # Deliberately an allow-list, not a deny-list: only formats the frontend
 # actually needs to render/preview are accepted.
 _ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
@@ -514,6 +524,71 @@ class ChatSafetyEventsView(APIView):
             "-created_at"
         )[:100]
         return Response(ChatSafetyEventSerializer(events, many=True).data)
+
+
+class ChatTranslateView(APIView):
+    """Translate a chat message between English and Bangla (Phase 15 — B1).
+
+    Deterministic phrase-table core by default (``CHAT_TRANSLATE_PROVIDER=phrase``);
+    with ``http`` the configured gateway is used and the phrase core is the
+    graceful fallback. The response always reports ``quality`` (full | phrase |
+    none) and ``provider`` so the client never presents an untranslated
+    sentence as translated. Same message is used to augment the safety
+    engine's cross-lingual scan — see chat/safety.detect_crosslingual.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ChatTranslateRateThrottle]
+
+    @extend_schema(
+        tags=["Chat"],
+        summary="Translate a chat message (EN⇄BN)",
+        description=(
+            "Authenticated. `text`: the message (max 4000 chars); `target`: "
+            "`en` or `bn`. Returns `translated`, `source_lang`, `quality` "
+            "(`full` from the gateway, `phrase` from the deterministic core, "
+            "`none` when nothing could be translated), `provider`, and a "
+            "human-readable `note`."
+        ),
+        request=TranslateRequestSerializer,
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "translated": {"type": "string"},
+                    "source_lang": {"type": "string"},
+                    "target_lang": {"type": "string"},
+                    "quality": {"type": "string"},
+                    "provider": {"type": "string"},
+                    "note": {"type": "string"},
+                },
+            }
+        },
+    )
+    def post(self, request: Request) -> Response:
+        if not getattr(settings, "CHAT_TRANSLATE_ENABLED", True):
+            return Response(
+                {"detail": "Translation is disabled."}, status=status.HTTP_403_FORBIDDEN
+            )
+        serializer = TranslateRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        from .translation import translate
+
+        result = translate(
+            serializer.validated_data["text"],
+            serializer.validated_data["target"],
+        )
+        return Response(
+            {
+                "translated": result.translated,
+                "source_lang": result.source_lang,
+                "target_lang": result.target_lang,
+                "quality": result.quality,
+                "provider": result.provider,
+                "note": result.note,
+            }
+        )
 
 
 # ============================================================

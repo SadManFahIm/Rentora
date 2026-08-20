@@ -1,7 +1,18 @@
 import { useState } from "react";
-import { ChevronDown, Loader2, ScrollText, ShieldAlert, ShieldCheck, ShieldX } from "lucide-react";
+import {
+  ChevronDown,
+  Link2,
+  Loader2,
+  Phone,
+  ScrollText,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldX,
+  Users2,
+} from "lucide-react";
 import {
   useFraudAuditLog,
+  useFraudRings,
   useFraudReports,
   useFraudSummary,
   useReviewFraudReport,
@@ -73,6 +84,7 @@ export default function AdminFraudPanel() {
   const [ordering, setOrdering] = useState<string>("-score");
   const [expanded, setExpanded] = useState<number | null>(null);
   const [showAudit, setShowAudit] = useState(false);
+  const [showRings, setShowRings] = useState(false);
 
   const params = {
     ...(status !== "all" ? { status } : {}),
@@ -86,6 +98,7 @@ export default function AdminFraudPanel() {
   const { data: summary } = useFraudSummary();
   const { data: reports = [], isLoading } = useFraudReports(params);
   const { data: audit = [] } = useFraudAuditLog();
+  const { data: rings } = useFraudRings();
   const review = useReviewFraudReport();
 
   return (
@@ -102,10 +115,159 @@ export default function AdminFraudPanel() {
             </p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setShowAudit((v) => !v)}>
-          <ScrollText className="size-4" /> {showAudit ? "Hide" : "Show"} audit trail
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setShowRings((v) => !v)}>
+            <Users2 className="size-4" /> {showRings ? "Hide" : "Show"} fraud rings
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setShowAudit((v) => !v)}>
+            <ScrollText className="size-4" /> {showAudit ? "Hide" : "Show"} audit trail
+          </Button>
+        </div>
       </div>
+
+      {/* Phase 15 — D8: coordinated-account rings (admin review queue). */}
+      {showRings && (
+        <div className="rounded-xl border border-gray-200 bg-card p-4 dark:border-gray-800">
+          <div className="mb-1 flex items-center gap-2">
+            <Users2 className="size-4 text-orange-600" />
+            <h3 className="font-display text-sm font-bold text-foreground">
+              Coordinated-account rings
+            </h3>
+            {rings && rings.ring_count > 0 && (
+              <span className="rounded-full bg-orange-500/10 px-2 py-0.5 text-xs font-semibold text-orange-600 dark:text-orange-400">
+                {rings.ring_count} ring{rings.ring_count === 1 ? "" : "s"} · {rings.user_count}{" "}
+                accounts
+              </span>
+            )}
+          </div>
+          <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+            Accounts linked by a shared phone number (strong) or a shared audit IP plus same-area
+            listings (weak). A ring flags accounts for priority review — it is not proof of guilt,
+            and nothing is ever auto-blocked.
+          </p>
+
+          {!rings ? (
+            <div className="flex items-center gap-2 py-4 text-xs text-gray-500">
+              <Loader2 className="size-3.5 animate-spin" /> Detecting rings…
+            </div>
+          ) : rings.rings.length === 0 ? (
+            <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-3 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <ShieldCheck className="size-4" /> No coordinated-account rings detected.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {rings.rings.map((ring) => (
+                <div
+                  key={ring.ring_id}
+                  className="rounded-xl border border-gray-200 p-3 dark:border-gray-800"
+                >
+                  <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+                    <span
+                      className={cn(
+                        "rounded-full px-2.5 py-0.5 font-bold",
+                        ring.score >= 70
+                          ? "bg-red-500/10 text-red-600 dark:text-red-400"
+                          : ring.score >= 50
+                            ? "bg-orange-500/10 text-orange-600 dark:text-orange-400"
+                            : "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                      )}
+                    >
+                      Ring #{ring.ring_id} · score {ring.score}/100
+                    </span>
+                    <span className="text-gray-500 dark:text-gray-400">
+                      {ring.member_count} members · {ring.strong_edges} phone link
+                      {ring.strong_edges === 1 ? "" : "s"} · {ring.weak_edges} IP+area link
+                      {ring.weak_edges === 1 ? "" : "s"}
+                    </span>
+                  </div>
+
+                  {/* Members */}
+                  <div className="flex flex-wrap gap-2">
+                    {ring.members.map((member) => (
+                      <div
+                        key={member.user_id}
+                        className="rounded-lg bg-gray-50 px-2.5 py-1.5 text-[11px] dark:bg-gray-800/60"
+                      >
+                        <div className="font-semibold text-foreground">
+                          {member.username}
+                          {member.nid_verified && (
+                            <span className="ml-1 text-emerald-600 dark:text-emerald-400">
+                              ✓ NID
+                            </span>
+                          )}
+                          {member.tenant_verified && (
+                            <span className="ml-1 text-emerald-600 dark:text-emerald-400">
+                              ✓ tenant
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-gray-500 dark:text-gray-400">
+                          {member.role} · {member.listings_count} listing
+                          {member.listings_count === 1 ? "" : "s"}
+                          {ring.member_scores[String(member.user_id)] != null && (
+                            <span className="ml-1 font-semibold text-orange-600 dark:text-orange-400">
+                              · {(ring.member_scores[String(member.user_id)] / 100).toFixed(0)}
+                              /10
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Evidence */}
+                  <ul className="mt-2 space-y-0.5">
+                    {ring.edges.map((edge) => (
+                      <li
+                        key={`${edge.users[0]}-${edge.users[1]}`}
+                        className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400"
+                      >
+                        {edge.strength === "strong" ? (
+                          <Phone className="size-3 shrink-0 text-red-400" />
+                        ) : (
+                          <Link2 className="size-3 shrink-0 text-amber-500" />
+                        )}
+                        <span className="font-semibold text-gray-600 dark:text-gray-300">
+                          #{edge.users[0]} ↔ #{edge.users[1]}
+                        </span>
+                        {edge.evidence}
+                      </li>
+                    ))}
+                  </ul>
+
+                  {/* Flagged rooms owned by ring members */}
+                  {ring.flagged_rooms.length > 0 && (
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                        Flagged listings:
+                      </span>
+                      {ring.flagged_rooms.map((room) => (
+                        <a
+                          key={room.room_id}
+                          href={`/rooms/${room.room_id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={cn(
+                            "rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+                            room.severity === "high"
+                              ? "border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300"
+                              : "border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-300"
+                          )}
+                        >
+                          {room.title || `#${room.room_id}`} · {room.area} · {room.severity}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {rings && (
+            <p className="mt-3 text-[10px] text-gray-400 dark:text-gray-500">{rings.note}</p>
+          )}
+        </div>
+      )}
 
       {/* Summary stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">

@@ -59,6 +59,11 @@ class User(AbstractUser):
     # or push alerts.
     digest_emails_enabled = models.BooleanField(default=True)
 
+    # Weekly rental market report email (Phase 15, C6): opt-in newsletter with
+    # the per-area price/demand snapshot. Default off — nobody gets market
+    # emails unless they ask.
+    market_report_emails_enabled = models.BooleanField(default=False)
+
     def save(self, *args, **kwargs):
         if not self.referral_code:
             import secrets

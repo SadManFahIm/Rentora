@@ -198,8 +198,12 @@ export const roomService = {
     }
   },
 
-  /** PATCH /rooms/:id/ — used to apply an AI pricing suggestion. */
-  async updateRoom(id: number, patch: Partial<Pick<ApiRoom, "price">>): Promise<Room> {
+  /** PATCH /rooms/:id/ — used to apply an AI pricing suggestion or
+   *  Phase 14 vision-suggested amenity tags. */
+  async updateRoom(
+    id: number,
+    patch: Partial<Pick<ApiRoom, "price" | "amenities">>
+  ): Promise<Room> {
     const { data } = await api.patch<ApiRoom>(`/rooms/${id}/`, patch);
     return mapRoom(data);
   },

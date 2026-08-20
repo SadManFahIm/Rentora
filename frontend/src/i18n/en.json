@@ -71,7 +71,10 @@
     "open": "Open Rentora Copilot",
     "close": "Close Rentora Copilot",
     "listingMode": "Talking about this listing — grounded answers only",
-    "send": "Send message"
+    "send": "Send message",
+    "speak": "Read aloud",
+    "stopSpeaking": "Stop reading",
+    "ttsLang": "bn-BD"
   },
   "trust": {
     "identityVerified": "Identity Verified",
@@ -92,5 +95,35 @@
     "startVerification": "Start Verification",
     "resubmit": "Resubmit Documents",
     "underReview": "Under Review"
+  },
+  "vision": {
+    "imageSearch": "Image search",
+    "searchByPhoto": "Find similar rooms",
+    "uploadHint": "Upload a room photo — we'll find listings that look like it.",
+    "searching": "Searching…",
+    "choosePhoto": "Choose a photo",
+    "matches": "{{count}} visual matches for your photo",
+    "clear": "Clear",
+    "matchScore": "{{score}}% match",
+    "noMatches": "No close visual matches — try another photo.",
+    "searchError": "Could not search by photo.",
+    "cancel": "Cancel",
+    "photoIntelligence": "Photo intelligence",
+    "analyze": "Analyze photos",
+    "analyzing": "Analyzing…",
+    "analyzeError": "Could not analyze the photos.",
+    "draftFromPhotos": "AI draft from photos",
+    "drafting": "Drafting…",
+    "draftError": "Could not draft from photos.",
+    "palette": "Dominant colours",
+    "suggestedTags": "Suggested tags",
+    "applyTags": "Apply tags",
+    "tagsApplied": "Tags applied to the listing.",
+    "applyError": "Could not apply the tags.",
+    "copy": "Copy",
+    "copied": "Copied to clipboard.",
+    "copyError": "Could not copy.",
+    "noAnalysis": "No photos to analyze.",
+    "note": "Photo intelligence is statistical — lighting, tones, décor and framing. It cannot name specific furniture; object-level tags need a configured vision gateway."
   }
 }
