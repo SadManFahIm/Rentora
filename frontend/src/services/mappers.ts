@@ -44,6 +44,8 @@ export interface ApiRoomImage {
   /** Optional in the schema — the backend model has a default. */
   is_primary?: boolean;
   created_at: string;
+  /** Phase 16 — optimized WebP variants keyed by size (thumbnail|small|medium|large). */
+  variants?: Record<string, string>;
 }
 
 export interface ApiOwner {
@@ -326,6 +328,21 @@ function pickImage(room: ApiRoom): string {
   return primary.image;
 }
 
+/** Phase 16 — the primary image's optimized WebP variants (when generated). */
+function pickVariants(room: ApiRoom): Room["imgVariants"] {
+  const images = room.images ?? [];
+  if (images.length === 0) return undefined;
+  const primary = images.find((img) => img.is_primary) ?? images[0];
+  const variants = primary.variants;
+  if (!variants || typeof variants !== "object") return undefined;
+  return {
+    thumbnail: variants.thumbnail,
+    small: variants.small,
+    medium: variants.medium,
+    large: variants.large,
+  };
+}
+
 function ownerName(owner: ApiOwner | null | undefined): string {
   if (!owner) return "Owner";
   const full = [owner.first_name, owner.last_name].filter(Boolean).join(" ").trim();
@@ -375,6 +392,7 @@ export function mapRoom(api: ApiRoom): Room {
     rating: Number(api.rating ?? 0),
     reviews: api.total_reviews ?? 0,
     img: pickImage(api),
+    imgVariants: pickVariants(api),
     amenities: api.amenities ?? [],
     // gender_preference is optional in the schema (model default) — default
     // to the backend's own default so the card never renders an empty badge.

@@ -87,6 +87,11 @@ INSTALLED_APPS = [
     "moderation",
     "disputes",
     "analytics",
+    # Phase 16 — Hardening & scale
+    "embeddings",
+    "feature_flags",
+    "experiments",
+    "images",
     # Phase 15 — Monetization 2.0
     "subscriptions",
     "monetization",
@@ -122,6 +127,7 @@ SECURITY_PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=()"
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
+    "config.http_middleware.RequestCorrelationMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -130,6 +136,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "config.security.SecurityHeadersMiddleware",
+    "config.http_middleware.CacheControlHeadersMiddleware",
     "recommendations.middleware.RoomViewActivityMiddleware",
 ]
 
@@ -165,6 +172,10 @@ if os.getenv("CHANNELS_BACKEND") == "redis":
             "BACKEND": "channels_redis.core.RedisChannelLayer",
             "CONFIG": {
                 "hosts": [os.getenv("REDIS_URL", "redis://localhost:6379/0")],
+                # Namespace channel keys so a shared Redis instance (dev DB 0,
+                # cache DB 1, ...) never collides with other apps.
+                "prefix": "rentora:ws:",
+                "group_expiry": 86400,
             },
         }
     }
@@ -184,6 +195,20 @@ if os.getenv("CHANNELS_BACKEND") == "redis":
         "default": {
             "BACKEND": "django.core.cache.backends.redis.RedisCache",
             "LOCATION": os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+            "KEY_PREFIX": "rentora",
+            "OPTIONS": {
+                # A slow/hung Redis must fail fast rather than pin the GIL.
+                # `retry_on_timeout` re-issues a command once on a short blip;
+                # pool sizing keeps one busy connection pool from starving.
+                # `protocol: 2` keeps compatibility with Redis < 6 (RESP3's
+                # HELLO handshake fails against older servers).
+                # (These kwargs are forwarded to redis-py's ConnectionPool.)
+                "max_connections": 50,
+                "socket_timeout": 1.0,
+                "socket_connect_timeout": 1.0,
+                "retry_on_timeout": True,
+                "protocol": 2,
+            },
         }
     }
 else:
@@ -233,9 +258,11 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "config.exceptions.custom_exception_handler",
     # Rate limiting. Anonymous requests are keyed by IP, authenticated by user.
     # The per-IP `auth` scope is applied explicitly on the login/register views.
+    # The *trusted* variants resolve the real client IP behind a proxy
+    # (config.throttling + config.ip); NUM_PROXIES is set per deployment.
     "DEFAULT_THROTTLE_CLASSES": (
-        "rest_framework.throttling.AnonRateThrottle",
-        "rest_framework.throttling.UserRateThrottle",
+        "config.throttling.TrustedAnonRateThrottle",
+        "config.throttling.TrustedUserRateThrottle",
     ),
     "DEFAULT_THROTTLE_RATES": {
         "anon": "100/hour",
@@ -265,8 +292,17 @@ REST_FRAMEWORK = {
         # can't use the "user" scope; keyed per-IP to absorb legitimate
         # gateway retries while still capping flood/replay attempts.
         "webhook_callback": "20/minute",
+        # Experiment exposure/conversion are low-cost but fire frequently from
+        # the client; a tight scope stops a scripted flood of the event store.
+        "experiments": "300/hour",
     },
 }
+
+# How many trusted proxies sit between clients and this app. 0 = directly
+# reachable (never trust X-Forwarded-For); N = the app trusts the rightmost N
+# XFF hops (config/ip.py). Set per deployment — trusting XFF when there is no
+# proxy lets clients spoof their rate-limit identity.
+NUM_PROXIES = int(os.getenv("NUM_PROXIES", "0"))
 
 # ============================================================
 # drf-spectacular (OpenAPI 3)
@@ -723,6 +759,49 @@ LISTING_TIER_DURATION_DAYS = 30
 
 
 # ============================================================
+# Phase 16 — Embeddings & vector search (pgvector)
+# ============================================================
+# Master switch for the DB-backed vector path. When OFF (default), search uses
+# the existing in-memory/disk semantic index exactly as before. When ON and
+# embeddings exist for the candidate pool, ranking is pushed down to pgvector.
+VECTOR_SEARCH_ENABLED = os.getenv("VECTOR_SEARCH_ENABLED", "False") == "True"
+# Embedding provider for the pipeline: "lite" (zero-dependency synonym-hash,
+# default), "auto"/"neural" (sentence-transformers when installed), "hosted"
+# (external endpoint). Reuses the rooms.embedding_service provider contract.
+EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "lite")
+# Fixed vector dimension stored in the pgvector column (see migration 0001).
+EMBEDDING_DIMENSIONS = int(os.getenv("EMBEDDING_DIMENSIONS", "384"))
+# Max neighbours returned by a vector search.
+VECTOR_SEARCH_TOP_K = int(os.getenv("VECTOR_SEARCH_TOP_K", "8"))
+
+# ============================================================
+# Phase 16 — Image pipeline (WebP variants, upload hardening)
+# ============================================================
+# Decompression-bomb ceiling for decoded uploads/variants (Pillow MAX_IMAGE_PIXELS).
+IMAGE_MAX_PIXELS = int(os.getenv("IMAGE_MAX_PIXELS", "100000000"))
+# Reject uploads outside these dimension bounds (see config/uploads.py).
+IMAGE_MIN_DIMENSION = int(os.getenv("IMAGE_MIN_DIMENSION", "128"))
+IMAGE_MAX_DIMENSION = int(os.getenv("IMAGE_MAX_DIMENSION", "8000"))
+# Max images a single listing may carry.
+MAX_ROOM_IMAGES = int(os.getenv("MAX_ROOM_IMAGES", "10"))
+# Root for private (non-publicly-served) uploads — KYC/tenant documents.
+MEDIA_PRIVATE_ROOT = os.getenv("MEDIA_PRIVATE_ROOT", "") or BASE_DIR / "private_media"
+# Phase 16 — request body size limits (protect against abuse / OOM).
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB — DRF parser limit
+FILE_UPLOAD_MAX_MEMORY_SIZE = DATA_UPLOAD_MAX_MEMORY_SIZE
+
+# Application version string exposed in health check and error reports.
+APP_VERSION = os.getenv("APP_VERSION", "dev")
+
+# ============================================================
+# Phase 16 — Redis & presence hardening
+# ============================================================
+# Chat presence leases (chat/presence.py): a connection counts as online while
+# its lease is younger than this; leases self-expire, so a hard-killed worker
+# can never leave a user permanently "online". Consumers heartbeat every 60s.
+PRESENCE_CONNECTION_TTL = int(os.getenv("PRESENCE_CONNECTION_TTL", "180"))
+
+# ============================================================
 # Phase 15 — Monetization 2.0 (Revenue)
 # ============================================================
 # Master switches for each revenue domain (env convention, default on).
@@ -774,6 +853,27 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TIMEZONE = "Asia/Dhaka"
+
+# Phase 16 — Celery reliability hardening.
+# Retry on broker connection loss; ack late so a crashed worker requeues.
+# Soft/hard time limits prevent stuck tasks from holding workers forever.
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_BROKER_CONNECTION_RETRY = True
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_TASK_SOFT_TIME_LIMIT = 300  # 5 min — raises SoftTimeLimitExceeded
+CELERY_TASK_TIME_LIMIT = 600  # 10 min — hard kill
+CELERY_TASK_DEFAULT_RETRY_DELAY = 60
+CELERY_TASK_MAX_RETRIES = 3
+
+# Auto-index rooms into the embedding store on save/delete. On by default only
+# with a real broker (production): enqueueing is cheap, but eager-mode dev/CI
+# would run the (idempotent) pipeline synchronously on every room write, so
+# there embeddings are built explicitly via `backfill_embeddings`. Can be
+# force-enabled with EMBEDDING_INDEX_ON_SAVE=1.
+EMBEDDING_INDEX_ON_SAVE = (
+    os.getenv("EMBEDDING_INDEX_ON_SAVE", "") == "1" or not CELERY_TASK_ALWAYS_EAGER
+)
 
 # ============================================================
 # Rental market report (Phase 15, C6) — see analytics/market_report.py
