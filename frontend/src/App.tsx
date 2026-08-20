@@ -24,6 +24,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard/Dashboard"));
 const Auth = lazy(() => import("./pages/Auth/Auth"));
 const PaymentStatus = lazy(() => import("./pages/PaymentStatus/PaymentStatus"));
 const Roommates = lazy(() => import("./pages/Roommates/Roommates"));
+const Services = lazy(() => import("./pages/Services/Services"));
 
 /**
  * Suspense boundary around routed content. The shell (nav/footer, query
@@ -63,6 +64,7 @@ export default function App() {
                   <Route path="/map" element={<Map />} />
                   <Route path="/chat" element={<Chat />} />
                   <Route path="/roommates" element={<Roommates />} />
+                  <Route path="/services" element={<Services />} />
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/payment/status" element={<PaymentStatus />} />
                   <Route path="/auth" element={<Auth />} />
