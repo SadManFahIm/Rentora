@@ -70,6 +70,17 @@ Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 
 ## 🆕 Changelog
 
+**Phase 15 — Monetization 2.0 (Revenue)**
+
+- **Landlord SaaS — subscriptions & entitlements** — plan catalog (monthly/yearly), self-serve checkout via SSLCommerz/bKash with **server-side pricing**, subscription activation tied to a confirmed payment (atomic), cancel-at-period-end + renewal, and **entitlements enforced server-side** (`SUBSCRIPTION_FREE_FEATURES`); the AI price-prediction v2 endpoint is gated behind `price_prediction_basic` with a graceful free-tier fallback. See [`docs/phase-15-monetization-2.0.md`](docs/phase-15-monetization-2.0.md)
+- **Revenue ledger & commission engine** — idempotent `RevenueLedgerEntry` + `Commission` records (unique `idempotency_key` so a booking/order can never double-credit), platform/partner splits per scope with default rates (broker 2.0%, corporate 1.0%, marketplace 10%, insurance 8%, credit 3%), a **payout lifecycle** (pending → approved → paid / rejected) that deducts the balance atomically and masks account details, and a Celery-beat **subscription renewal + reminder** pipeline
+- **Verified Broker/Agent Network** — broker profiles with license + referral code, rule-based auto-screen verification, **attributed booking commissions** (signal-driven, idempotent), broker dashboard (balance, pending/paid, recent commissions) and self-serve payout requests
+- **B2B Corporate Housing** — corporate accounts (pending/active/suspended), member invites, **bulk booking with partial success**, corporate invoices (draft → generate), company-admin overview/approvals and platform-admin controls
+- **Add-on Services Marketplace** — provider registration, category-filtered service catalog, order lifecycle (pending → confirmed → completed/canceled), **per-booking AI cross-sell recommendations** and provider commission
+- **Insurance & Credit Partnerships** — provider-agnostic partner abstraction with a rule-based insurance provider: instant quotes, issue/decline/cancel policies, product catalog, and renter credit eligibility (pre-approved limit); every action auditable
+- **Admin revenue centre** — revenue dashboard (gross/platform revenue, MRR, pending partner obligations), live ledger, and a payout queue (`/dashboard?tab=revenue`)
+- **Engineering** — 6 new backend apps (`subscriptions`, `monetization`, `brokers`, `corporate`, `marketplace`, `partner_services`), 11 migrations, `manage.py seed_monetization`, renewal/reminder beat tasks, **884 backend + 373 frontend tests**, tsc/eslint/prettier clean. Frontend: `/services` page + Dashboard tabs `monetization` / `broker` / `corporate` / `revenue`, EN/BN i18n
+
 **Phase 15 — Communication & Trust AI**
 
 - **Chat translation (B1)** — auto-detects source language, translates chat messages EN↔BN with Google Translate fallback; quality flag (`full`/`phrase`/`none`) shown honestly in the UI
@@ -506,6 +517,7 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 | **12.10**  | Tier-5 Upgrades — 📈 conversion funnel fully wired (booking_confirmed + payment_completed server-side), 🖼️ photo forensics v2 (text-overlay + tiled-watermark detection), 💹 per-listing price recommendation (demand forecast + market + interest), 👁️ Copilot image understanding (statistical photo answers), ✍️ AI listing draft (one-click title/description/amenities) | ✅ Shipped |
 | **13**     | Reach — 📱 SMS OTP phone sign-in (BD market, gateway-gated), 🟢 WhatsApp listing share + AI share summary, 🗺️ per-area SEO landing pages + sitemap, ⚡ Lighthouse performance gate in CI | ✅ Shipped |
 | **14**     | AI v3 Vision & Content — 👁️ photo intelligence (caption/palette/observations from actual photos), ✍️ AI draft title + description from photos, 🏷️ suggested amenity tags (review-then-apply), 📷 AI image search ("upload a photo, find rooms that look like it") with match scores | ✅ Shipped |
+| **15**     | Monetization 2.0 — 💳 subscriptions + entitlements (landlord SaaS), 🧾 idempotent revenue ledger + commission engine, 🏢 corporate housing (accounts / bulk booking / invoices), 🏅 verified broker network (attribution / payouts), 🛍️ add-on services marketplace (orders + AI cross-sell), 🛡️ insurance & credit partnerships, 🎛️ admin revenue & payout centre | ✅ Shipped |
 
 ---
 
@@ -1066,6 +1078,71 @@ Frontend runs at `http://localhost:3000`
 
 Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badge, Home "Featured Rooms") → **Premium** (৳499/30d: top of search, gold badge, priority in AI recommendations). Expired promotions revert to Free automatically (`expire_listings` management command + query-time `effective_tier`).
 
+### Monetization 2.0 (Revenue)
+
+**Subscriptions** — `/api/v1/subscriptions/`
+
+| Method | Endpoint                                  | Auth   | Description                                                         |
+| ------ | ----------------------------------------- | ------ | ------------------------------------------------------------------- |
+| GET    | `/subscriptions/plans/`                   | Public | Active plan catalog (pricing server-side)                           |
+| GET    | `/subscriptions/subscription/me/`         | Auth   | My subscription + entitled features                                 |
+| POST   | `/subscriptions/subscription/me/`         | Auth   | Start plan checkout (SSLCommerz/bKash) — returns the gateway URL    |
+| POST   | `/subscriptions/subscription/:id/cancel/` | Auth   | Cancel at period end                                                |
+| POST   | `/subscriptions/subscription/:id/renew/`  | Auth   | Start a renewal checkout                                            |
+
+**Revenue & payouts** — `/api/v1/monetization/`
+
+| Method | Endpoint                                      | Auth   | Description                                              |
+| ------ | --------------------------------------------- | ------ | -------------------------------------------------------- |
+| GET    | `/monetization/revenue/dashboard/`            | Admin  | Revenue by scope, gross/platform, MRR, pending obligations, recent ledger/commissions/payouts |
+| GET    | `/monetization/payouts/requests/`             | Admin  | Payout request queue (`?status=`)                        |
+| POST   | `/monetization/payouts/:id/decision/`         | Admin  | Approve / reject a payout (balance-safe)                 |
+| POST   | `/monetization/payouts/:id/mark-paid/`        | Admin  | Mark an approved payout as paid (offline settlement)     |
+
+**Broker network** — `/api/v1/brokers/`
+
+| Method | Endpoint                       | Auth  | Description                                            |
+| ------ | ------------------------------ | ----- | ------------------------------------------------------ |
+| POST   | `/brokers/register/`           | Auth  | Submit broker profile + first verification             |
+| GET/PUT| `/brokers/profile/`            | Broker| Broker profile                                          |
+| GET    | `/brokers/dashboard/`          | Broker| Balance, pending/paid summary, recent commissions      |
+| GET    | `/brokers/commissions/`        | Broker| Own commissions (`?status=`)                           |
+| GET    | `/brokers/payouts/`            | Broker| Own payout requests                                    |
+| POST   | `/brokers/payouts/request/`    | Broker| Request a payout of earned commissions                 |
+| POST   | `/brokers/:id/review/`         | Admin | Review a broker verification                           |
+
+**Corporate housing** — `/api/v1/corporate/`
+
+| Method | Endpoint                                | Auth        | Description                                    |
+| ------ | --------------------------------------- | ----------- | ---------------------------------------------- |
+| GET/POST | `/corporate/accounts/`               | Auth        | List / create corporate accounts               |
+| GET    | `/corporate/accounts/:id/`              | Member/Admin| Account detail                                 |
+| GET/POST | `/corporate/accounts/:id/members/`   | Owner/Admin | List / invite members by email                 |
+| POST   | `/corporate/bulk-booking/`              | Owner/Admin | Book a room for several members (partial success) |
+| GET    | `/corporate/invoices/`                  | Auth        | Own corporate invoices                         |
+| GET    | `/corporate/admin/`                     | Company admin | Overview + account approvals                   |
+
+**Add-on services marketplace** — `/api/v1/marketplace/`
+
+| Method | Endpoint                                 | Auth    | Description                                        |
+| ------ | ---------------------------------------- | ------- | -------------------------------------------------- |
+| POST   | `/marketplace/providers/register/`       | Auth    | Register a service-provider business               |
+| GET    | `/marketplace/providers/me/`             | Provider| My provider profile                                |
+| GET    | `/marketplace/services/`                 | Auth    | Active service catalog (`?category=`)              |
+| GET    | `/marketplace/services/:id/`             | Auth    | Service detail                                     |
+| GET/POST | `/marketplace/orders/`                 | Auth    | My orders / place an order                         |
+| POST   | `/marketplace/orders/:id/action/`        | Provider| Confirm / cancel / complete an order               |
+| GET    | `/marketplace/recommend/?booking_id=`    | Auth    | AI cross-sell recommendations after booking        |
+
+**Insurance & credit partnerships** — `/api/v1/partner-services/`
+
+| Method | Endpoint                                          | Auth   | Description                                    |
+| ------ | ------------------------------------------------- | ------ | ---------------------------------------------- |
+| GET    | `/partner-services/insurance/products/`           | Public | Insurance product catalog                      |
+| GET/POST | `/partner-services/insurance/quotes/`           | Auth   | My quotes / request a quote                    |
+| POST   | `/partner-services/insurance/quotes/:id/action/`  | Partner| Issue / decline / cancel a quote               |
+| GET    | `/partner-services/credit/eligibility/`           | Auth   | Renter credit eligibility (pre-approved limit) |
+
 ### KYC Verification
 
 | Method | Endpoint                                                      | Auth        | Description                                                          |
@@ -1116,7 +1193,7 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 | `/api/v1/redoc/`  | ReDoc                 |
 | `/api/v1/schema/` | OpenAPI schema (YAML) |
 
-> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook) · [`docs/RENTORA_COPILOT.md`](docs/RENTORA_COPILOT.md) (Copilot architecture, API, config) · [`docs/AI_PRICING_V2.md`](docs/AI_PRICING_V2.md) (pricing suggestion v2) · [`docs/DUPLICATE_IMAGE_FRAUD.md`](docs/DUPLICATE_IMAGE_FRAUD.md) (duplicate-image detector) · [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) + [`docs/MAP_API.md`](docs/MAP_API.md) + [`docs/MAP_SCORING.md`](docs/MAP_SCORING.md) (intelligent map v2) · [`docs/VOICE_SEARCH_PLAYBOOK.md`](docs/VOICE_SEARCH_PLAYBOOK.md) (voice search) · [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md) (verified feature matrix) · [`docs/PWA.md`](docs/PWA.md) (PWA architecture, manifest, SW strategy, install/update/offline behavior) · [`docs/phase-12-trust-safety-v2.md`](docs/phase-12-trust-safety-v2.md) (Phase 12 Trust & Safety V2) · [`docs/TENANT_KYC.md`](docs/TENANT_KYC.md) + [`docs/CHAT_SAFETY.md`](docs/CHAT_SAFETY.md) (tenant KYC + chat safety) · [`docs/tier2-upgrades.md`](docs/tier2-upgrades.md) (AI chat-safety classifier, self-hosted analytics, photo forensics, OSRM ETA, ClamAV, KYC auto pre-screen, react-router v7) · [`docs/tier3-upgrades.md`](docs/tier3-upgrades.md) (RAG Copilot listing mode, EN⇄BN i18n, production-grade embeddings, E2E expansion, tenant trust signals) · [`docs/tier4-upgrades.md`](docs/tier4-upgrades.md) (AI advisor, negotiation assistant, agreement checker, landlord copilot, property comparison, demand forecast, smart alerts, hosted embeddings, KYC auto pre-screen, Playwright E2E) · [`docs/tier5-upgrades.md`](docs/tier5-upgrades.md) (funnel analytics wiring, photo forensics v2, price recommendation, Copilot image understanding, AI listing draft)
+> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook) · [`docs/RENTORA_COPILOT.md`](docs/RENTORA_COPILOT.md) (Copilot architecture, API, config) · [`docs/AI_PRICING_V2.md`](docs/AI_PRICING_V2.md) (pricing suggestion v2) · [`docs/DUPLICATE_IMAGE_FRAUD.md`](docs/DUPLICATE_IMAGE_FRAUD.md) (duplicate-image detector) · [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) + [`docs/MAP_API.md`](docs/MAP_API.md) + [`docs/MAP_SCORING.md`](docs/MAP_SCORING.md) (intelligent map v2) · [`docs/VOICE_SEARCH_PLAYBOOK.md`](docs/VOICE_SEARCH_PLAYBOOK.md) (voice search) · [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md) (verified feature matrix) · [`docs/PWA.md`](docs/PWA.md) (PWA architecture, manifest, SW strategy, install/update/offline behavior) · [`docs/phase-12-trust-safety-v2.md`](docs/phase-12-trust-safety-v2.md) (Phase 12 Trust & Safety V2) · [`docs/TENANT_KYC.md`](docs/TENANT_KYC.md) + [`docs/CHAT_SAFETY.md`](docs/CHAT_SAFETY.md) (tenant KYC + chat safety) · [`docs/tier2-upgrades.md`](docs/tier2-upgrades.md) (AI chat-safety classifier, self-hosted analytics, photo forensics, OSRM ETA, ClamAV, KYC auto pre-screen, react-router v7) · [`docs/tier3-upgrades.md`](docs/tier3-upgrades.md) (RAG Copilot listing mode, EN⇄BN i18n, production-grade embeddings, E2E expansion, tenant trust signals) · [`docs/tier4-upgrades.md`](docs/tier4-upgrades.md) (AI advisor, negotiation assistant, agreement checker, landlord copilot, property comparison, demand forecast, smart alerts, hosted embeddings, KYC auto pre-screen, Playwright E2E) · [`docs/tier5-upgrades.md`](docs/tier5-upgrades.md) (funnel analytics wiring, photo forensics v2, price recommendation, Copilot image understanding, AI listing draft) · [`docs/phase-15-monetization-2.0.md`](docs/phase-15-monetization-2.0.md) (Phase 15 Monetization 2.0 — subscriptions, revenue ledger, brokers, corporate, marketplace, insurance/credit)
 
 ---
 

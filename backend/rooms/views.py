@@ -1256,9 +1256,99 @@ class RoomViewSet(viewsets.ModelViewSet):
                 {"detail": "You can only see recommendations for your own listings."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        # Phase 15 — Monetization 2.0: the abstraction gates the v2
+        # dynamic-pricing block behind the landlord plan entitlement.
+        from subscriptions.services.predict import price_prediction_for
+
+        return Response(price_prediction_for(request.user, room))
+
+    @extend_schema(
+        tags=["Rooms"],
+        summary="Apply the recommended dynamic price (landlord plan)",
+        description=(
+            "Premium action (server-side entitlement 'price_prediction_v2'): "
+            "writes the grounded dynamic price to the listing. Free-tier users "
+            "can view the recommendation but cannot auto-apply it. Never "
+            "auto-decides — this only runs on explicit landlord action."
+        ),
+    )
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="price-recommendation/apply",
+        permission_classes=[permissions.IsAuthenticated],
+    )
+    def apply_price_recommendation(self, request, pk=None):
+        from decimal import Decimal
+
+        from django.db import transaction
+
+        from audit.services import log_action
+        from subscriptions.services.entitlements import check_entitlement
+
+        room = self.get_object()
+        is_admin = request.user.is_staff or request.user.role == request.user.Role.ADMIN
+        if room.owner_id != request.user.id and not is_admin:
+            return Response(
+                {"detail": "You can only change your own listings."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if not check_entitlement(request.user, "price_prediction_v2") and not is_admin:
+            return Response(
+                {
+                    "detail": "Dynamic price application requires the price_prediction_v2 "
+                    "entitlement (landlord plan)."
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         from .price_recommendation import listing_price_recommendation
 
-        return Response(listing_price_recommendation(room))
+        recommendation = listing_price_recommendation(room)
+        dynamic = recommendation.get("dynamic_price")
+        if dynamic is None:
+            return Response(
+                {"detail": "No grounded dynamic price available right now."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            locked = Room.objects.select_for_update().get(pk=room.pk)
+            if locked.owner_id != request.user.id and not is_admin:
+                return Response(
+                    {"detail": "You can only change your own listings."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            new_price = Decimal(str(dynamic))
+            locked.price = new_price
+            locked.save(update_fields=["price", "updated_at"])
+            log_action(
+                actor=request.user,
+                action="room.price_applied",
+                target=locked,
+                detail={
+                    "from": str(room.price),
+                    "to": str(new_price),
+                    "valid_until": recommendation.get("valid_until"),
+                },
+            )
+
+        from analytics.services import record_event
+
+        record_event(
+            request.user,
+            "price_applied",
+            category="monetization",
+            properties={"room_id": locked.pk, "price": str(new_price)},
+            path="/dashboard",
+        )
+        return Response(
+            {
+                "room_id": locked.pk,
+                "price": str(new_price),
+                "valid_until": recommendation.get("valid_until"),
+            }
+        )
 
     @extend_schema(
         tags=["Rooms"],

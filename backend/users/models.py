@@ -9,6 +9,9 @@ class User(AbstractUser):
         TENANT = "tenant", "Tenant"
         LANDLORD = "landlord", "Landlord"
         ADMIN = "admin", "Admin"
+        # Phase 15 — Monetization 2.0: verified middlemen who refer tenants
+        # and earn commissions on approved bookings.
+        BROKER = "broker", "Broker"
 
     class Gender(models.TextChoices):
         MALE = "male", "Male"

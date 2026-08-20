@@ -1,0 +1,25 @@
+{% extends "emails/base_email.html" %}
+{% block content %}
+  <h2 style="margin: 0 0 12px; font-size: 18px; color: #0f172a;">Your subscription renews soon</h2>
+  <p style="margin: 0 0 8px;">Hi {{ user.first_name|default:user.username }},</p>
+  <p style="margin: 0 0 20px;">
+    Your <strong>{{ plan_name }}</strong> subscription renews on
+    <strong>{{ period_end|date:"d M Y" }}</strong>. Renew before the period ends to
+    keep your features active without interruption.
+  </p>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+    <tr>
+      <td style="padding: 16px 20px; font-size: 14px; color: #334155;">
+        <strong>Plan:</strong> {{ plan_name }}<br />
+        <strong>Renewal date:</strong> {{ period_end|date:"d M Y" }}
+      </td>
+    </tr>
+  </table>
+
+  <p style="margin: 20px 0 0;">
+    <a href="/dashboard?tab=monetization" style="background: #f97316; color: #ffffff; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; display: inline-block;">
+      Manage subscription
+    </a>
+  </p>
+{% endblock %}
