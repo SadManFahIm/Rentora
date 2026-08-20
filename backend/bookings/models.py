@@ -26,6 +26,24 @@ class Booking(models.Model):
     agreement_signed = models.BooleanField(default=False)
     notes = models.TextField(blank=True)
 
+    # Phase 15 — Monetization 2.0 attribution: the verified broker whose
+    # referral code was used on this booking (earns a commission on approval).
+    broker_referral = models.ForeignKey(
+        "brokers.BrokerProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="referrals",
+    )
+    # The corporate account that booked this room in bulk (drives invoicing).
+    corporate_account = models.ForeignKey(
+        "corporate.CorporateAccount",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="bookings",
+    )
+
     # Security deposit tracking. `security_deposit_amount` of 0 means no
     # deposit is required for this booking. Whether an unpaid deposit blocks
     # approval is a global, configurable business rule — see

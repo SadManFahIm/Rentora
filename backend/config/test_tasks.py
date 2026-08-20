@@ -13,6 +13,7 @@ class CeleryWiringTests(TestCase):
         import pricing.tasks  # noqa: F401
         import rooms.tasks  # noqa: F401
         import savedsearches.tasks  # noqa: F401
+        import subscriptions.tasks  # noqa: F401
         import users.tasks  # noqa: F401
         from config.celery import app
 
@@ -27,6 +28,8 @@ class CeleryWiringTests(TestCase):
             "savedsearches.tasks.check_saved_searches",
             "savedsearches.tasks.send_saved_search_digests",
             "analytics.tasks.generate_market_report",
+            "subscriptions.tasks.process_subscription_renewals",
+            "subscriptions.tasks.send_subscription_reminders",
         ]:
             with self.subTest(task=task_name):
                 self.assertIn(task_name, app.tasks)
@@ -48,6 +51,8 @@ class CeleryWiringTests(TestCase):
                 "send-saved-search-digests",
                 "generate-market-report",
                 "detect-fraud-rings",
+                "process-subscription-renewals",
+                "send-subscription-reminders",
             },
         )
 

@@ -87,6 +87,13 @@ INSTALLED_APPS = [
     "moderation",
     "disputes",
     "analytics",
+    # Phase 15 — Monetization 2.0
+    "subscriptions",
+    "monetization",
+    "brokers",
+    "corporate",
+    "marketplace",
+    "partner_services",
 ]
 
 # ============================================================
@@ -715,6 +722,40 @@ LISTING_TIER_PRICING = {
 LISTING_TIER_DURATION_DAYS = 30
 
 
+# ============================================================
+# Phase 15 — Monetization 2.0 (Revenue)
+# ============================================================
+# Master switches for each revenue domain (env convention, default on).
+SUBSCRIPTIONS_ENABLED = os.getenv("SUBSCRIPTIONS_ENABLED", "True") == "True"
+BROKER_NETWORK_ENABLED = os.getenv("BROKER_NETWORK_ENABLED", "True") == "True"
+CORPORATE_ENABLED = os.getenv("CORPORATE_ENABLED", "True") == "True"
+MARKETPLACE_ENABLED = os.getenv("MARKETPLACE_ENABLED", "True") == "True"
+INSURANCE_ENABLED = os.getenv("INSURANCE_ENABLED", "True") == "True"
+CREDIT_ENABLED = os.getenv("CREDIT_ENABLED", "True") == "True"
+MONETIZATION_LEDGER_ENABLED = os.getenv("MONETIZATION_LEDGER_ENABLED", "True") == "True"
+
+# Feature keys every signed-up user gets for free (the free tier baseline).
+SUBSCRIPTION_FREE_FEATURES = ["price_prediction_basic"]
+
+# Length (days) of one subscription billing period.
+SUBSCRIPTION_PERIOD_DAYS = {"monthly": 30, "yearly": 365}
+
+# Default commission rates (%) per revenue scope, used when no CommissionRule
+# exists for the scope. Values are server-side percentages.
+COMMISSION_DEFAULT_RATES = {
+    "broker": 2.0,
+    "corporate": 1.0,
+    "marketplace": 10.0,
+    "insurance": 8.0,
+    "credit": 3.0,
+}
+
+# Insurance/credit provider selection (mirrors KYC/VISION provider pattern).
+INSURANCE_PROVIDER = os.getenv("INSURANCE_PROVIDER", "rule")
+INSURANCE_GATEWAY_URL = os.getenv("INSURANCE_GATEWAY_URL", "")
+CREDIT_PROVIDER = os.getenv("CREDIT_PROVIDER", "rule")
+
+
 # Number of monthly installments to generate for an approved booking whose
 # `check_out` is open-ended (no fixed lease end date).
 DEFAULT_LEASE_SCHEDULE_MONTHS = int(os.getenv("DEFAULT_LEASE_SCHEDULE_MONTHS", "12"))
@@ -780,6 +821,16 @@ CELERY_BEAT_SCHEDULE = {
     "detect-fraud-rings": {
         "task": "fraud.tasks.detect_rings",
         "schedule": crontab(minute=0, hour=2, day_of_week=1),
+    },
+    # Phase 15 — Monetization 2.0: expire finished subscriptions + send
+    # renewal reminders daily.
+    "process-subscription-renewals": {
+        "task": "subscriptions.tasks.process_subscription_renewals",
+        "schedule": 86400.0,
+    },
+    "send-subscription-reminders": {
+        "task": "subscriptions.tasks.send_subscription_reminders",
+        "schedule": 86400.0,
     },
 }
 
