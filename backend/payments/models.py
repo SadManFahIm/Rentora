@@ -22,6 +22,10 @@ class Payment(models.Model):
         # room's tier for LISTING_TIER_DURATION_DAYS.
         LISTING_FEATURE = "listing_feature", "Listing Feature"
         LISTING_PREMIUM = "listing_premium", "Listing Premium"
+        # Phase 15 — Monetization 2.0: a subscription checkout. Attached to a
+        # `subscription` (not a booking/room); on success the subscription is
+        # activated/extended (subscriptions.services.activate).
+        SUBSCRIPTION = "subscription", "Subscription"
 
     class Status(models.TextChoices):
         INITIATED = "initiated", "Initiated"
@@ -47,6 +51,15 @@ class Payment(models.Model):
     )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="payments"
+    )
+    # Phase 15 — Monetization 2.0: set for subscription payments. String ref
+    # (not imported) to keep payments→subscriptions→payments import-free.
+    subscription = models.ForeignKey(
+        "subscriptions.Subscription",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
     )
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     payment_method = models.CharField(

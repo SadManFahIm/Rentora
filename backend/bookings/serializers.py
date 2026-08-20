@@ -65,6 +65,10 @@ class BookingSerializer(serializers.ModelSerializer):
 class BookingCreateSerializer(serializers.ModelSerializer):
     """Used by tenants to create a booking. `tenant` is set from the request in the view."""
 
+    # Phase 15 — Monetization 2.0: optional broker referral code. Resolved
+    # server-side to a verified broker; never trusted client-side.
+    broker_code = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
     class Meta:
         model = Booking
         fields = [
@@ -75,11 +79,22 @@ class BookingCreateSerializer(serializers.ModelSerializer):
             "monthly_rent",
             "notes",
             "security_deposit_amount",
+            "broker_code",
         ]
         extra_kwargs = {
             "monthly_rent": {"required": False},
             "security_deposit_amount": {"required": False},
         }
+
+    def validate_broker_code(self, value):
+        if not value:
+            return None
+        from brokers.services import resolve_referral
+
+        broker = resolve_referral(value)
+        if broker is None:
+            raise serializers.ValidationError("Invalid or unverified broker code.")
+        return broker
 
     def validate(self, attrs):
         request = self.context["request"]
@@ -107,6 +122,8 @@ class BookingCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data.setdefault("monthly_rent", validated_data["room"].price)
         validated_data["tenant"] = self.context["request"].user
+        broker = validated_data.pop("broker_code", None)
+        validated_data["broker_referral"] = broker
         return super().create(validated_data)
 
 
