@@ -98,12 +98,17 @@ immutable browser caching, `backfill_variants` command, and Celery task.
   delay + max retries. Prod settings warn loudly if `CELERY_BROKER_URL` is
   unset.
 
-### Stage 8 — Analytics Retention / Taxonomy  ✅ (existing + wired)
-Feature-flag + experiment analytics were delivered in Stage 3 and are
-taxonomy-consistent with the existing `analytics` event store (exposure →
-`experiment_exposure`, conversion → `experiment_conversion` with experiment
-context). Retention policy: the existing event table already carries
-per-event `created_at` for periodic purging.
+### Stage 8 — Analytics Retention / Taxonomy  ✅
+Feature-flag + experiment analytics are taxonomy-consistent with the existing
+`analytics` event store (exposure → `experiment_exposure`, conversion →
+`experiment_conversion` with experiment context). Stage 8 ships the retention
+and taxonomy halves:
+- **Retention purge**: `analytics.tasks.purge_expired_events` deletes events
+  older than `ANALYTICS_EVENT_RETENTION_DAYS` (default 365), scheduled daily
+  via Celery beat — keeps the first-party store bounded.
+- **Taxonomy endpoint**: `GET /api/v1/analytics/taxonomy/` (admin only) lists
+  every event name with category, lifetime count and first/last occurrence,
+  for auditing what the product captures.
 
 ### Stage 9 — A/B Experiment Polish  ✅
 Delivered within Stage 3 (deterministic assignment, persisted assignments,
@@ -195,11 +200,9 @@ invoicing/payouts. A future phase must add: a `Currency` model + per-listing
 1. **PostgreSQL integration gate** — CI job that runs the suite against
    PostgreSQL 16 + pgvector and flips `VECTOR_SEARCH_ENABLED=True`.
 2. **k6 load-test pipeline** — run `load-tests/` suites in CI on each release.
-3. **Analytics retention job** — scheduled purge of events older than a policy
-   TTL, plus a taxonomy report endpoint for the admin.
-4. **Multi-currency** — if the business needs it: `Currency` model, FX
+3. **Multi-currency** — if the business needs it: `Currency` model, FX
    provider, conversion-aware ledger.
-5. **Cellar / object-storage media** — move public images to an S3-compatible
+4. **Cellar / object-storage media** — move public images to an S3-compatible
    bucket with a CDN in front, keeping the content-hash variant naming.
 
 ---

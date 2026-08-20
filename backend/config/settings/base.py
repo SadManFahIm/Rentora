@@ -882,6 +882,11 @@ EMBEDDING_INDEX_ON_SAVE = (
 # emails). The public GET endpoint stays read-only regardless.
 MARKET_REPORT_ENABLED = os.getenv("MARKET_REPORT_ENABLED", "True") == "True"
 
+# Analytics retention (Phase 16, Stage 8) — events older than this many days
+# are purged daily by analytics.tasks.purge_expired_events (keeps the
+# first-party event store bounded and GDPR-friendly).
+ANALYTICS_EVENT_RETENTION_DAYS = int(os.getenv("ANALYTICS_EVENT_RETENTION_DAYS", "365"))
+
 # Scheduled maintenance (only effective with a real broker + `celery beat`):
 CELERY_BEAT_SCHEDULE = {
     "expire-listing-tiers": {
@@ -916,6 +921,11 @@ CELERY_BEAT_SCHEDULE = {
     "generate-market-report": {
         "task": "analytics.tasks.generate_market_report",
         "schedule": crontab(minute=0, hour=6, day_of_week=1),
+    },
+    # Phase 16, Stage 8 — daily purge of analytics events past retention.
+    "purge-expired-analytics": {
+        "task": "analytics.tasks.purge_expired_events",
+        "schedule": 86400.0,
     },
     # Phase 15, D8 — weekly fraud-ring recompute + re-scan (Monday 02:00).
     "detect-fraud-rings": {
