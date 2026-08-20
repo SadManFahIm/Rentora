@@ -48,3 +48,6 @@ frontend/scripts/.lighthouse/
 
 # Logs (local runserver/vite output)
 *.log
+
+# Phase 16 private uploads (generated)
+backend/private_media/

@@ -8,8 +8,9 @@ from django.db import transaction
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status
 from rest_framework.response import Response
-from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
+
+from config.throttling import TrustedUserRateThrottle
 
 from .models import MAX_PROPERTIES_KEYS, MAX_PROPERTY_LEN, Event
 from .services import build_summary
@@ -22,7 +23,7 @@ _SESSION_MAX_LEN = 64
 _PATH_MAX_LEN = 300
 
 
-class AnalyticsCaptureRateThrottle(UserRateThrottle):
+class AnalyticsCaptureRateThrottle(TrustedUserRateThrottle):
     """A busy visitor can generate a lot of events — but a hard cap still
     stops a scripted flood from filling the store. Scope rate lives in
     ``DEFAULT_THROTTLE_RATES['analytics']``."""

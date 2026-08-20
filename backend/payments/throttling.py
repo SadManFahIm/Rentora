@@ -1,9 +1,11 @@
 """Payment-specific DRF throttles (mirrors config/throttling.py's AuthRateThrottle)."""
 
-from rest_framework.throttling import SimpleRateThrottle, UserRateThrottle
+from rest_framework.throttling import SimpleRateThrottle
+
+from config.throttling import TrustedClientIPMixin, TrustedUserRateThrottle
 
 
-class PaymentInitiateRateThrottle(UserRateThrottle):
+class PaymentInitiateRateThrottle(TrustedUserRateThrottle):
     """Caps how often one authenticated user can start a payment session.
 
     Rate is read from ``DEFAULT_THROTTLE_RATES['payment_initiate']``
@@ -15,7 +17,7 @@ class PaymentInitiateRateThrottle(UserRateThrottle):
     scope = "payment_initiate"
 
 
-class WebhookCallbackRateThrottle(SimpleRateThrottle):
+class WebhookCallbackRateThrottle(TrustedClientIPMixin, SimpleRateThrottle):
     """Per-IP throttle for gateway callback endpoints.
 
     These views use `AllowAny`/no auth (the gateway itself hits them, not a

@@ -5,12 +5,15 @@ from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from rooms.models import Room
 
 from .models import Payment
+from .services import bkash
 from .views import ListingTierUpgradeInitiateView
 
 User = get_user_model()
@@ -161,3 +164,56 @@ class ListingTierUpgradeTests(APITestCase):
 
         pdf = generate_receipt_pdf(payment)
         self.assertTrue(pdf.startswith(b"%PDF"))
+
+
+class BkashGrantTokenTests(TestCase):
+    """Phase 16 — grant-token cache + single-flight lock (no stampede)."""
+
+    def _fake_post(self, token="tok-1", expires_in=3600):
+        class FakeResponse:
+            status_code = 200
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"id_token": token, "expires_in": expires_in}
+
+        return FakeResponse()
+
+    def setUp(self):
+        cache.clear()
+
+    def test_token_is_cached(self):
+        with patch.object(bkash.requests, "post", return_value=self._fake_post()) as mock:
+            first = bkash.get_grant_token()
+            second = bkash.get_grant_token()
+        self.assertEqual(first, "tok-1")
+        self.assertEqual(second, "tok-1")
+        # One upstream grant, two local reads.
+        self.assertEqual(mock.call_count, 1)
+
+    def test_force_refresh_always_grants(self):
+        with patch.object(
+            bkash.requests, "post", side_effect=[self._fake_post(), self._fake_post()]
+        ) as mock:
+            bkash.get_grant_token()
+            bkash.get_grant_token(force_refresh=True)
+        self.assertEqual(mock.call_count, 2)
+
+    def test_single_flight_lock_allows_waiting_caller_to_read_cache(self):
+        """The lock winner grants; a loser re-reads the cache instead of re-granting."""
+        with patch.object(bkash.requests, "post", return_value=self._fake_post()):
+            bkash.get_grant_token()  # populate cache
+        cache.delete(bkash.GRANT_TOKEN_CACHE_KEY)
+        cache.set(bkash.GRANT_TOKEN_LOCK_KEY, "held-by-other", timeout=10)
+        with patch.object(bkash.requests, "post", return_value=self._fake_post("tok-2")) as mock2:
+            token = bkash.get_grant_token()
+        # Lock held → loser reads cache (empty) → falls through to a direct grant.
+        self.assertEqual(token, "tok-2")
+        self.assertEqual(mock2.call_count, 1)
+
+    def test_lock_is_released_after_grant(self):
+        with patch.object(bkash.requests, "post", return_value=self._fake_post()):
+            bkash.get_grant_token()
+        self.assertIsNone(cache.get(bkash.GRANT_TOKEN_LOCK_KEY))

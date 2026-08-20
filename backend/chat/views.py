@@ -17,8 +17,9 @@ from rest_framework.filters import SearchFilter
 from rest_framework.parsers import MultiPartParser
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
+
+from config.throttling import TrustedUserRateThrottle
 
 from .antivirus import scan_bytes
 from .models import ChatRoom, ChatRoomMembership, ChatSafetyEvent, Message, Report, UserBlock
@@ -396,14 +397,14 @@ class OnlineStatusView(APIView):
         return [v for v in query_ids.split(",") if v]
 
 
-class ChatUploadRateThrottle(UserRateThrottle):
+class ChatUploadRateThrottle(TrustedUserRateThrottle):
     """Uploads are costlier than a normal API call — throttled tighter than
     the general 'user' rate. Scope rate lives in DEFAULT_THROTTLE_RATES."""
 
     scope = "chat_upload"
 
 
-class ChatTranslateRateThrottle(UserRateThrottle):
+class ChatTranslateRateThrottle(TrustedUserRateThrottle):
     """Translation calls hit the gateway (when configured) — a dedicated
     scope keeps one user from burning quota. Rate lives in
     DEFAULT_THROTTLE_RATES."""
@@ -600,7 +601,7 @@ def _is_admin_user(user) -> bool:
     return user.is_staff or user.role == "admin"
 
 
-class ReportRateThrottle(UserRateThrottle):
+class ReportRateThrottle(TrustedUserRateThrottle):
     """Reports are moderation actions — a dedicated scope stops one user from
     flooding the admin queue with reports (of the same or many targets). Rate
     lives in ``DEFAULT_THROTTLE_RATES['report']``; ``get_rate`` reads the live
