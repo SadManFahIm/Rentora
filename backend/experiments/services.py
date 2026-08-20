@@ -22,7 +22,9 @@ def _identifier(user, anonymous_id: str | None, request) -> str:
 
 
 def _bucket(key: str, ident: str) -> int:
-    digest = hashlib.md5(f"{key}:{ident}".encode()).hexdigest()[:8]
+    # nosec B324: MD5 here is deterministic bucketing (stable variant assignment),
+    # not a security primitive — an attacker gain from collisions is nil.
+    digest = hashlib.md5(f"{key}:{ident}".encode()).hexdigest()[:8]  # nosec B324
     return int(digest, 16) % 100
 
 
