@@ -54,7 +54,10 @@ async function main() {
   await page.goto(`${BASE}/chat?room=6`, { waitUntil: "networkidle" });
   await sleep(2500);
   const translateBtns = page.locator("button[aria-label='Translate message']");
-  await translateBtns.last().waitFor({ timeout: 15000 }).catch(() => {});
+  await translateBtns
+    .last()
+    .waitFor({ timeout: 15000 })
+    .catch(() => {});
   await jsClick(translateBtns.last());
   await sleep(3500);
   await page
@@ -88,7 +91,10 @@ async function main() {
   await jsClick(page.getByRole("button", { name: /Uttara.*room/i }).first());
   await sleep(6000);
   const speakBtn = page.getByRole("button", { name: /Read aloud/i });
-  await speakBtn.first().waitFor({ timeout: 20000 }).catch(() => {});
+  await speakBtn
+    .first()
+    .waitFor({ timeout: 20000 })
+    .catch(() => {});
   const widget = page
     .locator("text=/Rentora Copilot/i")
     .first()
@@ -120,12 +126,12 @@ async function main() {
   }, API);
   if (!meta) throw new Error("could not fetch room 90009 meta");
   const clicked = await page.evaluate(({ price, area }) => {
-    const cands = [...document.querySelectorAll("article, [class*='card'], [class*='rounded-2xl']")].filter(
-      (el) => {
-        const t = el.textContent || "";
-        return t.includes(area) && t.includes(price);
-      }
-    );
+    const cands = [
+      ...document.querySelectorAll("article, [class*='card'], [class*='rounded-2xl']"),
+    ].filter((el) => {
+      const t = el.textContent || "";
+      return t.includes(area) && t.includes(price);
+    });
     for (const el of cands) {
       let node = el;
       while (node) {
@@ -186,7 +192,10 @@ async function main() {
   await page.goto(`${BASE}/dashboard?tab=fraud`, { waitUntil: "networkidle" });
   await sleep(2500);
   const ringsToggle = page.getByRole("button", { name: /Show fraud rings/i });
-  await ringsToggle.first().waitFor({ timeout: 15000 }).catch(() => {});
+  await ringsToggle
+    .first()
+    .waitFor({ timeout: 15000 })
+    .catch(() => {});
   await jsClick(ringsToggle.first());
   await sleep(3500);
   const ringsSection = page
