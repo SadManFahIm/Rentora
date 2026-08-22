@@ -234,14 +234,14 @@ def _alert_admins(breaches: list):
             for breach in breaches[:5]:
                 create_notification(
                     user=admin,
-                    subject=f"Model drift: {breach['metric_name']} breached",
-                    body=(
+                    notification_type="model_drift",
+                    title=f"Model drift: {breach['metric_name']} breached",
+                    message=(
                         f"{breach['metric_name']}={breach['value']:.4f} "
                         f"(baseline={breach['baseline']}). "
                         "Retrain request has been created."
                     ),
-                    category="model_drift",
-                    url="/admin/ml_models/driftmetric/",
+                    action_url="/admin/ml_models/driftmetric/",
                 )
     except Exception:
         logger.exception("Failed to send drift alerts")
