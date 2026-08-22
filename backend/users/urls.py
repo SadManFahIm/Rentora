@@ -2,12 +2,17 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    FaceMatchView,
     KycAuditTrailView,
     KycDocumentFileView,
     KycDocumentListCreateView,
     KycPendingApplicationsView,
     KycReviewView,
     KycSlaStatsView,
+    LivenessConsentView,
+    LivenessInitView,
+    LivenessStatusView,
+    LivenessVerifyView,
     ReferralInfoView,
     TenantKycFileView,
     TenantKycPendingApplicationsView,
@@ -50,6 +55,12 @@ urlpatterns = [
         TenantKycReviewView.as_view(),
         name="tenant-kyc-review",
     ),
+    # Phase 17 — KYC Liveness + Face-Match (Stage 4)
+    path("kyc/liveness/init/", LivenessInitView.as_view(), name="kyc-liveness-init"),
+    path("kyc/liveness/verify/", LivenessVerifyView.as_view(), name="kyc-liveness-verify"),
+    path("kyc/liveness/status/", LivenessStatusView.as_view(), name="kyc-liveness-status"),
+    path("kyc/face-match/", FaceMatchView.as_view(), name="kyc-face-match"),
+    path("kyc/consent/", LivenessConsentView.as_view(), name="kyc-consent"),
     path("referral/", ReferralInfoView.as_view(), name="referral-info"),
     *router.urls,
 ]

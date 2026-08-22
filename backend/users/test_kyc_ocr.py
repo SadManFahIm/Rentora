@@ -212,4 +212,17 @@ class AutoScreenIntegrationTests(APITestCase):
     def test_ocr_score_boost_values(self):
         self.assertEqual(ocr_score_boost(None), 0)
         self.assertEqual(ocr_score_boost({"nid_number": ""}), 0)
-        self.assertEqual(ocr_score_boost({"nid_number": "12345678901234567"}), 5)
+        self.assertEqual(
+            ocr_score_boost({"nid_number": "12345678901234567", "confidence": "medium"}),
+            5,
+        )
+        # Low confidence does not meet default medium threshold
+        self.assertEqual(
+            ocr_score_boost({"nid_number": "12345678901234567", "confidence": "low"}),
+            0,
+        )
+        # High confidence meets any threshold
+        self.assertEqual(
+            ocr_score_boost({"nid_number": "12345678901234567", "confidence": "high"}),
+            5,
+        )

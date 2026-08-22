@@ -30,6 +30,15 @@ class CeleryWiringTests(TestCase):
             "analytics.tasks.generate_market_report",
             "subscriptions.tasks.process_subscription_renewals",
             "subscriptions.tasks.send_subscription_reminders",
+            # Phase 17 — task stubs
+            "fraud.tasks.rebuild_fraud_graph",
+            "fraud.tasks.update_graph_incremental",
+            "fraud.tasks.scan_review_trust",
+            "fraud.tasks.detect_review_anomalies",
+            "fraud.tasks.check_model_drift",
+            "fraud.tasks.purge_expired_liveness",
+            "fraud.tasks.alert_graph_anomalies",
+            "fraud.tasks.scan_photo_geo_mismatches",
         ]:
             with self.subTest(task=task_name):
                 self.assertIn(task_name, app.tasks)
@@ -54,6 +63,15 @@ class CeleryWiringTests(TestCase):
                 "process-subscription-renewals",
                 "send-subscription-reminders",
                 "purge-expired-analytics",
+                # Phase 17 — Graph & Deep Trust
+                "rebuild-fraud-graph",
+                "update-graph-incremental",
+                "scan-review-trust",
+                "detect-review-anomalies",
+                "check-model-drift",
+                "purge-expired-liveness",
+                "alert-graph-anomalies",
+                "scan-photo-geo-mismatches",
             },
         )
 

@@ -75,3 +75,49 @@ class FraudReviewRequestSerializer(serializers.Serializer):
     """Admin decision on an open report."""
 
     action = serializers.ChoiceField(choices=["reviewed", "dismissed"])
+
+
+class GraphNodeSerializer(serializers.ModelSerializer):
+    entity_type_display = serializers.CharField(source="get_entity_type_display", read_only=True)
+
+    class Meta:
+        from .models import GraphNode
+
+        model = GraphNode
+        fields = [
+            "id",
+            "entity_type",
+            "entity_type_display",
+            "entity_id",
+            "label",
+            "metadata",
+            "risk_score",
+            "community_id",
+            "first_seen",
+            "last_seen",
+        ]
+        read_only_fields = fields
+
+
+class GraphEdgeSerializer(serializers.ModelSerializer):
+    edge_type_display = serializers.CharField(source="get_edge_type_display", read_only=True)
+    strength_display = serializers.CharField(source="get_strength_display", read_only=True)
+
+    class Meta:
+        from .models import GraphEdge
+
+        model = GraphEdge
+        fields = [
+            "id",
+            "source",
+            "target",
+            "edge_type",
+            "edge_type_display",
+            "strength",
+            "strength_display",
+            "weight",
+            "evidence",
+            "first_seen",
+            "last_seen",
+        ]
+        read_only_fields = fields

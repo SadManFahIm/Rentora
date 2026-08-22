@@ -63,6 +63,12 @@ class Booking(models.Model):
 
 
 class Review(models.Model):
+    class ModerationStatus(models.TextChoices):
+        APPROVED = "approved", "Approved"
+        PENDING = "pending", "Pending Moderation"
+        REJECTED = "rejected", "Rejected"
+        ESCALATED = "escalated", "Escalated"
+
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="reviews")
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reviews"
@@ -70,6 +76,18 @@ class Review(models.Model):
     rating = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
     comment = models.TextField()
     verified_stay = models.BooleanField(default=False)
+    # Phase 17 — Fake-Review Detection (Stage 2 foundation)
+    moderation_status = models.CharField(
+        max_length=16,
+        choices=ModerationStatus.choices,
+        default=ModerationStatus.APPROVED,
+        help_text="Moderation queue status. Default 'approved' preserves existing behaviour.",
+    )
+    trust_score = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Computed trust score 0-100. Null until scored by the review-trust detector.",
+    )
     # Landlord reply (Phase 10 — Reviews v2): the room owner can answer a
     # review once; `reply` text + `replied_at` timestamp together mean "has
     # been answered".

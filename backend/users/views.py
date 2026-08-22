@@ -12,14 +12,20 @@ from notifications.emails import send_html_email
 from notifications.models import Notification
 from notifications.utils import create_notification
 
-from .models import KycDocument, TenantVerification, User
+from .models import KycDocument, LivenessChallenge, LivenessConsent, TenantVerification, User
 from .serializers import (
+    FaceMatchSerializer,
     KycAuditEntrySerializer,
     KycDocumentSerializer,
     KycPendingUserSerializer,
     KycReviewRequestSerializer,
     KycSlaSerializer,
     KycUploadRequestSerializer,
+    LivenessChallengeSerializer,
+    LivenessConsentRequestSerializer,
+    LivenessConsentSerializer,
+    LivenessInitSerializer,
+    LivenessVerifySerializer,
     TenantKycPendingSerializer,
     TenantKycReviewRequestSerializer,
     TenantVerificationSerializer,
@@ -832,6 +838,325 @@ class TenantKycReviewView(APIView):
                         )
                     )
         return Response(TenantKycPendingSerializer(target, context={"request": request}).data)
+
+
+# ============================================================
+# Phase 17 — KYC Liveness + Face-Match (Stage 4)
+# ============================================================
+
+
+class LivenessInitView(APIView):
+    """Initiate a liveness-detection challenge.
+
+    Creates a new LivenessChallenge with a pending status and an expiry time.
+    The client uses this challenge_id when submitting the selfie.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["KYC Liveness"],
+        summary="Initiate liveness challenge",
+        description="Creates a new liveness challenge with a 15-minute window. "
+        "Returns the challenge id and type.",
+        request=LivenessInitSerializer,
+        responses=LivenessChallengeSerializer,
+    )
+    def post(self, request):
+        serializer = LivenessInitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        from datetime import timedelta
+
+        from django.utils import timezone as _tz
+
+        ttl = getattr(settings, "KYC_LIVENESS_CHALLENGE_TTL", 900)
+
+        challenge = LivenessChallenge.objects.create(
+            user=request.user,
+            challenge_type=serializer.validated_data["challenge_type"],
+            expires_at=_tz.now() + timedelta(seconds=ttl),
+        )
+        return Response(
+            LivenessChallengeSerializer(challenge).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class LivenessVerifyView(APIView):
+    """Submit a selfie for liveness verification.
+
+    Validates the selfie image, runs the liveness provider, and updates
+    the challenge status. Requires the user to have granted liveness consent.
+    """
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser]
+
+    @extend_schema(
+        tags=["KYC Liveness"],
+        summary="Verify liveness with selfie",
+        description="Submit a selfie image for liveness detection. "
+        "Requires prior liveness consent.",
+        request=LivenessVerifySerializer,
+        responses=LivenessChallengeSerializer,
+    )
+    def post(self, request):
+        serializer = LivenessVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        challenge_id = serializer.validated_data["challenge_id"]
+        selfie_obj = serializer.validated_data["selfie"]
+
+        try:
+            challenge = LivenessChallenge.objects.get(pk=challenge_id, user=request.user)
+        except LivenessChallenge.DoesNotExist:
+            return Response(
+                {"detail": "Challenge not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if challenge.status != LivenessChallenge.Status.PENDING:
+            return Response(
+                {"detail": f"Challenge is already {challenge.status}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if challenge.is_expired:
+            challenge.status = LivenessChallenge.Status.EXPIRED
+            challenge.save(update_fields=["status"])
+            return Response(
+                {"detail": "Challenge has expired. Please start a new one."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Check consent
+        consent = LivenessConsent.objects.filter(
+            user=request.user,
+            consent_type=LivenessConsent.ConsentType.LIVENESS,
+        ).first()
+        if consent is None or not consent.granted:
+            return Response(
+                {"detail": "Liveness consent required. Please grant consent first."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Save selfie
+        challenge.selfie = selfie_obj
+        challenge.save(update_fields=["selfie"])
+
+        # Run liveness provider
+        from .liveness_provider import run_liveness_check
+
+        selfie_obj.seek(0)
+        selfie_bytes = selfie_obj.read()
+        result = run_liveness_check(
+            user=request.user,
+            challenge_type=challenge.challenge_type,
+            selfie_bytes=selfie_bytes,
+        )
+
+        from django.utils import timezone as _tz
+
+        challenge.completed_at = _tz.now()
+        challenge.provider_name = result.provider
+
+        if result.success:
+            score = int(result.confidence * 100)
+            challenge.status = LivenessChallenge.Status.PASSED
+            challenge.provider_score = score
+            challenge.provider_response = result.data
+        else:
+            challenge.status = LivenessChallenge.Status.FAILED
+            challenge.provider_score = 0
+            challenge.provider_response = {
+                "error": result.reason,
+                "failure_type": result.failure_type.value if result.failure_type else None,
+            }
+
+        challenge.save(
+            update_fields=[
+                "status",
+                "completed_at",
+                "provider_name",
+                "provider_score",
+                "provider_response",
+            ]
+        )
+
+        return Response(LivenessChallengeSerializer(challenge).data)
+
+
+class LivenessStatusView(APIView):
+    """Check the user's latest liveness challenge status."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["KYC Liveness"],
+        summary="Get latest liveness status",
+        description="Returns the most recent liveness challenge for the user.",
+        responses=LivenessChallengeSerializer,
+    )
+    def get(self, request):
+        challenge = (
+            LivenessChallenge.objects.filter(user=request.user).order_by("-created_at").first()
+        )
+        if challenge is None:
+            return Response(
+                {"detail": "No liveness challenge found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(LivenessChallengeSerializer(challenge).data)
+
+
+class FaceMatchView(APIView):
+    """Compare a selfie against the user's uploaded KYC document.
+
+    Requires: user has a TenantVerification with a document, has granted
+    face_match consent, and has passed a liveness check.
+    """
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser]
+
+    @extend_schema(
+        tags=["KYC Liveness"],
+        summary="Verify face match against KYC document",
+        description="Compares a selfie against the uploaded NID/passport. "
+        "Requires prior face_match consent and a passed liveness check.",
+        request=FaceMatchSerializer,
+        responses=LivenessChallengeSerializer,
+    )
+    def post(self, request):
+        serializer = FaceMatchSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        selfie_obj = serializer.validated_data["selfie"]
+
+        # Check consent
+        consent = LivenessConsent.objects.filter(
+            user=request.user,
+            consent_type=LivenessConsent.ConsentType.FACE_MATCH,
+        ).first()
+        if consent is None or not consent.granted:
+            return Response(
+                {"detail": "Face-match consent required. Please grant consent first."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Check that user has passed liveness
+        passed_liveness = LivenessChallenge.objects.filter(
+            user=request.user,
+            status=LivenessChallenge.Status.PASSED,
+        ).exists()
+        if not passed_liveness:
+            return Response(
+                {"detail": "Must pass liveness check before face match."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Get the user's KYC document
+        verification = TenantVerification.objects.filter(user=request.user).first()
+        if verification is None or not verification.file:
+            return Response(
+                {"detail": "No KYC document found. Please upload one first."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        document_path = verification.file.path
+
+        # Run face-match provider
+        from .face_match_provider import run_face_match
+
+        selfie_obj.seek(0)
+        selfie_bytes = selfie_obj.read()
+        result = run_face_match(
+            user=request.user,
+            document_path=document_path,
+            selfie_bytes=selfie_bytes,
+        )
+
+        # Update tenant verification with face-match result
+        if result.success:
+            score = int(result.confidence * 100)
+            verification.face_match_status = "passed"
+            verification.face_match_score = score
+        else:
+            verification.face_match_status = "failed"
+            verification.face_match_score = 0
+
+        verification.save(update_fields=["face_match_status", "face_match_score"])
+
+        return Response(
+            {
+                "face_match_status": verification.face_match_status,
+                "face_match_score": verification.face_match_score,
+                "provider": result.provider,
+                "reason": result.reason,
+            }
+        )
+
+
+class LivenessConsentView(APIView):
+    """Grant or revoke liveness/face-match consent.
+
+    GET returns the user's current consent status for all types.
+    POST grants or revokes a specific consent type.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["KYC Liveness"],
+        summary="Get liveness consent status",
+        description="Returns current consent status for liveness and face_match.",
+        responses=LivenessConsentSerializer(many=True),
+    )
+    def get(self, request):
+        consents = LivenessConsent.objects.filter(user=request.user)
+        return Response(LivenessConsentSerializer(consents, many=True).data)
+
+    @extend_schema(
+        tags=["KYC Liveness"],
+        summary="Grant or revoke liveness consent",
+        description="Grant or revoke consent for liveness detection or face match.",
+        request=LivenessConsentRequestSerializer,
+        responses=LivenessConsentSerializer,
+    )
+    def post(self, request):
+        serializer = LivenessConsentRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        consent_type = serializer.validated_data["consent_type"]
+        granted = serializer.validated_data["granted"]
+
+        from django.utils import timezone as _tz
+
+        consent, _created = LivenessConsent.objects.get_or_create(
+            user=request.user,
+            consent_type=consent_type,
+        )
+
+        consent.granted = granted
+        if granted:
+            consent.granted_at = _tz.now()
+            consent.revoked_at = None
+            consent.ip_address = _get_client_ip(request)
+        else:
+            consent.granted = False
+            consent.revoked_at = _tz.now()
+
+        consent.save(update_fields=["granted", "granted_at", "revoked_at", "ip_address"])
+        return Response(LivenessConsentSerializer(consent).data)
+
+
+def _get_client_ip(request) -> str | None:
+    """Extract client IP from X-Forwarded-For or REMOTE_ADDR."""
+    xff = request.META.get("HTTP_X_FORWARDED_FOR")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR")
 
 
 class ReferralInfoView(APIView):
