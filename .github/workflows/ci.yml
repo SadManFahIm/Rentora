@@ -303,6 +303,7 @@ jobs:
         with:
           name: lighthouse-report
           path: frontend/scripts/.lighthouse/
+          include-hidden-files: true
           if-no-files-found: warn
 
   e2e:
@@ -492,7 +493,13 @@ jobs:
     # (the history is still generated and validated locally).
     concurrency:
       group: coverage-history-${{ github.head_ref || github.ref }}
-      cancel-in-progress: true
+      # Wait for any in-flight run of the same group instead of cancelling it.
+      # cancel-in-progress:true marked the older run cancelled (red required
+      # check) whenever two merges to main landed within ~a minute — both runs
+      # share this group, so the newer job killed the older one mid-checkout.
+      # Serialization alone is enough: the force-push to coverage-history is
+      # already ordered, and a waiting run is green, not cancelled.
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
