@@ -203,9 +203,24 @@ def ocr_screen(verification) -> dict:
 
 
 def ocr_score_boost(extracted: dict | None) -> int:
-    """Small, explainable boost for a structurally valid NID number."""
+    """Small, explainable boost for a structurally valid NID number.
+
+    Respects ``KYC_OCR_MIN_CONFIDENCE`` — only boosts when the OCR
+    confidence meets or exceeds the configured threshold. Threshold
+    levels: ``high`` (number + name + DOB) > ``medium`` (number + one)
+    > ``low`` (number only).
+    """
     if extracted is None or not extracted.get("nid_number"):
         return 0
+
+    min_confidence = getattr(settings, "KYC_OCR_MIN_CONFIDENCE", "medium")
+    confidence_levels = {"low": 1, "medium": 2, "high": 3}
+    extracted_level = confidence_levels.get(extracted.get("confidence", "low"), 1)
+    required_level = confidence_levels.get(min_confidence, 2)
+
+    if extracted_level < required_level:
+        return 0
+
     return OCR_BOOST
 
 

@@ -99,6 +99,8 @@ INSTALLED_APPS = [
     "corporate",
     "marketplace",
     "partner_services",
+    # Phase 17 — Graph & Deep Trust
+    "ml_models",
 ]
 
 # ============================================================
@@ -463,6 +465,63 @@ KYC_OCR_ENABLED = os.getenv("KYC_OCR_ENABLED", "True") == "True"
 KYC_OCR_PROVIDER = os.getenv("KYC_OCR_PROVIDER", "none")
 KYC_OCR_GATEWAY_URL = os.getenv("KYC_OCR_GATEWAY_URL", "")
 KYC_OCR_GATEWAY_API_KEY = os.getenv("KYC_OCR_GATEWAY_API_KEY", "")
+
+# ============================================================
+# KYC Liveness detection (Phase 17, Stage 4) — see users/liveness_provider.py
+# ============================================================
+# Provider: "rules" (bundled mock, always passes) or "http" (HTTP gateway).
+# Empty = no liveness check (user can skip liveness if not required).
+KYC_LIVENESS_PROVIDER = os.getenv("KYC_LIVENESS_PROVIDER", "")
+KYC_LIVENESS_GATEWAY_URL = os.getenv("KYC_LIVENESS_GATEWAY_URL", "")
+KYC_LIVENESS_GATEWAY_API_KEY = os.getenv("KYC_LIVENESS_GATEWAY_API_KEY", "")
+# How long a liveness challenge stays valid before expiring (seconds).
+KYC_LIVENESS_CHALLENGE_TTL = int(os.getenv("KYC_LIVENESS_CHALLENGE_TTL", "900"))
+# How long liveness selfies are kept before auto-deletion (days).
+KYC_LIVENESS_RETENTION_DAYS = int(os.getenv("KYC_LIVENESS_RETENTION_DAYS", "90"))
+
+# ============================================================
+# KYC Face-match (Phase 17, Stage 4) — see users/face_match_provider.py
+# ============================================================
+# Provider: "rules" (bundled mock, always passes) or "http" (HTTP gateway).
+# Empty = no face-match check.
+KYC_FACE_MATCH_PROVIDER = os.getenv("KYC_FACE_MATCH_PROVIDER", "")
+KYC_FACE_MATCH_GATEWAY_URL = os.getenv("KYC_FACE_MATCH_GATEWAY_URL", "")
+KYC_FACE_MATCH_GATEWAY_API_KEY = os.getenv("KYC_FACE_MATCH_GATEWAY_API_KEY", "")
+
+# ============================================================
+# OCR confidence thresholds (Phase 17, Stage 4) — see users/kyc_ocr.py
+# ============================================================
+# Minimum OCR confidence level to earn the score boost.
+# "high" = number + name + DOB, "medium" = number + one of them, "low" = number only.
+KYC_OCR_MIN_CONFIDENCE = os.getenv("KYC_OCR_MIN_CONFIDENCE", "medium")
+
+# ============================================================
+# Photo-Geo Authenticity (Phase 17, Stage 5) — see fraud/services/photo_geo.py
+# ============================================================
+# Feature flag: phase17.photo_geo controls the detector (synced by sync_flags).
+# Distance threshold: photos farther than this from the room's declared lat/lng
+# are flagged as potential stock-photo or stolen-image fraud.
+PHOTO_GEO_MISMATCH_THRESHOLD_KM = float(os.getenv("PHOTO_GEO_MISMATCH_THRESHOLD_KM", "5.0"))
+
+# Phase 17 — Model Drift Monitoring (Stage 7)
+MODEL_DRIFT_THRESHOLDS = {
+    "fraud_signal_rate": {
+        "min": None,
+        "max": float(os.getenv("DRIFT_FRAUD_SIGNAL_MAX", "0.30")),
+        "baseline": 0.10,
+    },
+    "review_trust_avg": {
+        "min": float(os.getenv("DRIFT_REVIEW_TRUST_MIN", "50.0")),
+        "max": None,
+        "baseline": 70.0,
+    },
+    "photo_geo_mismatch_rate": {
+        "min": None,
+        "max": float(os.getenv("DRIFT_PHOTO_GEO_MAX", "0.15")),
+        "baseline": 0.05,
+    },
+}
+
 # Where the precomputed embedding matrix is persisted (production-grade
 # warm cache — see `manage.py prebuild_embeddings`). Defaults to
 # MEDIA_ROOT/embeddings; point this at a persistent volume in production.
@@ -941,6 +1000,40 @@ CELERY_BEAT_SCHEDULE = {
     "send-subscription-reminders": {
         "task": "subscriptions.tasks.send_subscription_reminders",
         "schedule": 86400.0,
+    },
+    # Phase 17 — Graph & Deep Trust (Stage 2 stubs — active in Stages 3-7)
+    "rebuild-fraud-graph": {
+        "task": "fraud.tasks.rebuild_fraud_graph",
+        "schedule": crontab(minute=0, hour=3, day_of_week=0),  # Sun 03:00
+    },
+    "update-graph-incremental": {
+        "task": "fraud.tasks.update_graph_incremental",
+        "schedule": 21600.0,  # every 6 hours
+    },
+    "scan-review-trust": {
+        "task": "fraud.tasks.scan_review_trust",
+        "schedule": crontab(minute=0, hour=5),  # daily 05:00
+    },
+    "detect-review-anomalies": {
+        "task": "fraud.tasks.detect_review_anomalies",
+        "schedule": crontab(minute=30, hour=5),  # daily 05:30
+    },
+    "check-model-drift": {
+        "task": "fraud.tasks.check_model_drift",
+        "schedule": crontab(minute=0, hour=6),  # daily 06:00
+    },
+    "purge-expired-liveness": {
+        "task": "fraud.tasks.purge_expired_liveness",
+        "schedule": crontab(minute=0, hour=3, day_of_week=1),  # Mon 03:00
+    },
+    "alert-graph-anomalies": {
+        "task": "fraud.tasks.alert_graph_anomalies",
+        "schedule": 21600.0,  # every 6 hours
+    },
+    # Phase 17 — Photo-Geo Authenticity (Stage 5)
+    "scan-photo-geo-mismatches": {
+        "task": "fraud.tasks.scan_photo_geo_mismatches",
+        "schedule": crontab(minute=0, hour=4, day_of_week=1),  # Mon 04:00
     },
 }
 
