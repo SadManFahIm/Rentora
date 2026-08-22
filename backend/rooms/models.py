@@ -123,6 +123,29 @@ class RoomImage(models.Model):
     image = models.ImageField(upload_to="rooms/")
     is_primary = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    # Phase 17 — Photo-Geo Authenticity (Stage 5): GPS extracted from EXIF
+    # at upload time (before strip_exif runs). Compared against the room's
+    # declared lat/lng to detect stock-photo or stolen-image fraud.
+    photo_lat = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text="Latitude extracted from photo EXIF data.",
+    )
+    photo_lng = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text="Longitude extracted from photo EXIF data.",
+    )
+    photo_gps_accuracy = models.CharField(
+        max_length=10,
+        blank=True,
+        default="",
+        help_text="GPS accuracy: high (with GPS method), medium (GPS data present), or empty.",
+    )
 
     class Meta:
         ordering = ["-is_primary", "created_at"]
