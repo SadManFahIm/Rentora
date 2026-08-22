@@ -1,0 +1,9 @@
+Hi {{ user.first_name|default:user.username }},
+
+Your {{ plan_name }} subscription renews on {{ period_end|date:"d M Y" }}.
+
+Renew before the period ends to keep your features active without interruption.
+
+Manage it here: /dashboard?tab=monetization
+
+— The {{ site_name }} Team

@@ -17,9 +17,9 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.filters import OrderingFilter
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+from config.throttling import TrustedScopedRateThrottle
 from wishlist.models import Wishlist
 
 from .dhaka_areas import (
@@ -104,6 +104,32 @@ _GEO_PARAMS = [
         description="With a reference point, keep only rooms within this many km of it.",
     ),
 ]
+
+
+def _vector_rank(query_text: str, pool_ids: list[int]) -> dict | None:
+    """Phase 16: push smart-search ranking down to pgvector embeddings.
+
+    Active only when ``VECTOR_SEARCH_ENABLED`` and embeddings exist for the
+    NL-filtered pool. Any failure returns ``None`` so the caller falls back to
+    the in-process hybrid rank — vector search can never regress keyword search.
+    """
+    if not getattr(settings, "VECTOR_SEARCH_ENABLED", False):
+        return None
+    try:
+        from embeddings.services import rooms_service
+
+        service = rooms_service()
+        if not pool_ids or not service.has_embeddings(pool_ids):
+            return None
+        matches = service.search_similar(query_text, top_k=len(pool_ids), candidate_ids=pool_ids)
+        if not matches:
+            return None
+        return {
+            "ids": [room_id for room_id, _score in matches],
+            "metadata": {"rank": "pgvector", "top_k": len(matches)},
+        }
+    except Exception:
+        return None
 
 
 @extend_schema_view(
@@ -219,6 +245,7 @@ class RoomViewSet(viewsets.ModelViewSet):
             "geocode",
             "summary",
             "similar_images",
+            "similar",
             "compare",
             "map_intel",
             "map_commute",
@@ -407,15 +434,19 @@ class RoomViewSet(viewsets.ModelViewSet):
                     settings.DEBUG or self.request.query_params.get("debug_rank") == "1"
                 )
                 if getattr(settings, "SEMANTIC_SEARCH_ENABLED", True):
-                    # Same-query cache (Tier-1 quick win): identical queries
-                    # over the same pool reuse the last ranking; bypassed for
-                    # authenticated (personalized) and debug requests.
-                    rank_result = cached_hybrid_rank(
-                        query_text,
-                        pool_ids,
-                        user=self.request.user,
-                        include_metadata=debug_rank,
-                    )
+                    # Phase 16: prefer the DB-backed pgvector ranking when it's
+                    # live and has data for this pool; otherwise the existing
+                    # same-query cache (Tier-1 quick win) which reuses the last
+                    # ranking; bypassed for authenticated (personalized) and
+                    # debug requests.
+                    rank_result = _vector_rank(query_text, pool_ids)
+                    if not rank_result:
+                        rank_result = cached_hybrid_rank(
+                            query_text,
+                            pool_ids,
+                            user=self.request.user,
+                            include_metadata=debug_rank,
+                        )
                 else:
                     # Legacy TF-IDF/LSA-only ranking when neural search is
                     # disabled via the SEMANTIC_SEARCH_ENABLED flag.
@@ -845,6 +876,53 @@ class RoomViewSet(viewsets.ModelViewSet):
             item["phash_distance"] = distance
         return Response(data)
 
+    @extend_schema(
+        tags=["Rooms"],
+        summary="Rooms with similar descriptions",
+        description=(
+            "Semantic discovery: public rooms whose listing text is closest to "
+            "this one in embedding space (pgvector when enabled, in-process "
+            "fallback otherwise). Best-effort — returns an empty list when no "
+            "embeddings exist yet."
+        ),
+        parameters=[
+            OpenApiParameter(
+                "limit", int, description="Max matches to return (default 8).", required=False
+            )
+        ],
+    )
+    @action(detail=True, methods=["get"], url_path="similar")
+    def similar(self, request, pk=None):
+        room = self.get_object()
+        limit = int(request.query_params.get("limit", 8) or 8)
+        query = " ".join(
+            part
+            for part in [room.title, room.area, room.description or "", room.address or ""]
+            if part
+        )
+        try:
+            from embeddings.services import search_similar_rooms
+
+            matches = search_similar_rooms(query, top_k=limit, exclude_ids=[room.id])
+        except Exception:
+            matches = []
+        if not matches:
+            return Response([])
+        rooms_by_id = {
+            obj.id: obj for obj in Room.objects.filter(id__in=[rid for rid, _score in matches])
+        }
+        ordered = [rooms_by_id[rid] for rid, _score in matches if rid in rooms_by_id]
+        serializer = RoomListSerializer(
+            ordered,
+            many=True,
+            context=self.get_serializer_context(),
+        )
+        data = serializer.data
+        score_by_id = {rid: score for rid, score in matches}
+        for item in data:
+            item["similarity"] = score_by_id.get(item["id"])
+        return Response(data)
+
     # ----- Intelligent Rental Decision Map (Phase 7 v2) --------------------
 
     @extend_schema(
@@ -1256,9 +1334,99 @@ class RoomViewSet(viewsets.ModelViewSet):
                 {"detail": "You can only see recommendations for your own listings."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        # Phase 15 — Monetization 2.0: the abstraction gates the v2
+        # dynamic-pricing block behind the landlord plan entitlement.
+        from subscriptions.services.predict import price_prediction_for
+
+        return Response(price_prediction_for(request.user, room))
+
+    @extend_schema(
+        tags=["Rooms"],
+        summary="Apply the recommended dynamic price (landlord plan)",
+        description=(
+            "Premium action (server-side entitlement 'price_prediction_v2'): "
+            "writes the grounded dynamic price to the listing. Free-tier users "
+            "can view the recommendation but cannot auto-apply it. Never "
+            "auto-decides — this only runs on explicit landlord action."
+        ),
+    )
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="price-recommendation/apply",
+        permission_classes=[permissions.IsAuthenticated],
+    )
+    def apply_price_recommendation(self, request, pk=None):
+        from decimal import Decimal
+
+        from django.db import transaction
+
+        from audit.services import log_action
+        from subscriptions.services.entitlements import check_entitlement
+
+        room = self.get_object()
+        is_admin = request.user.is_staff or request.user.role == request.user.Role.ADMIN
+        if room.owner_id != request.user.id and not is_admin:
+            return Response(
+                {"detail": "You can only change your own listings."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if not check_entitlement(request.user, "price_prediction_v2") and not is_admin:
+            return Response(
+                {
+                    "detail": "Dynamic price application requires the price_prediction_v2 "
+                    "entitlement (landlord plan)."
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         from .price_recommendation import listing_price_recommendation
 
-        return Response(listing_price_recommendation(room))
+        recommendation = listing_price_recommendation(room)
+        dynamic = recommendation.get("dynamic_price")
+        if dynamic is None:
+            return Response(
+                {"detail": "No grounded dynamic price available right now."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            locked = Room.objects.select_for_update().get(pk=room.pk)
+            if locked.owner_id != request.user.id and not is_admin:
+                return Response(
+                    {"detail": "You can only change your own listings."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            new_price = Decimal(str(dynamic))
+            locked.price = new_price
+            locked.save(update_fields=["price", "updated_at"])
+            log_action(
+                actor=request.user,
+                action="room.price_applied",
+                target=locked,
+                detail={
+                    "from": str(room.price),
+                    "to": str(new_price),
+                    "valid_until": recommendation.get("valid_until"),
+                },
+            )
+
+        from analytics.services import record_event
+
+        record_event(
+            request.user,
+            "price_applied",
+            category="monetization",
+            properties={"room_id": locked.pk, "price": str(new_price)},
+            path="/dashboard",
+        )
+        return Response(
+            {
+                "room_id": locked.pk,
+                "price": str(new_price),
+                "valid_until": recommendation.get("valid_until"),
+            }
+        )
 
     @extend_schema(
         tags=["Rooms"],
@@ -1589,7 +1757,7 @@ class RoomViewSet(viewsets.ModelViewSet):
     def vision_search(self, request):
         # DRF's @action decorator does not accept throttle kwargs — apply the
         # dedicated vision scope manually so photo uploads can't be scripted.
-        self.throttle_classes = [ScopedRateThrottle]
+        self.throttle_classes = [TrustedScopedRateThrottle]
         self.throttle_scope = "vision"
         self.check_throttles(request)
         if not settings.VISION_ENABLED:
@@ -1606,7 +1774,7 @@ class RoomViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
-            validate_image_upload(image)
+            validate_image_upload(image, enforce_min_dimension=False)
         except ValidationError as exc:
             return Response(
                 {"detail": exc.detail[0] if isinstance(exc.detail, list) else exc.detail},

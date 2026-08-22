@@ -20,6 +20,13 @@ export interface Room {
   rating: number;
   reviews: number;
   img: string;
+  /** Phase 16 — optimized WebP variants of the primary image (srcset). */
+  imgVariants?: {
+    thumbnail?: string;
+    small?: string;
+    medium?: string;
+    large?: string;
+  };
   amenities: string[];
   gender: GenderPref;
   available: boolean;
@@ -63,7 +70,7 @@ export interface TierCatalog {
   currency: string;
 }
 
-export type UserRole = "tenant" | "landlord" | "admin";
+export type UserRole = "tenant" | "landlord" | "admin" | "broker";
 
 export interface User {
   id?: number;
@@ -571,7 +578,12 @@ export type PaymentGateway = "sslcommerz" | "bkash";
 export type PaymentMethod = PaymentGateway | "nagad" | "manual";
 
 export type PaymentType =
-  "booking_deposit" | "monthly_rent" | "security_deposit" | "listing_feature" | "listing_premium";
+  | "booking_deposit"
+  | "monthly_rent"
+  | "security_deposit"
+  | "listing_feature"
+  | "listing_premium"
+  | "subscription";
 
 export type PaymentStatus =
   "initiated" | "pending" | "success" | "failed" | "cancelled" | "refunded";
@@ -982,4 +994,272 @@ export interface SimilarRoomResult {
 export interface WishlistShareInfo {
   token: string;
   link: string;
+}
+
+// ============================================================
+// Phase 15 — Monetization 2.0 (Revenue) domain types
+// ============================================================
+
+/** A purchasable subscription plan (subscriptions app). */
+export interface Plan {
+  code: string;
+  name: string;
+  description: string;
+  price: number;
+  billingCycle: "monthly" | "yearly";
+  features: string[];
+  active: boolean;
+}
+
+export type SubscriptionStatus = "pending" | "active" | "canceled" | "expired" | "past_due";
+
+/** The user's subscription to a plan. */
+export interface Subscription {
+  id: number;
+  plan: Plan;
+  status: SubscriptionStatus;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+  autoRenew: boolean;
+  cancelAtPeriodEnd: boolean;
+  createdAt: string;
+}
+
+/** GET /subscriptions/subscription/me/ */
+export interface SubscriptionMe {
+  subscription: Subscription | null;
+  entitledFeatures: string[];
+  subscriptionsEnabled: boolean;
+}
+
+/** POST /subscriptions/subscription/me/ — gateway session result. */
+export interface SubscriptionCheckout {
+  paymentUrl: string;
+  transactionId: string;
+  subscriptionId: number;
+}
+
+/** Monetization — commissions, payouts, ledger (admin revenue). */
+export type CommissionStatus = "pending" | "paid" | "canceled";
+
+export interface Commission {
+  id: number;
+  kind: string;
+  recipient: number;
+  recipientName: string;
+  amount: number;
+  rate: number;
+  status: CommissionStatus;
+  detail: Record<string, unknown>;
+  createdAt: string;
+  paidAt: string | null;
+}
+
+export type PayoutStatus = "pending" | "approved" | "paid" | "rejected" | "canceled";
+
+export interface Payout {
+  id: number;
+  recipient: number;
+  recipientName: string;
+  amount: number;
+  method: string;
+  accountDetails: Record<string, unknown>;
+  status: PayoutStatus;
+  reference: string;
+  reason: string;
+  createdAt: string;
+  decidedAt: string | null;
+}
+
+/** Admin revenue dashboard (GET /monetization/revenue/dashboard/). */
+export interface RevenueDashboard {
+  revenueByScope: { scope: string; gross: number | null; platform: number | null }[];
+  totalRevenue: number | null;
+  platformRevenue: number | null;
+  mrr: number | null;
+  partnerObligations: number | null;
+  pendingPayouts: { count: number; total: number | null };
+  recentLedger: RevenueLedgerEntry[];
+  recentCommissions: Commission[];
+  recentPayouts: Payout[];
+}
+
+export interface RevenueLedgerEntry {
+  id: number;
+  entryType: string;
+  scope: string;
+  user: number | null;
+  grossAmount: number;
+  platformAmount: number;
+  partnerAmount: number;
+  currency: string;
+  createdAt: string;
+}
+
+/** Brokers — profiles, commissions, payouts. */
+export type BrokerStatus = "unverified" | "pending" | "verified" | "rejected" | "suspended";
+
+export interface BrokerProfile {
+  id: number;
+  user: number;
+  userName: string;
+  licenseNumber: string;
+  yearsExperience: number;
+  specialization: string;
+  areas: string[];
+  referralCode: string;
+  status: BrokerStatus;
+  isVerified: boolean;
+  createdAt: string;
+}
+
+export interface BrokerVerification {
+  id: number;
+  profile: number;
+  documents: string[];
+  notes: string;
+  status: "pending" | "verified" | "rejected";
+  autoScreenScore: number | null;
+  autoScreenResult: string | null;
+  autoScreenDetail: Record<string, unknown>;
+  createdAt: string;
+}
+
+/** GET /brokers/dashboard/ */
+export interface BrokerDashboard {
+  profile: BrokerProfile;
+  availableBalance: number;
+  summary: { pendingCount: number; pendingTotal: number; paidTotal: number };
+  recentCommissions: Commission[];
+  shareUrl: string;
+}
+
+/** Corporate housing. */
+export type CorporateAccountStatus = "pending" | "active" | "suspended";
+
+export interface CorporateAccount {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  vatNumber: string;
+  owner: number;
+  ownerName: string;
+  status: CorporateAccountStatus;
+  createdAt: string;
+}
+
+export interface CorporateMember {
+  id: number;
+  account: number;
+  user: number;
+  userName: string;
+  email: string;
+  role: "admin" | "member";
+  createdAt: string;
+}
+
+export interface CorporateInvoice {
+  id: number;
+  account: number;
+  accountName: string;
+  invoiceNumber: string;
+  periodStart: string;
+  periodEnd: string;
+  amount: number;
+  status: "draft" | "sent" | "paid" | "overdue";
+  lineItems: Record<string, unknown>[];
+  createdAt: string;
+}
+
+/** Marketplace add-ons. */
+export type AddonCategory =
+  "cleaning" | "relocation" | "repairs" | "furniture" | "utilities" | "insurance";
+
+export type AddonProviderStatus = "pending" | "active" | "suspended";
+
+export interface AddonProvider {
+  id: number;
+  user: number;
+  userName: string;
+  businessName: string;
+  description: string;
+  status: AddonProviderStatus;
+  commissionRate: number | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface AddonService {
+  id: number;
+  provider: number;
+  providerName: string;
+  category: AddonCategory;
+  categoryDisplay: string;
+  title: string;
+  description: string;
+  price: number;
+  unit: string;
+  isActive: boolean;
+  ratingAvg: number;
+  ratingCount: number;
+  createdAt: string;
+}
+
+export type AddonOrderStatus = "pending" | "confirmed" | "completed" | "canceled" | "refunded";
+
+export interface AddonOrder {
+  id: number;
+  service: number;
+  serviceTitle: string;
+  providerBusiness: string;
+  tenant: number;
+  tenantName: string;
+  quantity: number;
+  total: number;
+  status: AddonOrderStatus;
+  notes: string;
+  createdAt: string;
+}
+
+export interface MarketplaceRecommendation {
+  bookingId: number;
+  services: AddonService[];
+  reasons: Record<string, string>;
+}
+
+/** Insurance & credit partners. */
+export interface InsuranceProduct {
+  id: number;
+  partner: number;
+  partnerName: string;
+  code: string;
+  name: string;
+  coverage: Record<string, unknown>;
+  priceMonthly: number;
+  deductible: number;
+  isActive: boolean;
+}
+
+export type InsuranceQuoteStatus = "quoted" | "issued" | "declined" | "canceled";
+
+export interface InsuranceQuote {
+  id: number;
+  product: InsuranceProduct;
+  price: number;
+  coveragePeriod: number;
+  status: InsuranceQuoteStatus;
+  statusDisplay: string;
+  quoteData: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface CreditEligibility {
+  eligible: boolean;
+  creditScore: number;
+  preapprovedLimit: number;
+  currency: string;
+  reasons: string[];
+  provider: string;
 }

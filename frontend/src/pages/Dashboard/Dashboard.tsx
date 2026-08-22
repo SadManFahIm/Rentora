@@ -29,6 +29,12 @@ import WishlistShareButton from "../../components/WishlistShareButton/WishlistSh
 import KycCard from "../../components/KycCard/KycCard";
 import TenantKycCard from "../../components/TenantKycCard/TenantKycCard";
 import AdminKycPanel from "../../components/AdminKycPanel/AdminKycPanel";
+import SubscriptionPanel from "../../components/SubscriptionPanel/SubscriptionPanel";
+import BrokerPanel from "../../components/BrokerPanel/BrokerPanel";
+import CorporatePanel from "../../components/CorporatePanel/CorporatePanel";
+import MarketplacePanel from "../../components/MarketplacePanel/MarketplacePanel";
+import InsurancePanel from "../../components/InsurancePanel/InsurancePanel";
+import AdminRevenuePanel from "../../components/AdminRevenuePanel/AdminRevenuePanel";
 import RoomCard from "../../components/RoomCard/RoomCard";
 import RoomModal from "../../components/RoomModal/RoomModal";
 import RoomForm from "../../components/RoomForm/RoomForm";
@@ -69,7 +75,11 @@ type DashboardTab =
   | "moderation"
   | "disputes"
   | "trust"
-  | "insights";
+  | "insights"
+  | "monetization"
+  | "broker"
+  | "corporate"
+  | "revenue";
 const TABS: DashboardTab[] = [
   "overview",
   "listings",
@@ -83,6 +93,10 @@ const TABS: DashboardTab[] = [
   "disputes",
   "trust",
   "insights",
+  "monetization",
+  "broker",
+  "corporate",
+  "revenue",
 ];
 
 interface StatCard {
@@ -245,6 +259,7 @@ export default function Dashboard() {
   const isLandlord = isAdmin || user?.role === "landlord";
   const visibleTabs = TABS.filter((t) => {
     if (t === "kyc" || t === "reports" || t === "moderation" || t === "trust") return isAdmin;
+    if (t === "revenue") return isAdmin;
     if (t === "insights") return isLandlord;
     return true;
   });
@@ -703,6 +718,22 @@ export default function Dashboard() {
           </div>
         </>
       )}
+
+      {activeTab === "monetization" && (
+        <div className="flex flex-col gap-10">
+          <SubscriptionPanel />
+          <hr className="border-gray-200 dark:border-gray-800" />
+          <MarketplacePanel />
+          <hr className="border-gray-200 dark:border-gray-800" />
+          <InsurancePanel />
+        </div>
+      )}
+
+      {activeTab === "broker" && <BrokerPanel />}
+
+      {activeTab === "corporate" && <CorporatePanel />}
+
+      {activeTab === "revenue" && isAdmin && <AdminRevenuePanel />}
 
       {selectedRoom && <RoomModal room={selectedRoom} onClose={() => setSelectedRoom(null)} />}
 

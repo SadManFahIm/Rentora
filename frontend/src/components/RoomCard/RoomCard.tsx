@@ -34,6 +34,22 @@ export default function RoomCard({
   const isPremium = room.tier === "premium";
   const isFeatured = room.tier === "featured";
 
+  // Phase 16 — serve optimized WebP variants when available; the browser picks
+  // the size closest to its viewport via srcset. Falls back to the original.
+  const VARIANT_WIDTHS: Record<string, number> = {
+    thumbnail: 320,
+    small: 640,
+    medium: 960,
+    large: 1280,
+  };
+  const imgSrcset = room.imgVariants
+    ? Object.entries(room.imgVariants)
+        .filter(([, url]) => Boolean(url))
+        .map(([size, url]) => `${url} ${VARIANT_WIDTHS[size] ?? 640}w`)
+        .join(", ")
+    : undefined;
+  const preferredVariant = room.imgVariants?.medium ?? room.imgVariants?.large ?? room.img;
+
   return (
     <Card
       className={cn(
@@ -49,9 +65,11 @@ export default function RoomCard({
       {/* Image */}
       <div className="relative h-50 overflow-hidden">
         <img
-          src={room.img}
+          src={preferredVariant}
+          srcSet={imgSrcset}
           alt={room.name}
           loading="lazy"
+          decoding="async"
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
         <Badge

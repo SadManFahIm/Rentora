@@ -138,7 +138,25 @@ export default function RoomModal({ room, onClose }: RoomModalProps) {
             <VisuallyHidden>
               <DialogTitle>{current.name}</DialogTitle>
             </VisuallyHidden>
-            <img src={current.img} alt={current.name} className="h-75 w-full object-cover" />
+            <img
+              src={current.imgVariants?.large ?? current.img}
+              srcSet={
+                current.imgVariants
+                  ? Object.entries(current.imgVariants)
+                      .filter(([, url]) => Boolean(url))
+                      .map(([size, url]) => {
+                        const width =
+                          { thumbnail: 320, small: 640, medium: 960, large: 1280 }[size] ?? 960;
+                        return `${url} ${width}w`;
+                      })
+                      .join(", ")
+                  : undefined
+              }
+              alt={current.name}
+              loading="lazy"
+              decoding="async"
+              className="h-75 w-full object-cover"
+            />
             <div className="p-7">
               {/* Header */}
               <div className="mb-4 flex items-start justify-between gap-4">
