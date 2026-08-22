@@ -5,7 +5,7 @@ from django.urls import reverse
 from drf_spectacular.utils import extend_schema_field, inline_serializer
 from rest_framework import serializers
 
-from .models import KycDocument, TenantVerification
+from .models import KycDocument, LivenessChallenge, LivenessConsent, TenantVerification
 
 User = get_user_model()
 
@@ -435,3 +435,77 @@ class PasskeySerializer(serializers.Serializer):
     response = serializers.JSONField()
     challenge_id = serializers.CharField(required=False, allow_blank=True)
     name = serializers.CharField(required=False, allow_blank=True, max_length=120)
+
+
+# ============================================================
+# Phase 17 — KYC Liveness + Face-Match (Stage 4)
+# ============================================================
+
+
+class LivenessChallengeSerializer(serializers.ModelSerializer):
+    """Read serializer for a liveness challenge."""
+
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    challenge_type_display = serializers.CharField(
+        source="get_challenge_type_display", read_only=True
+    )
+
+    class Meta:
+        model = LivenessChallenge
+        fields = [
+            "id",
+            "status",
+            "status_display",
+            "challenge_type",
+            "challenge_type_display",
+            "provider_name",
+            "provider_score",
+            "created_at",
+            "expires_at",
+            "completed_at",
+        ]
+        read_only_fields = fields
+
+
+class LivenessInitSerializer(serializers.Serializer):
+    """Input for POST /api/v1/users/kyc/liveness/init/."""
+
+    challenge_type = serializers.ChoiceField(
+        choices=LivenessChallenge.ChallengeType.choices,
+        default=LivenessChallenge.ChallengeType.BLINK,
+    )
+
+
+class LivenessVerifySerializer(serializers.Serializer):
+    """Input for POST /api/v1/users/kyc/liveness/verify/."""
+
+    challenge_id = serializers.IntegerField()
+    selfie = serializers.ImageField()
+
+
+class FaceMatchSerializer(serializers.Serializer):
+    """Input for POST /api/v1/users/kyc/face-match/."""
+
+    selfie = serializers.ImageField()
+
+
+class LivenessConsentSerializer(serializers.ModelSerializer):
+    """Read/write serializer for liveness consent."""
+
+    class Meta:
+        model = LivenessConsent
+        fields = [
+            "id",
+            "consent_type",
+            "granted",
+            "granted_at",
+            "revoked_at",
+        ]
+        read_only_fields = ["id", "granted_at", "revoked_at"]
+
+
+class LivenessConsentRequestSerializer(serializers.Serializer):
+    """Input for POST /api/v1/users/kyc/consent/."""
+
+    consent_type = serializers.ChoiceField(choices=LivenessConsent.ConsentType.choices)
+    granted = serializers.BooleanField()

@@ -184,6 +184,30 @@ class TenantVerification(models.Model):
     auto_screen_result = models.CharField(max_length=24, null=True, blank=True)
     auto_screen_detail = models.JSONField(default=dict, blank=True)
 
+    # Phase 17 — KYC Liveness + Face-Match (Stage 2 foundation)
+    liveness_status = models.CharField(
+        max_length=16,
+        blank=True,
+        default="",
+        help_text="Liveness check status: empty (not started), pending, passed, failed, needs_review.",
+    )
+    liveness_score = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Liveness confidence score 0-100 from the provider.",
+    )
+    face_match_status = models.CharField(
+        max_length=16,
+        blank=True,
+        default="",
+        help_text="Face-match status: empty (not started), pending, passed, failed, needs_review.",
+    )
+    face_match_score = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Face-match similarity score 0-100 from the provider.",
+    )
+
     class Meta:
         ordering = ["-created_at"]
 
@@ -307,3 +331,132 @@ class PasskeyCredential(models.Model):
 
     def __str__(self):
         return f"Passkey {self.name or self.credential_id[:8]} for {self.user_id}"
+
+
+# ============================================================
+# Phase 17 — KYC Liveness + Face-Match (Stage 4)
+# ============================================================
+
+
+class LivenessChallenge(models.Model):
+    """A single liveness-detection challenge for KYC verification.
+
+    Lifecycle: pending → passed | failed | expired.
+    Selfies are stored in private media and auto-deleted after 90 days.
+
+    The challenge tracks which provider was used and what the provider
+    returned, so the admin can audit any automated decision.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        PASSED = "passed", "Passed"
+        FAILED = "failed", "Failed"
+        EXPIRED = "expired", "Expired"
+
+    class ChallengeType(models.TextChoices):
+        BLINK = "blink", "Blink Detection"
+        SMILE = "smile", "Smile Detection"
+        TURN_HEAD = "turn_head", "Turn Head"
+        TEXT_CHALLENGE = "text_challenge", "Follow Instructions"
+
+    user = models.ForeignKey(
+        "users.User",
+        on_delete=models.CASCADE,
+        related_name="liveness_challenges",
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    challenge_type = models.CharField(
+        max_length=20,
+        choices=ChallengeType.choices,
+        default=ChallengeType.BLINK,
+    )
+    selfie = models.ImageField(
+        upload_to="kyc/liveness/%Y/%m/",
+        storage=private_media_storage,
+        blank=True,
+        null=True,
+        help_text="User selfie captured during liveness check (private, auto-deleted after 90 days).",
+    )
+    provider_name = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        help_text="Name of the liveness provider used (e.g. 'rules', 'http').",
+    )
+    provider_score = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Provider confidence score 0-100.",
+    )
+    provider_response = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Raw provider response for audit trail.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Challenge expires after this time (default 15 minutes).",
+    )
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "status"]),
+        ]
+
+    def __str__(self):
+        return f"Liveness challenge for user {self.user_id} ({self.status}, {self.challenge_type})"
+
+    @property
+    def is_expired(self) -> bool:
+        from django.utils import timezone as _tz
+
+        if self.expires_at is None:
+            return False
+        return _tz.now() > self.expires_at
+
+
+class LivenessConsent(models.Model):
+    """Tracks user consent for liveness detection and face-match.
+
+    Required before collecting any biometric data (selfies, face embeddings).
+    Each consent grant/revoke is auditable via timestamps + IP.
+    """
+
+    class ConsentType(models.TextChoices):
+        LIVENESS = "liveness", "Liveness Detection"
+        FACE_MATCH = "face_match", "Face Match Comparison"
+
+    user = models.ForeignKey(
+        "users.User",
+        on_delete=models.CASCADE,
+        related_name="liveness_consents",
+    )
+    consent_type = models.CharField(
+        max_length=20,
+        choices=ConsentType.choices,
+    )
+    granted = models.BooleanField(
+        default=False,
+        help_text="True if user has granted consent.",
+    )
+    granted_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-granted_at"]
+        unique_together = [("user", "consent_type")]
+
+    def __str__(self):
+        state = "granted" if self.granted else "revoked"
+        return f"Consent({self.consent_type}) for user {self.user_id}: {state}"

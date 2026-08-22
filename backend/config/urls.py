@@ -119,6 +119,8 @@ urlpatterns = [
     path("api/v1/partner-services/", include("partner_services.urls")),
     path("api/v1/flags/", include("feature_flags.urls")),
     path("api/v1/experiments/", include("experiments.urls")),
+    # Phase 17 — Graph & Deep Trust
+    path("api/v1/ml/", include("ml_models.urls")),
 ]
 
 if settings.DEBUG:
