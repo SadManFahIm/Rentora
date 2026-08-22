@@ -38,6 +38,7 @@ class CeleryWiringTests(TestCase):
             "fraud.tasks.check_model_drift",
             "fraud.tasks.purge_expired_liveness",
             "fraud.tasks.alert_graph_anomalies",
+            "fraud.tasks.scan_photo_geo_mismatches",
         ]:
             with self.subTest(task=task_name):
                 self.assertIn(task_name, app.tasks)
@@ -70,6 +71,7 @@ class CeleryWiringTests(TestCase):
                 "check-model-drift",
                 "purge-expired-liveness",
                 "alert-graph-anomalies",
+                "scan-photo-geo-mismatches",
             },
         )
 
