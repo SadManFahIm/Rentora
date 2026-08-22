@@ -13,12 +13,14 @@ from drf_spectacular.views import (
 )
 
 from config.auth_views import ThrottledLoginView, ThrottledRegisterView
-from config.views import security_txt
+from config.views import health_check, security_txt
 from users import otp_views as users_otp_views
 from users import passkey_views as users_passkey_views
 from users import sms_otp_views as users_sms_otp_views
 
 urlpatterns = [
+    # Health check — no auth, no throttle (load balancer probes).
+    path("health/", health_check, name="health-check"),
     # RFC 9116 security.txt — both canonical and convenience paths.
     path(".well-known/security.txt", security_txt, name="security-txt"),
     path("security.txt", security_txt),
@@ -109,7 +111,30 @@ urlpatterns = [
     path("api/v1/moderation/", include("moderation.urls")),
     path("api/v1/disputes/", include("disputes.urls")),
     path("api/v1/audit/", include("audit.urls")),
+    path("api/v1/subscriptions/", include("subscriptions.urls")),
+    path("api/v1/monetization/", include("monetization.urls")),
+    path("api/v1/brokers/", include("brokers.urls")),
+    path("api/v1/corporate/", include("corporate.urls")),
+    path("api/v1/marketplace/", include("marketplace.urls")),
+    path("api/v1/partner-services/", include("partner_services.urls")),
+    path("api/v1/flags/", include("feature_flags.urls")),
+    path("api/v1/experiments/", include("experiments.urls")),
+    # Phase 17 — Graph & Deep Trust
+    path("api/v1/ml/", include("ml_models.urls")),
 ]
 
 if settings.DEBUG:
+    # Private uploads must never be reachable through the public media URL.
+    # They now live in MEDIA_PRIVATE_ROOT (out of MEDIA_ROOT entirely), but a
+    # legacy copy in the public root (pre-Phase 16) must still 404 — a hard
+    # denial beats "served by the dev static handler by accident".
+    from django.http import HttpResponseNotFound
+
+    def _deny_private_media(request, path):
+        return HttpResponseNotFound("Not found.")
+
+    urlpatterns += [
+        path("media/kyc_documents/<path:path>", _deny_private_media),
+        path("media/tenant_kyc/<path:path>", _deny_private_media),
+    ]
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -39,6 +39,27 @@ class Notification(models.Model):
         DISPUTE_UPDATE = "dispute_update", "Dispute Update"
         SAVED_SEARCH_MATCH = "saved_search_match", "Saved Search Match"
         SYSTEM = "system", "System"
+        # Phase 15 — Monetization 2.0 (revenue).
+        SUBSCRIPTION_ACTIVE = "subscription_active", "Subscription Active"
+        SUBSCRIPTION_CANCELED = "subscription_canceled", "Subscription Canceled"
+        SUBSCRIPTION_EXPIRED = "subscription_expired", "Subscription Expired"
+        SUBSCRIPTION_RENEWAL_REMINDER = (
+            "subscription_renewal_reminder",
+            "Subscription Renewal Reminder",
+        )
+        PAYOUT_REQUESTED = "payout_requested", "Payout Requested"
+        PAYOUT_APPROVED = "payout_approved", "Payout Approved"
+        PAYOUT_PAID = "payout_paid", "Payout Paid"
+        PAYOUT_REJECTED = "payout_rejected", "Payout Rejected"
+        COMMISSION_EARNED = "commission_earned", "Commission Earned"
+        BROKER_SUBMITTED = "broker_submitted", "Broker Submitted"
+        BROKER_VERIFIED = "broker_verified", "Broker Verified"
+        BROKER_REJECTED = "broker_rejected", "Broker Rejected"
+        CORPORATE_ACCOUNT_CREATED = "corporate_account_created", "Corporate Account Created"
+        CORPORATE_INVOICE = "corporate_invoice", "Corporate Invoice"
+        ADDON_PROVIDER_SUBMITTED = "addon_provider_submitted", "Add-on Provider Submitted"
+        ADDON_ORDER_CONFIRMED = "addon_order_confirmed", "Add-on Order Confirmed"
+        INSURANCE_POLICY_ISSUED = "insurance_policy_issued", "Insurance Policy Issued"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

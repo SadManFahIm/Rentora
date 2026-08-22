@@ -119,6 +119,15 @@ def _apply_success_side_effects(payment: Payment) -> None:
 
     booking = payment.booking
 
+    # Phase 15 — Monetization 2.0: subscription payments have no booking and
+    # no room — they activate (or renew) the attached subscription and record
+    # the revenue ledger entry inside subscriptions.services.activate.
+    if payment.payment_type == Payment.Type.SUBSCRIPTION:
+        from subscriptions.services.activate import activate_on_payment
+
+        activate_on_payment(payment)
+        return
+
     # Paid-listing promotions: booking is None, but `room` is set. On success
     # the room's tier is upgraded for LISTING_TIER_DURATION_DAYS from now —
     # this is the only place a tier can be granted, so a forged callback
@@ -135,6 +144,25 @@ def _apply_success_side_effects(payment: Payment) -> None:
         room.tier_expires_at = timezone.now() + timedelta(days=settings.LISTING_TIER_DURATION_DAYS)
         room.is_featured = True
         room.save(update_fields=["tier", "tier_expires_at", "is_featured", "updated_at"])
+        if getattr(settings, "MONETIZATION_LEDGER_ENABLED", True):
+            from monetization.services.ledger import record_entry
+
+            record_entry(
+                entry_type="listing_promotion",
+                scope="listing",
+                user=payment.user,
+                gross=payment.amount,
+                platform_amount=payment.amount,
+                partner_amount=0,
+                source=payment,
+                idempotency_key=f"listing-promotion-{payment.transaction_id}",
+                detail={"room_id": room.pk, "tier": room.tier},
+            )
+        return
+
+    # Payments without any subject (no booking, no room, no subscription)
+    # have no further side effects.
+    if booking is None:
         return
 
     if payment.payment_type == Payment.Type.SECURITY_DEPOSIT and not booking.security_deposit_paid:
@@ -158,7 +186,7 @@ def _apply_success_side_effects(payment: Payment) -> None:
 
 
 def _apply_refund_side_effects(payment: Payment) -> None:
-    if payment.payment_type == Payment.Type.SECURITY_DEPOSIT:
+    if payment.payment_type == Payment.Type.SECURITY_DEPOSIT and payment.booking_id is not None:
         booking = payment.booking
         if not booking.security_deposit_refunded:
             booking.security_deposit_refunded = True
@@ -621,6 +649,26 @@ class BkashInitiateView(APIView):
 
 
 def _notify_payment_result(payment: Payment, *, success: bool) -> None:
+    # Phase 15 — Monetization 2.0: subscription payments have no booking/room.
+    if payment.payment_type == Payment.Type.SUBSCRIPTION:
+        if success:
+            create_notification(
+                user=payment.user,
+                notification_type=Notification.Type.PAYMENT_SUCCESS,
+                title="Subscription payment successful",
+                message=f"Your subscription payment of {payment.amount} BDT was successful.",
+                action_url="/dashboard?tab=monetization",
+            )
+        else:
+            create_notification(
+                user=payment.user,
+                notification_type=Notification.Type.PAYMENT_FAILED,
+                title="Subscription payment failed",
+                message=f"Your subscription payment of {payment.amount} BDT did not go through.",
+                action_url="/dashboard?tab=monetization",
+            )
+        return
+
     # Listing-promotion payments have no booking: notify the listing owner
     # directly about their tier activation / failure instead.
     if payment.booking_id is None and payment.room_id is not None:

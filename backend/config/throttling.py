@@ -1,10 +1,42 @@
 """Custom DRF throttles."""
 
 from rest_framework.settings import api_settings
-from rest_framework.throttling import SimpleRateThrottle
+from rest_framework.throttling import (
+    AnonRateThrottle,
+    ScopedRateThrottle,
+    SimpleRateThrottle,
+    UserRateThrottle,
+)
 
 
-class AuthRateThrottle(SimpleRateThrottle):
+class TrustedClientIPMixin:
+    """Key throttles on the real client IP even behind a proxy.
+
+    DRF's default ``get_ident`` reads ``REMOTE_ADDR`` — behind a proxy that is
+    the proxy's address for *every* user, so all traffic shares one bucket.
+    ``config.ip.get_client_ip`` honours ``NUM_PROXIES`` (opt-in trust of
+    ``X-Forwarded-For``); see its docstring for the security trade-off.
+    """
+
+    def get_ident(self, request):
+        from config.ip import get_client_ip
+
+        return get_client_ip(request)
+
+
+class TrustedAnonRateThrottle(TrustedClientIPMixin, AnonRateThrottle):
+    """AnonRateThrottle that keys on the proxy-resolved client IP."""
+
+
+class TrustedUserRateThrottle(TrustedClientIPMixin, UserRateThrottle):
+    """UserRateThrottle that keys on the proxy-resolved client IP."""
+
+
+class TrustedScopedRateThrottle(TrustedClientIPMixin, ScopedRateThrottle):
+    """ScopedRateThrottle that keys on the proxy-resolved client IP."""
+
+
+class AuthRateThrottle(TrustedClientIPMixin, SimpleRateThrottle):
     """Per-IP throttle for authentication endpoints (login/register).
 
     Unlike ``AnonRateThrottle``, this always keys on the client IP — even for

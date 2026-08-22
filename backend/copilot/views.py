@@ -3,9 +3,9 @@ from django.http import Http404
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status
 from rest_framework.response import Response
-from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
+from config.throttling import TrustedUserRateThrottle
 from rooms.models import Room
 
 from .serializers import (
@@ -22,7 +22,7 @@ from .serializers import (
 from .services import chat, listing_facts_for, share_summary_for
 
 
-class CopilotRateThrottle(UserRateThrottle):
+class CopilotRateThrottle(TrustedUserRateThrottle):
     """Copilot can be chatty, but it still talks to the search engine on
     every turn — a dedicated, generous-but-bounded scope beats an unbounded
     loop."""

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { Menu, X, Sun, Moon, Heart, Bell, ChevronDown } from "lucide-react";
+import { Menu, X, Sun, Moon, Heart, Bell, ChevronDown, Building2 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { useUiStore } from "../../stores/uiStore";
 import { useWishlistStore } from "../../stores/wishlistStore";
@@ -30,6 +30,7 @@ const NAV_KEYS: { key: string; to: string }[] = [
   { key: "nav.map", to: "/map" },
   { key: "nav.chat", to: "/chat" },
   { key: "nav.roommates", to: "/roommates" },
+  { key: "nav.services", to: "/services" },
 ];
 
 export default function Navbar() {
@@ -50,8 +51,7 @@ export default function Navbar() {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   // Live notification push. `enabled` (tied to `user`) means this connects on
-  // login and the hook's own cleanup disconnects it on logout — nothing
-  // further to wire up for that.
+  // login and the hook's own cleanup disconnects it on logout.
   const { lastMessage: notificationEvent } = useWebSocket<NotificationWsEvent>(
     "/ws/notifications/",
     { enabled: !!user }
@@ -86,27 +86,30 @@ export default function Navbar() {
     cn(
       "rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
       isActive
-        ? "border border-gray-300 text-gray-900 dark:border-gray-700 dark:text-gray-100"
-        : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+        ? "border border-border bg-surface-subtle font-semibold text-foreground"
+        : "text-muted-foreground hover:text-foreground"
     );
 
   const mobileNavLinkClass = ({ isActive }: { isActive: boolean }) =>
     cn(
       "block rounded-full px-4 py-2 text-base font-medium transition-colors",
       isActive
-        ? "border border-gray-300 text-gray-900 dark:border-gray-700 dark:text-gray-100"
-        : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+        ? "border border-border bg-surface-subtle font-semibold text-foreground"
+        : "text-muted-foreground hover:text-foreground"
     );
 
   return (
-    <nav className="sticky top-0 z-[100] border-b border-gray-200 bg-card/95 backdrop-blur-md dark:border-gray-800">
+    <nav className="sticky top-0 z-[100] border-b border-border bg-card/95 backdrop-blur-md">
       <div className="flex h-16 items-center justify-between px-4 md:px-6 lg:px-8">
         <div
           className="flex shrink-0 cursor-pointer items-center gap-2"
           onClick={() => navigate("/")}
         >
-          <span className="bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text font-display text-lg font-extrabold tracking-tight text-transparent dark:from-orange-400 dark:to-amber-300 sm:text-xl">
-            🏠 Rentora
+          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-brand text-brand-foreground shadow-xs">
+            <Building2 className="size-4.5" />
+          </div>
+          <span className="font-display text-lg font-bold tracking-tight text-foreground sm:text-xl">
+            Rentora
           </span>
           <BangladeshFlag className="h-4 w-auto sm:h-5" />
         </div>
@@ -133,8 +136,8 @@ export default function Navbar() {
               className={cn(
                 "flex items-center gap-1 rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
                 areasOpen
-                  ? "border border-gray-300 text-gray-900 dark:border-gray-700 dark:text-gray-100"
-                  : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                  ? "border border-border bg-surface-subtle text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
               )}
               aria-expanded={areasOpen}
             >
@@ -144,8 +147,8 @@ export default function Navbar() {
               />
             </button>
             {areasOpen && (
-              <div className="absolute left-1/2 top-[calc(100%+8px)] z-[150] w-64 -translate-x-1/2 overflow-hidden rounded-2xl border border-gray-200 bg-popover shadow-lg dark:border-gray-800">
-                <div className="border-b border-gray-200 px-4 py-2.5 text-xs font-bold tracking-wide text-muted-foreground uppercase dark:border-gray-800">
+              <div className="absolute left-1/2 top-[calc(100%+8px)] z-[150] w-64 -translate-x-1/2 overflow-hidden rounded-xl border border-border bg-popover shadow-lg">
+                <div className="border-b border-border px-4 py-2.5 text-xs font-bold tracking-wide text-muted-foreground uppercase">
                   Popular areas
                 </div>
                 <div className="grid grid-cols-2 gap-0.5 p-2">
@@ -153,7 +156,7 @@ export default function Navbar() {
                     <NavLink
                       key={area.slug}
                       to={`/rooms/${area.slug}`}
-                      className="rounded-lg px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-muted dark:text-gray-300"
+                      className="rounded-md px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
                       onClick={() => setAreasOpen(false)}
                     >
                       {area.area}
@@ -172,7 +175,7 @@ export default function Navbar() {
           <Button
             variant="outline"
             size="icon"
-            className="rounded-xl"
+            className="rounded-md"
             onClick={() => toggleDarkMode()}
           >
             {darkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
@@ -181,7 +184,7 @@ export default function Navbar() {
           <Button
             variant="outline"
             size="icon"
-            className="relative rounded-xl"
+            className="relative rounded-md"
             onClick={() => navigate("/rooms")}
           >
             <Heart className="size-4" />
@@ -199,7 +202,7 @@ export default function Navbar() {
             <Button
               variant="outline"
               size="icon"
-              className="relative rounded-xl"
+              className="relative rounded-md"
               onClick={() => setShowNotif((v) => !v)}
             >
               <Bell className="size-4" />
@@ -213,27 +216,27 @@ export default function Navbar() {
               )}
             </Button>
             {showNotif && (
-              <div className="absolute right-0 top-[52px] z-[150] w-80 overflow-hidden rounded-2xl border border-gray-200 bg-popover dark:border-gray-800 shadow-lg">
-                <div className="flex items-center justify-between border-b border-gray-200 p-4 font-display dark:border-gray-800 text-sm font-bold">
+              <div className="absolute right-0 top-[52px] z-[150] w-80 overflow-hidden rounded-xl border border-border bg-popover shadow-lg">
+                <div className="flex items-center justify-between border-b border-border p-4 font-display text-sm font-bold text-foreground">
                   Notifications
                   <button
-                    className="text-xs font-medium text-brand hover:underline"
+                    className="text-xs font-medium text-brand hover:underline cursor-pointer"
                     onClick={markAllRead}
                   >
                     Mark all read
                   </button>
                 </div>
                 {smartAlerts.length > 0 && smartAlerts[0].priority >= 70 && (
-                  <div className="border-b border-amber-200 bg-amber-500/10 p-3 dark:border-amber-700/40">
+                  <div className="border-b border-warning/30 bg-warning/10 p-3">
                     <div className="mb-0.5 flex items-center justify-between">
-                      <span className="text-[10px] font-bold tracking-wide text-amber-700 uppercase dark:text-amber-400">
+                      <span className="text-[10px] font-bold tracking-wide text-warning uppercase">
                         ⚡ Top alert · priority {smartAlerts[0].priority}
                       </span>
                     </div>
                     <div className="text-xs font-semibold text-foreground">
                       {smartAlerts[0].title}
                     </div>
-                    <div className="text-[11px] text-gray-600 dark:text-gray-400">
+                    <div className="text-[11px] text-muted-foreground">
                       {smartAlerts[0].message} — <i>{smartAlerts[0].reason}</i>
                     </div>
                   </div>
@@ -243,7 +246,7 @@ export default function Navbar() {
                     <div
                       key={n.id}
                       className={cn(
-                        "flex gap-3 border-b border-gray-200 p-4 last:border-0 dark:border-gray-800 hover:bg-muted",
+                        "flex gap-3 border-b border-border p-4 last:border-0 hover:bg-muted",
                         !n.read && "bg-brand/5"
                       )}
                     >
@@ -262,7 +265,7 @@ export default function Navbar() {
           {user ? (
             <div className="flex items-center gap-2">
               <div
-                className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-linear-to-br from-brand to-brand-dark text-xs font-bold text-white"
+                className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-brand text-xs font-bold text-brand-foreground"
                 onClick={() => navigate("/dashboard")}
               >
                 {user.name.slice(0, 2).toUpperCase()}
@@ -282,7 +285,7 @@ export default function Navbar() {
         <Button
           variant="outline"
           size="icon"
-          className="shrink-0 rounded-xl md:hidden"
+          className="shrink-0 rounded-md md:hidden"
           onClick={() => setMobileOpen((v) => !v)}
           aria-label="Toggle menu"
         >
@@ -292,7 +295,7 @@ export default function Navbar() {
 
       {/* Mobile menu panel */}
       {mobileOpen && (
-        <div className="border-t border-gray-200 bg-card dark:border-gray-800 px-4 py-4 md:hidden">
+        <div className="border-t border-border bg-card px-4 py-4 md:hidden">
           <div className="flex flex-col gap-1">
             {NAV_KEYS.map((item) => (
               <NavLink
@@ -316,12 +319,12 @@ export default function Navbar() {
             )}
           </div>
 
-          <div className="mt-4 flex items-center gap-2 border-t border-gray-200 pt-4 dark:border-gray-800">
+          <div className="mt-4 flex items-center gap-2 border-t border-border pt-4">
             <LanguageToggle />
             <Button
               variant="outline"
               size="icon"
-              className="rounded-xl"
+              className="rounded-md"
               onClick={() => toggleDarkMode()}
             >
               {darkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
@@ -329,7 +332,7 @@ export default function Navbar() {
             <Button
               variant="outline"
               size="icon"
-              className="relative rounded-xl"
+              className="relative rounded-md"
               onClick={() => {
                 navigate("/rooms");
                 setMobileOpen(false);
@@ -348,7 +351,7 @@ export default function Navbar() {
             <Button
               variant="outline"
               size="icon"
-              className="relative rounded-xl"
+              className="relative rounded-md"
               onClick={() => setShowNotif((v) => !v)}
             >
               <Bell className="size-4" />
@@ -364,11 +367,11 @@ export default function Navbar() {
           </div>
 
           {showNotif && (
-            <div className="mt-3 overflow-hidden rounded-2xl border border-gray-200 bg-popover dark:border-gray-800 shadow-lg">
-              <div className="flex items-center justify-between border-b border-gray-200 p-4 font-display dark:border-gray-800 text-sm font-bold">
+            <div className="mt-3 overflow-hidden rounded-xl border border-border bg-popover shadow-lg">
+              <div className="flex items-center justify-between border-b border-border p-4 font-display text-sm font-bold text-foreground">
                 Notifications
                 <button
-                  className="text-xs font-medium text-brand hover:underline"
+                  className="text-xs font-medium text-brand hover:underline cursor-pointer"
                   onClick={markAllRead}
                 >
                   Mark all read
@@ -379,7 +382,7 @@ export default function Navbar() {
                   <div
                     key={n.id}
                     className={cn(
-                      "flex gap-3 border-b border-gray-200 p-4 last:border-0 dark:border-gray-800",
+                      "flex gap-3 border-b border-border p-4 last:border-0",
                       !n.read && "bg-brand/5"
                     )}
                   >
@@ -394,7 +397,7 @@ export default function Navbar() {
             </div>
           )}
 
-          <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-800">
+          <div className="mt-4 border-t border-border pt-4">
             {user ? (
               <Button variant="outline" className="w-full" onClick={() => logout.mutate()}>
                 Logout

@@ -20,6 +20,7 @@ const paymentTypeLabels: Record<PaymentType, string> = {
   booking_deposit: "Booking Deposit",
   listing_feature: "Listing Promotion (Featured)",
   listing_premium: "Listing Promotion (Premium)",
+  subscription: "Subscription",
 };
 
 interface GatewayOption {

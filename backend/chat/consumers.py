@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
 from typing import Any
 
 from asgiref.sync import sync_to_async
@@ -40,6 +41,12 @@ WS_CLOSE_FORBIDDEN = 4403
 # their status to "offline" and back.
 OFFLINE_GRACE_SECONDS = 5
 
+# Server-side heartbeat cadence for presence leases (chat/presence.py). Each
+# connection refreshes its lease every interval; a lease older than the
+# configured TTL is considered dead, which self-heals presence after a worker
+# hard-kill that never fires ``disconnect``.
+PRESENCE_HEARTBEAT_INTERVAL = 60
+
 
 class ChatConsumer(AsyncWebsocketConsumer):
     """Handles a single client's connection to one chat room."""
@@ -60,7 +67,14 @@ class ChatConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
 
-        await sync_to_async(presence.mark_online)(self.user.pk)
+        # Register a presence lease for this socket (Phase 16 hardening: the
+        # lease is refreshed by a heartbeat and expires on its own, so a
+        # killed worker can never leave the user stuck "online").
+        self.connection_id = str(uuid.uuid4())
+        await sync_to_async(presence.mark_online)(self.user.pk, self.connection_id)
+        self._heartbeat_task = asyncio.create_task(
+            self._heartbeat(self.user.pk, self.connection_id)
+        )
         # Opening the room counts as reading it.
         await self._mark_read_and_broadcast()
 
@@ -70,9 +84,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
         if getattr(self, "user", None) is not None and self.user.is_authenticated:
+            heartbeat = getattr(self, "_heartbeat_task", None)
+            if heartbeat is not None:
+                heartbeat.cancel()
+            connection_id = getattr(self, "connection_id", None)
             # Fire-and-forget: don't block the disconnect handler on the delay.
             # Keep the task reference so the event loop doesn't GC it mid-flight.
-            self._offline_task = asyncio.create_task(self._delayed_mark_offline(self.user.pk))
+            self._offline_task = asyncio.create_task(
+                self._delayed_mark_offline(self.user.pk, connection_id)
+            )
 
     async def receive(self, text_data: str | None = None, bytes_data=None) -> None:
         """Parse an inbound frame and dispatch it by ``type``."""
@@ -204,9 +224,18 @@ class ChatConsumer(AsyncWebsocketConsumer):
             },
         )
 
-    async def _delayed_mark_offline(self, user_id: int) -> None:
+    async def _heartbeat(self, user_id: int, connection_id: str) -> None:
+        """Refresh the presence lease while the socket is open."""
+        try:
+            while True:
+                await asyncio.sleep(PRESENCE_HEARTBEAT_INTERVAL)
+                await sync_to_async(presence.touch)(user_id, connection_id)
+        except asyncio.CancelledError:
+            pass
+
+    async def _delayed_mark_offline(self, user_id: int, connection_id: str | None) -> None:
         await asyncio.sleep(OFFLINE_GRACE_SECONDS)
-        await sync_to_async(presence.mark_offline)(user_id)
+        await sync_to_async(presence.mark_offline)(user_id, connection_id)
 
     @database_sync_to_async
     def _is_member(self, room_id: int | str, user_id: int) -> bool:

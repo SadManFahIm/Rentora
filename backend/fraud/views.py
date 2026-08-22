@@ -315,3 +315,189 @@ class FraudReportReviewView(APIView):
             detail={"room_id": report.room_id},
         )
         return Response(FraudReportSerializer(report, context={"request": request}).data)
+
+
+# ---------------------------------------------------------------------------
+# Stage 3 — Persistent Fraud Graph endpoints
+# ---------------------------------------------------------------------------
+
+
+class _AdminRequiredMixin:
+    """Mixin that requires admin (staff or role=admin) access."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _check_admin(self, request):
+        if not (request.user.is_staff or request.user.role == "admin"):
+            return Response(
+                {"detail": "Admin access required."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return None
+
+
+class FraudGraphOverviewView(_AdminRequiredMixin, APIView):
+    """Admin-only graph dashboard: node/edge/community counts, high-risk user count."""
+
+    @extend_schema(
+        tags=["Fraud"],
+        summary="Graph overview",
+        description="Admin-only summary stats for the persistent fraud graph.",
+    )
+    def get(self, request):
+        deny = self._check_admin(request)
+        if deny:
+            return deny
+        from .services.graph import graph_overview
+
+        return Response(graph_overview())
+
+
+class FraudGraphNodeListView(_AdminRequiredMixin, APIView):
+    """Admin-only list of graph nodes with optional filters."""
+
+    @extend_schema(
+        tags=["Fraud"],
+        summary="List graph nodes",
+        description=(
+            "Admin-only. Filter by entity_type, community_id, min_risk_score. "
+            "Paginated to 200 results."
+        ),
+    )
+    def get(self, request):
+        deny = self._check_admin(request)
+        if deny:
+            return deny
+        from .models import GraphNode
+        from .serializers import GraphNodeSerializer
+
+        qs = GraphNode.objects.all()
+        entity_type = request.query_params.get("entity_type")
+        if entity_type:
+            qs = qs.filter(entity_type=entity_type)
+        community_id = request.query_params.get("community_id")
+        if community_id is not None:
+            qs = qs.filter(community_id=community_id)
+        min_risk = request.query_params.get("min_risk_score")
+        if min_risk is not None:
+            qs = qs.filter(risk_score__gte=int(min_risk))
+        return Response(GraphNodeSerializer(qs[:200], many=True).data)
+
+
+class FraudGraphEdgeListView(_AdminRequiredMixin, APIView):
+    """Admin-only list of graph edges with optional filters."""
+
+    @extend_schema(
+        tags=["Fraud"],
+        summary="List graph edges",
+        description=("Admin-only. Filter by edge_type, strength. Paginated to 200 results."),
+    )
+    def get(self, request):
+        deny = self._check_admin(request)
+        if deny:
+            return deny
+        from .models import GraphEdge
+        from .serializers import GraphEdgeSerializer
+
+        qs = GraphEdge.objects.select_related("source", "target").all()
+        edge_type = request.query_params.get("edge_type")
+        if edge_type:
+            qs = qs.filter(edge_type=edge_type)
+        strength = request.query_params.get("strength")
+        if strength:
+            qs = qs.filter(strength=strength)
+        return Response(GraphEdgeSerializer(qs[:200], many=True).data)
+
+
+class FraudGraphNodeNeighborsView(_AdminRequiredMixin, APIView):
+    """Admin-only: get all neighbors and edges for a specific graph node."""
+
+    @extend_schema(
+        tags=["Fraud"],
+        summary="Node neighbors",
+        description="Admin-only. Returns adjacent nodes and edges for a graph node.",
+    )
+    def get(self, request, node_id):
+        deny = self._check_admin(request)
+        if deny:
+            return deny
+        from .services.graph import node_neighbors
+
+        result = node_neighbors(node_id)
+        if "error" in result:
+            return Response(result, status=status.HTTP_404_NOT_FOUND)
+        return Response(result)
+
+
+class FraudGraphAnomaliesView(_AdminRequiredMixin, APIView):
+    """Admin-only: detect anomalous communities (scam ring candidates)."""
+
+    @extend_schema(
+        tags=["Fraud"],
+        summary="Graph anomalies",
+        description=(
+            "Admin-only. Communities with >= 3 users and at least one "
+            "high-risk member. For review only, never automatic blocks."
+        ),
+    )
+    def get(self, request):
+        deny = self._check_admin(request)
+        if deny:
+            return deny
+        from .services.graph import detect_anomalies
+
+        return Response(detect_anomalies())
+
+
+class PhotoGeoMismatchesView(_AdminRequiredMixin, APIView):
+    """Admin-only: list rooms with photo-geo mismatches."""
+
+    @extend_schema(
+        tags=["Fraud"],
+        summary="Photo-geo mismatches",
+        description=(
+            "Admin-only. Rooms where uploaded photos have GPS coordinates "
+            "that differ from the room's declared location by more than the "
+            "configured threshold."
+        ),
+    )
+    def get(self, request):
+        deny = self._check_admin(request)
+        if deny:
+            return deny
+
+        from rooms.models import Room
+
+        from .services.photo_geo import check_photo_geo_mismatch, get_threshold_km
+
+        threshold = get_threshold_km()
+        rooms_with_gps = (
+            Room.objects.filter(images__photo_lat__isnull=False)
+            .distinct()
+            .select_related("owner")[:200]
+        )
+
+        results = []
+        for room in rooms_with_gps:
+            result = check_photo_geo_mismatch(room)
+            if result["mismatch"]:
+                results.append(
+                    {
+                        "room_id": room.pk,
+                        "title": room.title,
+                        "area": room.area,
+                        "room_lat": float(room.lat),
+                        "room_lng": float(room.lng),
+                        "max_distance_km": result["max_distance_km"],
+                        "mismatched_images": result["mismatched_images"],
+                        "owner": room.owner.username,
+                    }
+                )
+
+        return Response(
+            {
+                "threshold_km": threshold,
+                "mismatches": results,
+                "count": len(results),
+            }
+        )

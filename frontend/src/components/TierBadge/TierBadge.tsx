@@ -6,17 +6,17 @@ const tierConfig: Record<ListingTier, { label: string; icon: typeof Sparkles; cl
   premium: {
     label: "Premium",
     icon: Crown,
-    classes: "bg-gradient-to-r from-amber-400 via-orange-500 to-pink-500 text-white shadow-sm",
+    classes: "bg-warning text-warning-foreground border border-warning/30 shadow-xs",
   },
   featured: {
     label: "Featured",
     icon: Flame,
-    classes: "bg-orange-600 text-white shadow-sm",
+    classes: "bg-brand text-brand-foreground shadow-xs",
   },
   free: {
     label: "Free",
     icon: Sparkles,
-    classes: "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300",
+    classes: "bg-surface-subtle text-muted-foreground border border-border",
   },
 };
 
@@ -37,7 +37,7 @@ export default function TierBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[0.7rem] font-bold tracking-wide",
+        "inline-flex items-center gap-1 rounded-sm px-2 py-0.5 text-[0.7rem] font-bold tracking-wide",
         config.classes,
         className
       )}

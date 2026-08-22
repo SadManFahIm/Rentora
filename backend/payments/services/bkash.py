@@ -20,6 +20,8 @@ import requests
 from django.conf import settings
 from django.core.cache import cache
 
+from config.cache_utils import lock, unlock
+
 if TYPE_CHECKING:
     from payments.models import Payment
 
@@ -30,6 +32,11 @@ GRANT_TOKEN_CACHE_KEY = "bkash_grant_token"
 # Refresh a bit before the token actually expires so an in-flight request
 # never gets caught using a token that expires mid-call.
 TOKEN_EXPIRY_BUFFER_SECONDS = 60
+# Single-flight lock: prevents N concurrent requests from hammering the grant
+# endpoint when the cache is cold. Auto-expires, so a crashed holder cannot
+# deadlock payment creation.
+GRANT_TOKEN_LOCK_KEY = "bkash_grant_token_lock"
+GRANT_TOKEN_LOCK_SECONDS = 10
 
 
 class BkashError(Exception):
@@ -41,12 +48,33 @@ def _base_url() -> str:
 
 
 def get_grant_token(force_refresh: bool = False) -> str:
-    """Return a valid bKash access token, fetching + caching a new one if needed."""
+    """Return a valid bKash access token, fetching + caching a new one if needed.
+
+    A cold cache is a stampede hazard: many concurrent payment requests would
+    each call the grant endpoint. A short single-flight lock lets exactly one
+    caller fetch; the rest re-read the freshly populated cache. If the lock is
+    unavailable (cache hiccup) we fall through to a direct grant — worst case
+    is one extra upstream call, never a deadlock.
+    """
     if not force_refresh:
         cached = cache.get(GRANT_TOKEN_CACHE_KEY)
         if cached:
             return cached
+    if force_refresh:
+        return _grant_and_cache()
+    if lock(GRANT_TOKEN_LOCK_KEY, timeout=GRANT_TOKEN_LOCK_SECONDS):
+        try:
+            return _grant_and_cache()
+        finally:
+            unlock(GRANT_TOKEN_LOCK_KEY)
+    cached = cache.get(GRANT_TOKEN_CACHE_KEY)
+    if cached:
+        return cached
+    return _grant_and_cache()
 
+
+def _grant_and_cache() -> str:
+    """Call the bKash grant endpoint once, cache the token, and return it."""
     payload = {
         "app_key": settings.BKASH_APP_KEY,
         "app_secret": settings.BKASH_APP_SECRET,

@@ -1,6 +1,8 @@
 from datetime import date
 
 from django.conf import settings
+from django.db import transaction
+from django.db.models import Q
 from drf_spectacular.utils import extend_schema_field, inline_serializer
 from rest_framework import serializers
 
@@ -65,6 +67,10 @@ class BookingSerializer(serializers.ModelSerializer):
 class BookingCreateSerializer(serializers.ModelSerializer):
     """Used by tenants to create a booking. `tenant` is set from the request in the view."""
 
+    # Phase 15 — Monetization 2.0: optional broker referral code. Resolved
+    # server-side to a verified broker; never trusted client-side.
+    broker_code = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
     class Meta:
         model = Booking
         fields = [
@@ -75,11 +81,22 @@ class BookingCreateSerializer(serializers.ModelSerializer):
             "monthly_rent",
             "notes",
             "security_deposit_amount",
+            "broker_code",
         ]
         extra_kwargs = {
             "monthly_rent": {"required": False},
             "security_deposit_amount": {"required": False},
         }
+
+    def validate_broker_code(self, value):
+        if not value:
+            return None
+        from brokers.services import resolve_referral
+
+        broker = resolve_referral(value)
+        if broker is None:
+            raise serializers.ValidationError("Invalid or unverified broker code.")
+        return broker
 
     def validate(self, attrs):
         request = self.context["request"]
@@ -91,23 +108,58 @@ class BookingCreateSerializer(serializers.ModelSerializer):
         if not room.is_available:
             raise serializers.ValidationError("This room is not available for booking.")
 
-        check_in = attrs["check_in"]
-        check_out = attrs.get("check_out")
-        blocking_statuses = [Booking.Status.PENDING, Booking.Status.APPROVED]
-        for existing in Booking.objects.filter(room=room, status__in=blocking_statuses):
-            existing_end = existing.check_out or date.max
-            new_end = check_out or date.max
-            if existing.check_in <= new_end and existing_end >= check_in:
-                raise serializers.ValidationError(
-                    "This room already has an overlapping booking for those dates."
-                )
+        if self._overlap_exists(room, attrs["check_in"], attrs.get("check_out")):
+            raise serializers.ValidationError(
+                "This room already has an overlapping booking for those dates."
+            )
 
         return attrs
+
+    @staticmethod
+    def _overlap_exists(room, check_in, check_out) -> bool:
+        """True when a blocking booking overlaps ``[check_in, check_out]``."""
+        blocking_statuses = [Booking.Status.PENDING, Booking.Status.APPROVED]
+        new_end = check_out or date.max
+        return (
+            Booking.objects.filter(
+                room=room,
+                status__in=blocking_statuses,
+            )
+            .filter(
+                Q(check_in__lte=new_end),
+                Q(check_out__isnull=True) | Q(check_out__gte=check_in),
+            )
+            .exists()
+        )
 
     def create(self, validated_data):
         validated_data.setdefault("monthly_rent", validated_data["room"].price)
         validated_data["tenant"] = self.context["request"].user
-        return super().create(validated_data)
+        broker = validated_data.pop("broker_code", None)
+        validated_data["broker_referral"] = broker
+
+        # Phase 16 hardening — close the check-then-insert race. Two tenants
+        # validating concurrently (no overlap at validation time) could both
+        # create a booking for the same dates. Locking the room row inside a
+        # transaction serializes concurrent creates for that room, and the
+        # overlap re-check becomes authoritative (SQLite ignores FOR UPDATE in
+        # dev, but PostgreSQL honours it — and the pre-check above still
+        # rejects the common case early).
+        with transaction.atomic():
+            room = (
+                type(validated_data["room"])
+                .objects.select_for_update()
+                .get(pk=validated_data["room"].pk)
+            )
+            if not room.is_available:
+                raise serializers.ValidationError("This room is not available for booking.")
+            if self._overlap_exists(
+                room, validated_data["check_in"], validated_data.get("check_out")
+            ):
+                raise serializers.ValidationError(
+                    "This room already has an overlapping booking for those dates."
+                )
+            return super().create(validated_data)
 
 
 class BookingUpdateSerializer(serializers.ModelSerializer):
