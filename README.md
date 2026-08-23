@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-1058%20(716%20BE%20%2B%20342%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-1320%20(978%20BE%20%2B%20342%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -17,7 +17,7 @@
 ## 📚 Table of Contents
 
 - [Product Overview](#-product-overview)
-- [Changelog — Phase 9 · 10 · 11](#changelog)
+- [Changelog — Phase 16 · 17](#changelog)
 - [What's New in v2.0](#changelog--whats-new-in-v20)
 - [Delivery Roadmap](#-delivery-roadmap)
 - [Features](#-features)
@@ -69,6 +69,17 @@ Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 ---
 
 ## 🆕 Changelog
+
+**Phase 17 — Graph & Deep Trust (ML Anti-Fraud v2)**
+
+- **Scam-network graph** — `GraphNode`/`GraphEdge` models (PostgreSQL, no external graph DB), `rebuild_graph` full rebuild + `update_graph_incremental` on fraud events, community detection (Union-Find), admin API (`/api/v1/fraud/graph/` — nodes, edges, rebuild, anomalies). Feature-flagged via `GRAPH_ENABLED`
+- **KYC liveness + face-match** — `LivenessChallenge`/`LivenessConsent` models, pluggable providers (`rules` deterministic, `http` gateway), OCR confidence thresholds, 5 API endpoints (`/users/liveness/`), `purge_expired_liveness` beat task. Feature-flagged via `KYC_LIVENESS_ENABLED`
+- **Photo-geo authenticity** — `RoomImage` GPS fields, `photo_geo` service (haversine mismatch detection), `scan_photo_geo_mismatches` Celery task, `PhotoGeoMismatchesView` admin endpoint. Feature-flagged via `PHOTO_GEO_ENABLED`
+- **Fake-review detection** — `review_detector` service (trust scoring: age/length/contact/spam/velocity/similarity, anomaly detection), `scan_review_trust` + `detect_review_anomalies` Celery tasks. Feature-flagged via `REVIEW_TRUST_ENABLED`
+- **Model drift monitoring** — `model_monitor` service (check_all_drift, DriftMetric recording, retrain-request creation), `check_model_drift` beat task, admin drift/retrain endpoints. Feature-flagged via `MODEL_DRIFT_ENABLED`
+- **Shared provider abstraction** — `BaseProvider`/`ProviderResult`/`ProviderFailure`/`Registry` in `fraud/services/provider_base.py`; all providers (liveness, face-match, OCR) share a common failure taxonomy (`USER_FAILURE`/`PROVIDER_FAILURE`/`SYSTEM_FAILURE`)
+- **Security/privacy** — PII masking (phone, NID, email), reason sanitization, audit logging, sensitive-field scrubbing from logs/analytics/URLs/CSVs; `ProviderResult.fail()` auto-sanitizes
+- **Engineering** — 262 new backend tests (350 fraud total), 10 stages, pre-commit ruff-clean, Celery beat schedule updated. See [`docs/phase-17-final-report.md`](docs/phase-17-final-report.md) + [`docs/phase-17-graph-trust-audit.md`](docs/phase-17-graph-trust-audit.md)
 
 **Phase 16 — Hardening & Scale**
 
@@ -529,6 +540,8 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 | **13**     | Reach — 📱 SMS OTP phone sign-in (BD market, gateway-gated), 🟢 WhatsApp listing share + AI share summary, 🗺️ per-area SEO landing pages + sitemap, ⚡ Lighthouse performance gate in CI | ✅ Shipped |
 | **14**     | AI v3 Vision & Content — 👁️ photo intelligence (caption/palette/observations from actual photos), ✍️ AI draft title + description from photos, 🏷️ suggested amenity tags (review-then-apply), 📷 AI image search ("upload a photo, find rooms that look like it") with match scores | ✅ Shipped |
 | **15**     | Monetization 2.0 — 💳 subscriptions + entitlements (landlord SaaS), 🧾 idempotent revenue ledger + commission engine, 🏢 corporate housing (accounts / bulk booking / invoices), 🏅 verified broker network (attribution / payouts), 🛍️ add-on services marketplace (orders + AI cross-sell), 🛡️ insurance & credit partnerships, 🎛️ admin revenue & payout centre | ✅ Shipped |
+| **16**     | Hardening & Scale — 🧠 embeddings + pgvector (vendor-guarded), 🚩 feature flags + A/B experiments, 🖼️ image pipeline/CDN (WebP variants, private storage), 🔴 Redis hardening (leases, locks, timeouts), ⚡ rate limiting + abuse prevention, ⏱️ Celery reliability (retry, ack-late, time limits), 🏥 `/health/` liveness, 📋 X-Request-ID correlation | ✅ Shipped |
+| **17**     | Graph & Deep Trust — 🕸️ scam-network graph (PostgreSQL nodes/edges, community detection), 🪪 KYC liveness + face-match (pluggable providers), 📷 photo-geo authenticity (GPS mismatch), 🕵️ fake-review detection (trust scoring + anomalies), 📊 model drift monitoring (metrics + retrain requests), 🔐 PII masking + privacy layer, 🧩 shared provider abstraction (BaseProvider/Registry) | ✅ Shipped |
 
 ---
 
@@ -1204,7 +1217,7 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 | `/api/v1/redoc/`  | ReDoc                 |
 | `/api/v1/schema/` | OpenAPI schema (YAML) |
 
-> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook) · [`docs/RENTORA_COPILOT.md`](docs/RENTORA_COPILOT.md) (Copilot architecture, API, config) · [`docs/AI_PRICING_V2.md`](docs/AI_PRICING_V2.md) (pricing suggestion v2) · [`docs/DUPLICATE_IMAGE_FRAUD.md`](docs/DUPLICATE_IMAGE_FRAUD.md) (duplicate-image detector) · [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) + [`docs/MAP_API.md`](docs/MAP_API.md) + [`docs/MAP_SCORING.md`](docs/MAP_SCORING.md) (intelligent map v2) · [`docs/VOICE_SEARCH_PLAYBOOK.md`](docs/VOICE_SEARCH_PLAYBOOK.md) (voice search) · [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md) (verified feature matrix) · [`docs/PWA.md`](docs/PWA.md) (PWA architecture, manifest, SW strategy, install/update/offline behavior) · [`docs/phase-12-trust-safety-v2.md`](docs/phase-12-trust-safety-v2.md) (Phase 12 Trust & Safety V2) · [`docs/TENANT_KYC.md`](docs/TENANT_KYC.md) + [`docs/CHAT_SAFETY.md`](docs/CHAT_SAFETY.md) (tenant KYC + chat safety) · [`docs/tier2-upgrades.md`](docs/tier2-upgrades.md) (AI chat-safety classifier, self-hosted analytics, photo forensics, OSRM ETA, ClamAV, KYC auto pre-screen, react-router v7) · [`docs/tier3-upgrades.md`](docs/tier3-upgrades.md) (RAG Copilot listing mode, EN⇄BN i18n, production-grade embeddings, E2E expansion, tenant trust signals) · [`docs/tier4-upgrades.md`](docs/tier4-upgrades.md) (AI advisor, negotiation assistant, agreement checker, landlord copilot, property comparison, demand forecast, smart alerts, hosted embeddings, KYC auto pre-screen, Playwright E2E) · [`docs/tier5-upgrades.md`](docs/tier5-upgrades.md) (funnel analytics wiring, photo forensics v2, price recommendation, Copilot image understanding, AI listing draft) · [`docs/phase-15-monetization-2.0.md`](docs/phase-15-monetization-2.0.md) (Phase 15 Monetization 2.0 — subscriptions, revenue ledger, brokers, corporate, marketplace, insurance/credit)
+> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook) · [`docs/RENTORA_COPILOT.md`](docs/RENTORA_COPILOT.md) (Copilot architecture, API, config) · [`docs/AI_PRICING_V2.md`](docs/AI_PRICING_V2.md) (pricing suggestion v2) · [`docs/DUPLICATE_IMAGE_FRAUD.md`](docs/DUPLICATE_IMAGE_FRAUD.md) (duplicate-image detector) · [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) + [`docs/MAP_API.md`](docs/MAP_API.md) + [`docs/MAP_SCORING.md`](docs/MAP_SCORING.md) (intelligent map v2) · [`docs/VOICE_SEARCH_PLAYBOOK.md`](docs/VOICE_SEARCH_PLAYBOOK.md) (voice search) · [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md) (verified feature matrix) · [`docs/PWA.md`](docs/PWA.md) (PWA architecture, manifest, SW strategy, install/update/offline behavior) · [`docs/phase-12-trust-safety-v2.md`](docs/phase-12-trust-safety-v2.md) (Phase 12 Trust & Safety V2) · [`docs/TENANT_KYC.md`](docs/TENANT_KYC.md) + [`docs/CHAT_SAFETY.md`](docs/CHAT_SAFETY.md) (tenant KYC + chat safety) · [`docs/tier2-upgrades.md`](docs/tier2-upgrades.md) (AI chat-safety classifier, self-hosted analytics, photo forensics, OSRM ETA, ClamAV, KYC auto pre-screen, react-router v7) · [`docs/tier3-upgrades.md`](docs/tier3-upgrades.md) (RAG Copilot listing mode, EN⇄BN i18n, production-grade embeddings, E2E expansion, tenant trust signals) · [`docs/tier4-upgrades.md`](docs/tier4-upgrades.md) (AI advisor, negotiation assistant, agreement checker, landlord copilot, property comparison, demand forecast, smart alerts, hosted embeddings, KYC auto pre-screen, Playwright E2E) · [`docs/tier5-upgrades.md`](docs/tier5-upgrades.md) (funnel analytics wiring, photo forensics v2, price recommendation, Copilot image understanding, AI listing draft) · [`docs/phase-15-monetization-2.0.md`](docs/phase-15-monetization-2.0.md) (Phase 15 Monetization 2.0 — subscriptions, revenue ledger, brokers, corporate, marketplace, insurance/credit) · [`docs/phase-15-communication-trust-ai.md`](docs/phase-15-communication-trust-ai.md) (Phase 15 Communication & Trust AI — chat translation, support copilot, KYC OCR, review summary, market report, fraud rings) · [`docs/phase-16-hardening.md`](docs/phase-16-hardening.md) (Phase 16 Hardening & Scale — embeddings, feature flags, image pipeline, Redis, rate limiting, Celery) · [`docs/phase-17-final-report.md`](docs/phase-17-final-report.md) (Phase 17 Graph & Deep Trust — scam-network graph, KYC liveness, photo-geo, fake-review detection, model drift, PII masking)
 
 ---
 
