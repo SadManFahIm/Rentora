@@ -101,6 +101,8 @@ INSTALLED_APPS = [
     "partner_services",
     # Phase 17 — Graph & Deep Trust
     "ml_models",
+    # Phase 18 — AI Intelligence Layer
+    "ai_intelligence",
 ]
 
 # ============================================================
@@ -595,6 +597,14 @@ CHAT_SAFETY_ML_FLAG_CONFIDENCE = float(os.getenv("CHAT_SAFETY_ML_FLAG_CONFIDENCE
 # Posterior threshold: suspicious >= this boosts a rule-based medium to high.
 CHAT_SAFETY_ML_BOOST_CONFIDENCE = float(os.getenv("CHAT_SAFETY_ML_BOOST_CONFIDENCE", "0.85"))
 
+# ---- AI Intelligence Layer (Phase 18.1) ----
+# Master switch for AI execution telemetry. When False, providers skip
+# telemetry logging entirely (zero overhead). When True, providers log
+# execution data asynchronously (non-blocking).
+AI_TELEMETRY_ENABLED = os.getenv("AI_TELEMETRY_ENABLED", "True") == "True"
+# How long to keep AI execution logs (days). Older logs are purged.
+AI_EXECUTION_LOG_RETENTION_DAYS = int(os.getenv("AI_EXECUTION_LOG_RETENTION_DAYS", "90"))
+
 # ============================================================
 # Chat live translation EN⇄BN (Phase 15, B1) — see chat/translation.py
 # ============================================================
@@ -1034,6 +1044,15 @@ CELERY_BEAT_SCHEDULE = {
     "scan-photo-geo-mismatches": {
         "task": "fraud.tasks.scan_photo_geo_mismatches",
         "schedule": crontab(minute=0, hour=4, day_of_week=1),  # Mon 04:00
+    },
+    # Phase 18 — AI Intelligence Layer (Stage 1)
+    "update-ai-provider-health": {
+        "task": "ai_intelligence.update_provider_health",
+        "schedule": 3600.0,  # hourly
+    },
+    "purge-old-ai-execution-logs": {
+        "task": "ai_intelligence.purge_old_execution_logs",
+        "schedule": crontab(minute=0, hour=2),  # daily 02:00
     },
 }
 

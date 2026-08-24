@@ -7,6 +7,7 @@ class CeleryWiringTests(TestCase):
     def test_tasks_are_registered(self):
         # Import the task modules first, exactly like a real worker would
         # (autodiscovery alone is timing-sensitive inside the test runner).
+        import ai_intelligence.tasks  # noqa: F401
         import analytics.tasks  # noqa: F401
         import fraud.tasks  # noqa: F401
         import payments.tasks  # noqa: F401
@@ -39,6 +40,9 @@ class CeleryWiringTests(TestCase):
             "fraud.tasks.purge_expired_liveness",
             "fraud.tasks.alert_graph_anomalies",
             "fraud.tasks.scan_photo_geo_mismatches",
+            # Phase 18 — AI Intelligence Layer
+            "ai_intelligence.update_provider_health",
+            "ai_intelligence.purge_old_execution_logs",
         ]:
             with self.subTest(task=task_name):
                 self.assertIn(task_name, app.tasks)
@@ -72,6 +76,9 @@ class CeleryWiringTests(TestCase):
                 "purge-expired-liveness",
                 "alert-graph-anomalies",
                 "scan-photo-geo-mismatches",
+                # Phase 18 — AI Intelligence Layer
+                "update-ai-provider-health",
+                "purge-old-ai-execution-logs",
             },
         )
 
