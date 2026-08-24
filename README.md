@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-1320%20(978%20BE%20%2B%20342%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-1645%20(1270%20BE%20%2B%20375%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -17,7 +17,7 @@
 ## 📚 Table of Contents
 
 - [Product Overview](#-product-overview)
-- [Changelog — Phase 16 · 17](#changelog)
+- [Changelog — Phase 18 · 17](#changelog)
 - [What's New in v2.0](#changelog--whats-new-in-v20)
 - [Delivery Roadmap](#-delivery-roadmap)
 - [Features](#-features)
@@ -69,6 +69,18 @@ Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 ---
 
 ## 🆕 Changelog
+
+**Phase 18.1 — AI Intelligence Foundation (Provider Registry + Telemetry)**
+
+- **AI Intelligence Layer** — new `ai_intelligence` Django app: `AIFeatureRegistry` (central registry of all AI features, providers, costs, settings), `AIExecutionLog` (append-only per-request telemetry with UUID execution_id, latency, tokens, cost, confidence, fallback chain tracking, 4 composite DB indexes), `ProviderHealth` (aggregated provider availability/failure rates over time windows with p95/p99 latency, unique constraint per provider+feature+window)
+- **TelemetryMixin** — drop-in mixin for any `BaseProvider` subclass: automatic execution timing (`timed_execution` context manager), non-blocking telemetry logging to `AIExecutionLog`, configurable via `AI_TELEMETRY_ENABLED` setting (default `True`), lazy DB import so providers work without telemetry when flag is off
+- **Enhanced ProviderResult** — new fields: `latency_ms`, `input_tokens`, `output_tokens`, `model_name`, `model_version`, `estimated_cost_usd`, `failure_type` (backward-compatible defaults); `ok()` and `fail()` class methods extended with optional telemetry kwargs
+- **Cost estimation** — `calculate_estimated_cost(provider, model, tokens)` utility with published pricing for OpenAI (GPT-4 family) and Anthropic (Claude 3 family); returns `Decimal` in USD, 0 for unknown models
+- **Provider stats API** — `get_provider_stats(feature_id, provider, hours)` aggregates execution logs into success rate, avg/p95 latency, total cost, total tokens, with per-provider breakdown
+- **Admin API** — 7 read-only endpoints under `api/v1/ai/` (feature list/detail, execution log list/detail, provider health list, stats, manual health update), all staff-only
+- **Celery beat tasks** — `update_provider_health` (hourly aggregation of execution logs into `ProviderHealth`), `purge_old_execution_logs` (daily cleanup of logs older than `AI_EXECUTION_LOG_RETENTION_DAYS`, default 90)
+- **Provider health aggregation** — calculates success rate, p95/p99 latency, timeout counts, token totals, cost totals per (provider, feature) combination; marks providers unhealthy when success_rate drops below 95%
+- **Engineering** — 21 new tests, 3 database migrations, ruff-clean, existing 1270 tests all pass. See [`docs/phase-18-ai-intelligence-audit.md`](docs/phase-18-ai-intelligence-audit.md)
 
 **Phase 17 — Graph & Deep Trust (ML Anti-Fraud v2)**
 
@@ -542,6 +554,7 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 | **15**     | Monetization 2.0 — 💳 subscriptions + entitlements (landlord SaaS), 🧾 idempotent revenue ledger + commission engine, 🏢 corporate housing (accounts / bulk booking / invoices), 🏅 verified broker network (attribution / payouts), 🛍️ add-on services marketplace (orders + AI cross-sell), 🛡️ insurance & credit partnerships, 🎛️ admin revenue & payout centre | ✅ Shipped |
 | **16**     | Hardening & Scale — 🧠 embeddings + pgvector (vendor-guarded), 🚩 feature flags + A/B experiments, 🖼️ image pipeline/CDN (WebP variants, private storage), 🔴 Redis hardening (leases, locks, timeouts), ⚡ rate limiting + abuse prevention, ⏱️ Celery reliability (retry, ack-late, time limits), 🏥 `/health/` liveness, 📋 X-Request-ID correlation | ✅ Shipped |
 | **17**     | Graph & Deep Trust — 🕸️ scam-network graph (PostgreSQL nodes/edges, community detection), 🪪 KYC liveness + face-match (pluggable providers), 📷 photo-geo authenticity (GPS mismatch), 🕵️ fake-review detection (trust scoring + anomalies), 📊 model drift monitoring (metrics + retrain requests), 🔐 PII masking + privacy layer, 🧩 shared provider abstraction (BaseProvider/Registry) | ✅ Shipped |
+| **18.1**   | AI Intelligence Foundation — 🧠 AI feature registry (central registry + provider tracking), 📊 execution telemetry (latency/tokens/cost/confidence per request), 🏥 provider health monitoring (p95/p99 latency, success rates, auto-degradation), 💰 cost estimation engine (OpenAI + Anthropic pricing), 🔌 TelemetryMixin (drop-in for BaseProvider), 🎛️ admin API (7 endpoints, staff-only) | ✅ Shipped |
 
 ---
 
