@@ -1,0 +1,11 @@
+# gitleaks configuration — allowlist known false positives.
+# See https://github.com/gitleaks/gitleaks#configuration
+
+[allowlist]
+  description = "Global allowlist for known false positives"
+  paths = [
+    # Management commands seed AI-feature metadata (settings_key values are
+    # Django setting names, not actual API keys — gitleaks generic-api-key
+    # matches them because the string looks high-entropy).
+    "backend/ai_intelligence/management/commands/register_ai_features\\.py$",
+  ]
