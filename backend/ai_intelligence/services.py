@@ -1,7 +1,8 @@
-"""AI Intelligence Layer — Phase 18.1 services.
+"""AI Intelligence Layer — Phase 18.1 + 18.2 services.
 
 Provides:
 - Feature registry management
+- Prompt registry CRUD and versioning
 - Execution log querying and aggregation
 - Provider health monitoring
 - Cost calculation utilities
@@ -12,15 +13,21 @@ All functions are designed to be non-blocking and fail gracefully.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Avg, Count, Q, Sum
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Feature Registry
+# ---------------------------------------------------------------------------
 
 
 def get_feature_registry(feature_key: str) -> Any:
@@ -38,8 +45,14 @@ def register_feature(
     name: str,
     category: str = "other",
     description: str = "",
+    owner: str = "",
+    status: str = "active",
+    is_enabled: bool = True,
     default_provider: str = "",
+    default_model: str = "",
     available_providers: list[str] | None = None,
+    fallback_strategy: str = "none",
+    feature_flag_key: str = "",
     settings_key: str = "",
     estimated_cost_per_request: float = 0,
     metadata: dict | None = None,
@@ -56,8 +69,14 @@ def register_feature(
             "name": name,
             "category": category,
             "description": description,
+            "owner": owner,
+            "status": status,
+            "is_enabled": is_enabled,
             "default_provider": default_provider,
+            "default_model": default_model,
             "available_providers": available_providers or [],
+            "fallback_strategy": fallback_strategy,
+            "feature_flag_key": feature_flag_key,
             "settings_key": settings_key,
             "estimated_cost_per_request": Decimal(str(estimated_cost_per_request)),
             "metadata": metadata or {},
@@ -66,6 +85,372 @@ def register_feature(
     action = "Created" if created else "Updated"
     logger.info("%s AI feature: %s", action, feature_id)
     return feature
+
+
+def is_feature_available(feature_key: str, user=None) -> bool:
+    """Check if a feature is both enabled in the registry AND passes its flag.
+
+    Returns True if the feature exists, is_enabled=True, and its linked
+    feature flag (if any) is also active. Never raises.
+    """
+    try:
+        feature = get_feature_registry(feature_key)
+        if feature is None or not feature.is_enabled:
+            return False
+        if feature.feature_flag_key:
+            from feature_flags.models import is_enabled as flag_is_enabled
+
+            if not flag_is_enabled(feature.feature_flag_key, user=user):
+                return False
+        return True
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Prompt Registry
+# ---------------------------------------------------------------------------
+
+_VARIABLE_RE = re.compile(r"\{\{(\w+)\}\}")
+
+
+def create_prompt(
+    prompt_key: str,
+    name: str,
+    template: str,
+    *,
+    description: str = "",
+    category: str = "other",
+    feature_id: int | None = None,
+    template_type: str = "template",
+    default_model: str = "",
+    input_schema: dict | None = None,
+    output_schema: dict | None = None,
+    system_instructions: str = "",
+    variables: dict | None = None,
+    model_requirement: str = "",
+    change_summary: str = "",
+    created_by: Any = None,
+) -> Any:
+    """Create a new prompt with its first version (v1).
+
+    Returns the AIPrompt instance. Raises on duplicate prompt_key.
+    """
+    from .models import AIFeatureRegistry, AIPrompt, AIPromptVersion
+
+    feature = None
+    if feature_id is not None:
+        feature = AIFeatureRegistry.objects.filter(pk=feature_id).first()
+
+    with transaction.atomic():
+        prompt = AIPrompt.objects.create(
+            prompt_key=prompt_key,
+            name=name,
+            description=description,
+            category=category,
+            feature=feature,
+            template_type=template_type,
+            default_model=default_model,
+            input_schema=input_schema or {},
+            output_schema=output_schema or {},
+            status=AIPrompt.Status.DRAFT,
+            created_by=created_by if created_by and created_by.is_authenticated else None,
+        )
+
+        # Create version 1 as the initial version (not auto-activated)
+        AIPromptVersion.objects.create(
+            prompt=prompt,
+            version=1,
+            template=template,
+            system_instructions=system_instructions,
+            variables=variables or {},
+            model_requirement=model_requirement,
+            status=AIPromptVersion.Status.INACTIVE,
+            is_active=False,
+            change_summary=change_summary or "Initial version",
+            created_by=created_by if created_by and created_by.is_authenticated else None,
+        )
+
+    logger.info("Created prompt: %s", prompt_key)
+    return prompt
+
+
+def create_prompt_version(
+    prompt_key: str,
+    template: str,
+    *,
+    system_instructions: str = "",
+    variables: dict | None = None,
+    model_requirement: str = "",
+    change_summary: str = "",
+    created_by: Any = None,
+) -> Any:
+    """Create a new version for an existing prompt.
+
+    Returns the new AIPromptVersion. The new version is NOT auto-activated.
+    Raises ValueError if prompt does not exist.
+    """
+    from .models import AIPrompt, AIPromptVersion
+
+    prompt = AIPrompt.objects.filter(prompt_key=prompt_key).first()
+    if prompt is None:
+        raise ValueError(f"Prompt not found: {prompt_key}")
+
+    latest = prompt.versions.order_by("-version").first()
+    next_version = (latest.version + 1) if latest else 1
+
+    version = AIPromptVersion.objects.create(
+        prompt=prompt,
+        version=next_version,
+        template=template,
+        system_instructions=system_instructions,
+        variables=variables or {},
+        model_requirement=model_requirement,
+        status=AIPromptVersion.Status.INACTIVE,
+        is_active=False,
+        change_summary=change_summary,
+        created_by=created_by if created_by and created_by.is_authenticated else None,
+    )
+    logger.info("Created prompt version: %s:v%d", prompt_key, next_version)
+    return version
+
+
+def activate_prompt_version(
+    prompt_key: str,
+    version_number: int,
+    *,
+    activated_by: Any = None,
+    request: Any = None,
+) -> Any:
+    """Activate a specific prompt version.
+
+    Deactivates the currently active version (if any) and activates the
+    specified version. Returns the activated version.
+    Raises ValueError if version does not exist or prompt not found.
+    """
+    from .models import AIPromptVersion
+
+    target = (
+        AIPromptVersion.objects.select_related("prompt")
+        .filter(prompt__prompt_key=prompt_key, version=version_number)
+        .first()
+    )
+    if target is None:
+        raise ValueError(f"Version not found: {prompt_key}:v{version_number}")
+
+    with transaction.atomic():
+        # Deactivate all currently active versions for this prompt
+        AIPromptVersion.objects.filter(
+            prompt=target.prompt,
+            is_active=True,
+        ).update(is_active=False, status=AIPromptVersion.Status.INACTIVE)
+
+        # Activate the target version
+        target.is_active = True
+        target.status = AIPromptVersion.Status.ACTIVE
+        target.save(update_fields=["is_active", "status"])
+
+    # Audit log (non-blocking)
+    try:
+        from audit.services import log_action
+
+        log_action(
+            actor=activated_by,
+            action="ai_intelligence.prompt_version.activated",
+            target=target,
+            request=request,
+            detail={"prompt_key": prompt_key, "version": version_number},
+        )
+    except Exception:
+        logger.debug("Audit log failed for prompt activation", exc_info=True)
+
+    logger.info("Activated prompt version: %s:v%d", prompt_key, version_number)
+    return target
+
+
+def deactivate_prompt_version(
+    prompt_key: str,
+    *,
+    deactivated_by: Any = None,
+    request: Any = None,
+) -> bool:
+    """Deactivate the currently active version for a prompt.
+
+    Returns True if a version was deactivated, False if none was active.
+    """
+    from .models import AIPromptVersion
+
+    active = (
+        AIPromptVersion.objects.select_related("prompt")
+        .filter(prompt__prompt_key=prompt_key, is_active=True)
+        .first()
+    )
+    if active is None:
+        return False
+
+    active.is_active = False
+    active.status = AIPromptVersion.Status.INACTIVE
+    active.save(update_fields=["is_active", "status"])
+
+    try:
+        from audit.services import log_action
+
+        log_action(
+            actor=deactivated_by,
+            action="ai_intelligence.prompt_version.deactivated",
+            target=active,
+            request=request,
+            detail={"prompt_key": prompt_key, "version": active.version},
+        )
+    except Exception:
+        logger.debug("Audit log failed for prompt deactivation", exc_info=True)
+
+    logger.info("Deactivated prompt version: %s:v%d", prompt_key, active.version)
+    return True
+
+
+def rollback_prompt(
+    prompt_key: str,
+    *,
+    rolled_back_by: Any = None,
+    request: Any = None,
+) -> Any:
+    """Rollback a prompt to its previous version.
+
+    Finds the currently active version, deactivates it, and activates
+    the version immediately before it (by version number).
+    Returns the newly activated version, or raises ValueError if
+    no rollback is possible (no active version or no previous version).
+    """
+    from .models import AIPromptVersion
+
+    active = (
+        AIPromptVersion.objects.select_related("prompt")
+        .filter(prompt__prompt_key=prompt_key, is_active=True)
+        .first()
+    )
+    if active is None:
+        raise ValueError(f"No active version found for {prompt_key}")
+
+    previous = (
+        AIPromptVersion.objects.filter(
+            prompt=active.prompt,
+            version__lt=active.version,
+        )
+        .order_by("-version")
+        .first()
+    )
+    if previous is None:
+        raise ValueError(f"No previous version to rollback to for {prompt_key}")
+
+    result = activate_prompt_version(
+        prompt_key,
+        previous.version,
+        activated_by=rolled_back_by,
+        request=request,
+    )
+
+    try:
+        from audit.services import log_action
+
+        log_action(
+            actor=rolled_back_by,
+            action="ai_intelligence.prompt_version.rollback",
+            target=result,
+            request=request,
+            detail={
+                "prompt_key": prompt_key,
+                "from_version": active.version,
+                "to_version": previous.version,
+            },
+        )
+    except Exception:
+        logger.debug("Audit log failed for prompt rollback", exc_info=True)
+
+    return result
+
+
+def get_prompt_template(prompt_key: str) -> tuple[str, dict] | None:
+    """Get the active template and variables for a prompt.
+
+    Returns (template, variables) tuple, or None if no active version.
+    """
+    from .models import AIPromptVersion
+
+    active = (
+        AIPromptVersion.objects.filter(
+            prompt__prompt_key=prompt_key,
+            is_active=True,
+        )
+        .select_related("prompt")
+        .first()
+    )
+    if active is None:
+        return None
+    return active.template, active.variables
+
+
+def render_prompt(
+    prompt_key: str,
+    context: dict[str, str],
+) -> str:
+    """Render a prompt template with the given context variables.
+
+    Uses safe ``{{variable}}`` substitution. Validates that all required
+    variables are present. Raises ValidationError on missing variables or
+    template not found.
+    """
+    result = get_prompt_template(prompt_key)
+    if result is None:
+        raise ValidationError(f"No active prompt version for: {prompt_key}")
+
+    template, variables = result
+
+    # Find required variables (those without defaults)
+    required = {
+        name
+        for name, defn in variables.items()
+        if isinstance(defn, dict) and not defn.get("default")
+    }
+    provided = set(context.keys())
+    missing = required - provided
+    if missing:
+        raise ValidationError(f"Missing required variables: {', '.join(sorted(missing))}")
+
+    # Safe substitution — only {{word}} patterns
+    def _replace(match: re.Match) -> str:
+        var_name = match.group(1)
+        return str(context.get(var_name, variables.get(var_name, {}).get("default", "")))
+
+    return _VARIABLE_RE.sub(_replace, template)
+
+
+def validate_prompt_variables(
+    template: str,
+    variables: dict,
+) -> list[str]:
+    """Extract declared variables from template and validate against schema.
+
+    Returns a list of warning strings (empty if valid).
+    """
+    warnings: list[str] = []
+    template_vars = set(_VARIABLE_RE.findall(template))
+    schema_vars = set(variables.keys())
+
+    undeclared = template_vars - schema_vars
+    if undeclared:
+        warnings.append(f"Template uses undeclared variables: {', '.join(sorted(undeclared))}")
+
+    unused = schema_vars - template_vars
+    if unused:
+        warnings.append(f"Schema declares unused variables: {', '.join(sorted(unused))}")
+
+    return warnings
+
+
+# ---------------------------------------------------------------------------
+# Telemetry
+# ---------------------------------------------------------------------------
 
 
 def log_execution(
@@ -88,6 +473,8 @@ def log_execution(
     primary_provider: str = "",
     fallback_chain: list[str] | None = None,
     metadata: dict | None = None,
+    prompt_key: str = "",
+    prompt_version: int = 0,
 ) -> Any:
     """Log an AI execution to the telemetry store.
 
@@ -118,11 +505,18 @@ def log_execution(
                 primary_provider=primary_provider,
                 fallback_chain=fallback_chain or [],
                 metadata=metadata or {},
+                prompt_key=prompt_key,
+                prompt_version=prompt_version,
             )
             return log
     except Exception:
         logger.debug("Failed to log AI execution", exc_info=True)
         return None
+
+
+# ---------------------------------------------------------------------------
+# Provider Stats
+# ---------------------------------------------------------------------------
 
 
 def get_provider_stats(
@@ -174,6 +568,11 @@ def get_provider_stats(
     stats["by_provider"] = list(by_provider)
 
     return stats
+
+
+# ---------------------------------------------------------------------------
+# Provider Health
+# ---------------------------------------------------------------------------
 
 
 def update_provider_health(hours: int = 1) -> int:
@@ -250,6 +649,11 @@ def update_provider_health(hours: int = 1) -> int:
         updated += 1
 
     return updated
+
+
+# ---------------------------------------------------------------------------
+# Cost Estimation
+# ---------------------------------------------------------------------------
 
 
 def calculate_estimated_cost(
