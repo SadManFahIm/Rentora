@@ -1054,6 +1054,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "ai_intelligence.purge_old_execution_logs",
         "schedule": crontab(minute=0, hour=2),  # daily 02:00
     },
+    # Phase 18.3 — Evaluation Framework
+    "cancel-stale-evaluation-runs": {
+        "task": "ai_intelligence.cancel_stale_evaluation_runs",
+        "schedule": 1800.0,  # every 30 minutes
+    },
 }
 
 # ============================================================

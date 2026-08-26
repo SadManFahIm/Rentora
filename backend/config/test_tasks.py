@@ -43,6 +43,9 @@ class CeleryWiringTests(TestCase):
             # Phase 18 — AI Intelligence Layer
             "ai_intelligence.update_provider_health",
             "ai_intelligence.purge_old_execution_logs",
+            # Phase 18.3 — Evaluation Framework
+            "ai_intelligence.execute_evaluation_run",
+            "ai_intelligence.cancel_stale_evaluation_runs",
         ]:
             with self.subTest(task=task_name):
                 self.assertIn(task_name, app.tasks)
@@ -79,6 +82,8 @@ class CeleryWiringTests(TestCase):
                 # Phase 18 — AI Intelligence Layer
                 "update-ai-provider-health",
                 "purge-old-ai-execution-logs",
+                # Phase 18.3 — Evaluation Framework
+                "cancel-stale-evaluation-runs",
             },
         )
 
