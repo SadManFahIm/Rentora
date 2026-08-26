@@ -2,7 +2,19 @@
 
 from django.contrib import admin
 
-from .models import AIExecutionLog, AIFeatureRegistry, AIPrompt, AIPromptVersion, ProviderHealth
+from .models import (
+    AIExecutionLog,
+    AIFeatureRegistry,
+    AIPrompt,
+    AIPromptVersion,
+    EvaluationCase,
+    EvaluationCaseResult,
+    EvaluationDataset,
+    EvaluationMetric,
+    EvaluationRun,
+    EvaluationThreshold,
+    ProviderHealth,
+)
 
 
 class AIPromptVersionInline(admin.TabularInline):
@@ -170,6 +182,168 @@ class ProviderHealthAdmin(admin.ModelAdmin):
     search_fields = ["provider", "feature_key"]
     readonly_fields = ["created_at"]
     date_hierarchy = "window_start"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Phase 18.3 — Evaluation Framework Admin
+# ---------------------------------------------------------------------------
+
+
+@admin.register(EvaluationMetric)
+class EvaluationMetricAdmin(admin.ModelAdmin):
+    list_display = [
+        "metric_key",
+        "name",
+        "metric_type",
+        "category",
+        "is_higher_better",
+        "default_threshold",
+    ]
+    list_filter = ["metric_type", "category"]
+    search_fields = ["metric_key", "name"]
+    readonly_fields = ["created_at"]
+
+
+@admin.register(EvaluationDataset)
+class EvaluationDatasetAdmin(admin.ModelAdmin):
+    list_display = [
+        "dataset_key",
+        "name",
+        "version",
+        "status",
+        "dataset_type",
+        "sample_count",
+        "feature",
+        "created_at",
+    ]
+    list_filter = ["status", "dataset_type"]
+    search_fields = ["dataset_key", "name"]
+    readonly_fields = ["created_at", "updated_at"]
+    date_hierarchy = "created_at"
+
+
+@admin.register(EvaluationCase)
+class EvaluationCaseAdmin(admin.ModelAdmin):
+    list_display = ["case_id", "dataset", "created_at"]
+    list_filter = ["dataset"]
+    search_fields = ["case_id"]
+    readonly_fields = ["created_at"]
+
+
+@admin.register(EvaluationThreshold)
+class EvaluationThresholdAdmin(admin.ModelAdmin):
+    list_display = [
+        "feature",
+        "metric",
+        "threshold_min",
+        "threshold_max",
+    ]
+    list_filter = ["feature", "metric"]
+    readonly_fields = ["created_at", "updated_at"]
+
+
+class EvaluationCaseResultInline(admin.TabularInline):
+    model = EvaluationCaseResult
+    extra = 0
+    readonly_fields = [
+        "case",
+        "input_data",
+        "actual_output",
+        "expected_output",
+        "metric_results",
+        "passed",
+        "score",
+        "confidence",
+        "latency_ms",
+        "error_message",
+        "created_at",
+    ]
+    fields = readonly_fields
+
+
+@admin.register(EvaluationRun)
+class EvaluationRunAdmin(admin.ModelAdmin):
+    list_display = [
+        "run_key_short",
+        "feature",
+        "model_name",
+        "provider",
+        "dataset",
+        "status",
+        "score",
+        "total_cases",
+        "passed_cases",
+        "failed_cases",
+        "duration_ms",
+        "total_cost_usd",
+        "created_at",
+    ]
+    list_filter = ["status", "feature"]
+    search_fields = ["run_key", "model_name", "provider"]
+    readonly_fields = [
+        "run_key",
+        "status",
+        "started_at",
+        "completed_at",
+        "duration_ms",
+        "total_cases",
+        "passed_cases",
+        "failed_cases",
+        "error_count",
+        "score",
+        "metric_scores",
+        "total_cost_usd",
+        "created_at",
+        "updated_at",
+    ]
+    date_hierarchy = "created_at"
+    inlines = [EvaluationCaseResultInline]
+
+    @admin.display(description="Run ID")
+    def run_key_short(self, obj):
+        return str(obj.run_key)[:8]
+
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(EvaluationCaseResult)
+class EvaluationCaseResultAdmin(admin.ModelAdmin):
+    list_display = [
+        "pk",
+        "run_short",
+        "case",
+        "passed",
+        "score",
+        "latency_ms",
+        "created_at",
+    ]
+    list_filter = ["passed"]
+    readonly_fields = [
+        "run",
+        "case",
+        "input_data",
+        "actual_output",
+        "expected_output",
+        "metric_results",
+        "passed",
+        "score",
+        "confidence",
+        "latency_ms",
+        "error_message",
+        "evaluator_version",
+        "created_at",
+    ]
+
+    @admin.display(description="Run")
+    def run_short(self, obj):
+        return str(obj.run.run_key)[:8]
 
     def has_add_permission(self, request):
         return False

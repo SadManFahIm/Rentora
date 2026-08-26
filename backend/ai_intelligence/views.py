@@ -1,4 +1,4 @@
-"""AI Intelligence Layer — Phase 18.1 + 18.2 API views.
+"""AI Intelligence Layer — Phase 18.1 + 18.2 + 18.3 API views.
 
 All views require admin authentication (IsAdminUser).
 """
@@ -7,7 +7,18 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import AIExecutionLog, AIFeatureRegistry, AIPrompt, AIPromptVersion, ProviderHealth
+from .models import (
+    AIExecutionLog,
+    AIFeatureRegistry,
+    AIPrompt,
+    AIPromptVersion,
+    EvaluationCase,
+    EvaluationDataset,
+    EvaluationMetric,
+    EvaluationRun,
+    EvaluationThreshold,
+    ProviderHealth,
+)
 from .serializers import (
     AIExecutionLogSerializer,
     AIFeatureRegistrySerializer,
@@ -16,8 +27,22 @@ from .serializers import (
     AIPromptListSerializer,
     AIPromptVersionCreateSerializer,
     AIPromptVersionSerializer,
+    EvaluationCaseResultSerializer,
+    EvaluationCaseSerializer,
+    EvaluationDatasetCreateSerializer,
+    EvaluationDatasetDetailSerializer,
+    EvaluationDatasetListSerializer,
+    EvaluationMetricSerializer,
+    EvaluationRunCreateSerializer,
+    EvaluationRunDetailSerializer,
+    EvaluationRunListSerializer,
+    EvaluationThresholdSerializer,
+    ModelComparisonSerializer,
+    PromptComparisonSerializer,
     ProviderHealthSerializer,
     ProviderStatsSerializer,
+    RegressionCheckSerializer,
+    RunComparisonSerializer,
 )
 from .services import (
     activate_prompt_version,
@@ -481,3 +506,320 @@ class UpdateProviderHealthView(APIView):
             {"updated": updated, "message": f"Updated {updated} provider health records."},
             status=status.HTTP_200_OK,
         )
+
+
+# ---------------------------------------------------------------------------
+# Phase 18.3 — Evaluation Framework Views
+# ---------------------------------------------------------------------------
+
+
+class _AdminPermission(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user
+            and request.user.is_authenticated
+            and (request.user.is_staff or getattr(request.user, "role", "") == "admin")
+        )
+
+
+class EvaluationMetricListView(generics.ListCreateAPIView):
+    """List all evaluation metrics or create a new one."""
+
+    permission_classes = [_AdminPermission]
+    queryset = EvaluationMetric.objects.all()
+    serializer_class = EvaluationMetricSerializer
+
+
+class EvaluationDatasetListView(generics.ListCreateAPIView):
+    """List all evaluation datasets or create a new one."""
+
+    permission_classes = [_AdminPermission]
+
+    def get_queryset(self):
+        return EvaluationDataset.objects.select_related("feature").all()
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return EvaluationDatasetCreateSerializer
+        return EvaluationDatasetListSerializer
+
+    def create(self, request, *args, **kwargs):
+        ser = EvaluationDatasetCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        from .services import create_dataset
+
+        try:
+            dataset = create_dataset(
+                dataset_key=ser.validated_data["dataset_key"],
+                name=ser.validated_data["name"],
+                feature_id=ser.validated_data.get("feature_id"),
+                description=ser.validated_data.get("description", ""),
+                dataset_type=ser.validated_data.get("dataset_type", "synthetic"),
+                created_by=request.user,
+            )
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            EvaluationDatasetListSerializer(dataset).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class EvaluationDatasetDetailView(generics.RetrieveAPIView):
+    """Get evaluation dataset detail with cases."""
+
+    permission_classes = [_AdminPermission]
+    queryset = EvaluationDataset.objects.select_related("feature")
+    serializer_class = EvaluationDatasetDetailSerializer
+    lookup_field = "pk"
+
+
+class EvaluationCaseListView(generics.ListAPIView):
+    """List evaluation cases for a dataset."""
+
+    permission_classes = [_AdminPermission]
+    serializer_class = EvaluationCaseSerializer
+
+    def get_queryset(self):
+        dataset_id = self.kwargs.get("dataset_id")
+        return EvaluationCase.objects.filter(dataset_id=dataset_id)
+
+
+class EvaluationThresholdListView(generics.ListCreateAPIView):
+    """List or create evaluation thresholds."""
+
+    permission_classes = [_AdminPermission]
+    serializer_class = EvaluationThresholdSerializer
+
+    def get_queryset(self):
+        feature_id = self.request.query_params.get("feature_id")
+        qs = EvaluationThreshold.objects.select_related("feature", "metric").all()
+        if feature_id:
+            qs = qs.filter(feature__feature_id=feature_id)
+        return qs
+
+    def create(self, request, *args, **kwargs):
+        from .services import set_threshold
+
+        feature_id = request.data.get("feature_id")
+        metric_key = request.data.get("metric_key")
+        threshold_min = request.data.get("threshold_min")
+        threshold_max = request.data.get("threshold_max")
+        try:
+            threshold = set_threshold(
+                feature_id=feature_id,
+                metric_key=metric_key,
+                threshold_min=threshold_min,
+                threshold_max=threshold_max,
+            )
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            EvaluationThresholdSerializer(threshold).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class EvaluationRunListView(generics.ListCreateAPIView):
+    """List evaluation runs or create a new one."""
+
+    permission_classes = [_AdminPermission]
+
+    def get_queryset(self):
+        qs = EvaluationRun.objects.select_related("feature", "dataset").all()
+        feature_id = self.request.query_params.get("feature_id")
+        if feature_id:
+            qs = qs.filter(feature__feature_id=feature_id)
+        run_status = self.request.query_params.get("status")
+        if run_status:
+            qs = qs.filter(status=run_status)
+        return qs
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return EvaluationRunCreateSerializer
+        return EvaluationRunListSerializer
+
+    def create(self, request, *args, **kwargs):
+        ser = EvaluationRunCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        from .services import create_evaluation_run
+
+        try:
+            run = create_evaluation_run(
+                feature_id=ser.validated_data.get("feature_id"),
+                dataset_key=ser.validated_data.get("dataset_key"),
+                dataset_version=ser.validated_data.get("dataset_version"),
+                prompt_key=ser.validated_data.get("prompt_key"),
+                prompt_version=ser.validated_data.get("prompt_version"),
+                model_name=ser.validated_data.get("model_name", ""),
+                provider=ser.validated_data.get("provider", ""),
+                baseline_run_id=ser.validated_data.get("baseline_run_id"),
+                experiment_key=ser.validated_data.get("experiment_key", ""),
+                variant_key=ser.validated_data.get("variant_key", ""),
+                max_cases=ser.validated_data.get("max_cases", 1000),
+                timeout_seconds=ser.validated_data.get("timeout_seconds", 3600),
+                created_by=request.user,
+            )
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            EvaluationRunListSerializer(run).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class EvaluationRunDetailView(generics.RetrieveAPIView):
+    """Get evaluation run detail with case results."""
+
+    permission_classes = [_AdminPermission]
+
+    def get_queryset(self):
+        return EvaluationRun.objects.select_related("feature", "dataset").prefetch_related(
+            "case_results"
+        )
+
+    serializer_class = EvaluationRunDetailSerializer
+
+
+class EvaluationRunExecuteView(APIView):
+    """Execute an evaluation run (synchronous for small, async for large)."""
+
+    permission_classes = [_AdminPermission]
+
+    def post(self, request, run_id: int):
+        from .services import execute_evaluation_run
+
+        result = execute_evaluation_run(run_id)
+        if result.get("status") == "error":
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result, status=status.HTTP_200_OK)
+
+
+class EvaluationRunCancelView(APIView):
+    """Cancel a pending or running evaluation."""
+
+    permission_classes = [_AdminPermission]
+
+    def post(self, request, run_id: int):
+        from .services import cancel_evaluation_run
+
+        cancelled = cancel_evaluation_run(run_id)
+        if not cancelled:
+            return Response(
+                {"error": "Run not found or cannot be cancelled"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({"status": "cancelled"}, status=status.HTTP_200_OK)
+
+
+class EvaluationCaseResultListView(generics.ListAPIView):
+    """List case results for an evaluation run."""
+
+    permission_classes = [_AdminPermission]
+    serializer_class = EvaluationCaseResultSerializer
+
+    def get_queryset(self):
+        from .models import EvaluationCaseResult
+
+        run_id = self.kwargs.get("run_id")
+        qs = EvaluationCaseResult.objects.filter(run_id=run_id)
+        passed = self.request.query_params.get("passed")
+        if passed is not None:
+            qs = qs.filter(passed=passed.lower() in ("true", "1"))
+        return qs
+
+
+class RunComparisonView(APIView):
+    """Compare two evaluation runs."""
+
+    permission_classes = [_AdminPermission]
+
+    def post(self, request):
+        ser = RunComparisonSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        from .services import compare_runs
+
+        result = compare_runs(
+            ser.validated_data["run_a_id"],
+            ser.validated_data["run_b_id"],
+        )
+        if "error" in result:
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result)
+
+
+class ModelComparisonView(APIView):
+    """Compare two models on the same feature and dataset."""
+
+    permission_classes = [_AdminPermission]
+
+    def post(self, request):
+        ser = ModelComparisonSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        from .services import compare_models
+
+        result = compare_models(
+            ser.validated_data["feature_id"],
+            ser.validated_data["model_a"],
+            ser.validated_data["model_b"],
+            ser.validated_data["dataset_key"],
+        )
+        if "error" in result:
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result)
+
+
+class PromptComparisonView(APIView):
+    """Compare two prompt versions on the same dataset."""
+
+    permission_classes = [_AdminPermission]
+
+    def post(self, request):
+        ser = PromptComparisonSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        from .services import compare_prompts
+
+        result = compare_prompts(
+            ser.validated_data["prompt_key"],
+            ser.validated_data["version_a"],
+            ser.validated_data["version_b"],
+            ser.validated_data["dataset_key"],
+        )
+        if "error" in result:
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result)
+
+
+class RegressionCheckView(APIView):
+    """Check a run for quality regressions."""
+
+    permission_classes = [_AdminPermission]
+
+    def post(self, request):
+        ser = RegressionCheckSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        from .services import check_regression
+
+        result = check_regression(ser.validated_data["run_id"])
+        if "error" in result:
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result)
+
+
+class BaselineListView(APIView):
+    """List latest baselines for a feature."""
+
+    permission_classes = [_AdminPermission]
+
+    def get(self, request):
+        feature_id = request.query_params.get("feature_id")
+        if not feature_id:
+            return Response(
+                {"error": "feature_id is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from .services import get_latest_baselines
+
+        runs = get_latest_baselines(feature_id)
+        return Response(EvaluationRunListSerializer(runs, many=True).data)
