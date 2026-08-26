@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-1645%20(1312%20BE%20%2B%20375%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-1722%20(1356%20BE%20%2B%20366%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -17,7 +17,7 @@
 ## 📚 Table of Contents
 
 - [Product Overview](#-product-overview)
-- [Changelog — Phase 18.2 · 18.1 · 17](#changelog)
+- [Changelog — Phase 18.3 · 18.2 · 18.1 · 17](#changelog)
 - [What's New in v2.0](#changelog--whats-new-in-v20)
 - [Delivery Roadmap](#-delivery-roadmap)
 - [Features](#-features)
@@ -69,6 +69,18 @@ Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 ---
 
 ## 🆕 Changelog
+
+**Phase 18.3 — AI Evaluation Framework**
+
+- **Evaluation Metrics** — `EvaluationMetric` model with metric_key (unique), metric_type (`deterministic`/`heuristic`/`llm_judge`), category, formula, `is_higher_better` direction, default_threshold; `register_metric()` service with idempotent create/update
+- **Golden Datasets** — `EvaluationDataset` versioned with `UniqueConstraint(dataset_key, version)`, status lifecycle (`draft` → `published` → `archived`), `EvaluationCase` with input/expected_output/expected_labels/metadata/evaluation_criteria; `create_dataset()`, `create_dataset_version()` (clone), `publish_dataset()`, `archive_dataset()`, `add_cases()` services
+- **Evaluator Abstraction** — `evaluators.py` with `register_evaluator()` / `get_evaluator()` / `evaluate_case()` dispatcher; 26 built-in evaluators: search (precision@K, recall@K, NDCG, MRR, relevance_score), classification (accuracy, precision, recall, F1), fraud (precision, recall, F1, FPR, FNR), LLM (task_success, relevance, completeness, hallucination_rate, structured_output_validity), general (exact_match, contains, length_ratio), prediction (MAE, RMSE, R²)
+- **Evaluation Runs** — `EvaluationRun` with UUID run_key, status lifecycle (`pending` → `running` → `completed`/`failed`/`cancelled`), `EvaluationCaseResult` with per-metric results, composite score, pass/fail, latency, error tracking; `create_evaluation_run()`, `execute_evaluation_run()`, `cancel_evaluation_run()` services; `execute_evaluation_run_task` Celery task for async execution
+- **Thresholds & Regression** — `EvaluationThreshold` (unique per feature+metric), `check_regression()` compares run metrics against thresholds, `get_latest_baselines()` for baseline tracking
+- **Model/Prompt Comparison** — `compare_runs()` (side-by-side), `compare_models()` (same feature, different models), `compare_prompts()` (same feature, different prompts), `compare_with_baseline()` with delta analysis
+- **Admin API** — 17 new endpoints under `api/v1/ai/eval/`: metrics, datasets, cases, thresholds, runs (CRUD + execute + cancel), case results, comparisons, regression check, baselines
+- **Celery** — `execute_evaluation_run_task` (async run execution), `cancel_stale_evaluation_runs` (every 30 min, cancels runs stuck >1 hour)
+- **Engineering** — 44 new tests (107 ai_intelligence total), 6 new models, 1 new app file (evaluators.py), migration 0005, ruff-clean. See [`docs/phase-18-3-evaluation-framework.md`](docs/phase-18-3-evaluation-framework.md)
 
 **Phase 18.2 — AI Intelligence Foundation (Prompt Registry + Feature Integration)**
 
@@ -564,6 +576,7 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 | **17**     | Graph & Deep Trust — 🕸️ scam-network graph (PostgreSQL nodes/edges, community detection), 🪪 KYC liveness + face-match (pluggable providers), 📷 photo-geo authenticity (GPS mismatch), 🕵️ fake-review detection (trust scoring + anomalies), 📊 model drift monitoring (metrics + retrain requests), 🔐 PII masking + privacy layer, 🧩 shared provider abstraction (BaseProvider/Registry) | ✅ Shipped |
 | **18.1**   | AI Intelligence Foundation — 🧠 AI feature registry (central registry + provider tracking), 📊 execution telemetry (latency/tokens/cost/confidence per request), 🏥 provider health monitoring (p95/p99 latency, success rates, auto-degradation), 💰 cost estimation engine (OpenAI + Anthropic pricing), 🔌 TelemetryMixin (drop-in for BaseProvider), 🎛️ admin API (7 endpoints, staff-only) | ✅ Shipped |
 | **18.2**   | AI Intelligence Foundation — 📝 prompt registry (versioned templates, activate/deactivate/rollback), 🔗 feature flag integration (`is_feature_available` checks registry + Django flags), 🌱 `register_ai_features` seeds 30 real features, 🎛️ admin API expanded to 18 endpoints | ✅ Shipped |
+| **18.3**   | AI Evaluation Framework — 📏 evaluation metrics (deterministic/heuristic/LLM-judge), 📊 golden datasets (versioned, publishable), 🔬 evaluator abstraction (26 built-in: search/classification/fraud/LLM/general/prediction), 🧪 evaluation runs (async Celery, per-case results), 📈 model/prompt comparison, 🚨 regression detection (threshold-based), 🎛️ admin API (17 eval endpoints) | ✅ Shipped |
 
 ---
 
