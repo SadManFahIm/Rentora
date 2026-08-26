@@ -1,4 +1,4 @@
-"""AI Intelligence Layer — Phase 18.1 + 18.2 URL configuration."""
+"""AI Intelligence Layer — Phase 18.1 + 18.2 + 18.3 URL configuration."""
 
 from django.urls import path
 
@@ -90,5 +90,87 @@ urlpatterns = [
         "health/update/",
         views.UpdateProviderHealthView.as_view(),
         name="health-update",
+    ),
+    # Phase 18.3 — Evaluation Framework
+    # Metrics
+    path(
+        "eval/metrics/",
+        views.EvaluationMetricListView.as_view(),
+        name="eval-metric-list",
+    ),
+    # Datasets
+    path(
+        "eval/datasets/",
+        views.EvaluationDatasetListView.as_view(),
+        name="eval-dataset-list",
+    ),
+    path(
+        "eval/datasets/<int:pk>/",
+        views.EvaluationDatasetDetailView.as_view(),
+        name="eval-dataset-detail",
+    ),
+    path(
+        "eval/datasets/<int:dataset_id>/cases/",
+        views.EvaluationCaseListView.as_view(),
+        name="eval-case-list",
+    ),
+    # Thresholds
+    path(
+        "eval/thresholds/",
+        views.EvaluationThresholdListView.as_view(),
+        name="eval-threshold-list",
+    ),
+    # Evaluation runs
+    path(
+        "eval/runs/",
+        views.EvaluationRunListView.as_view(),
+        name="eval-run-list",
+    ),
+    path(
+        "eval/runs/<int:pk>/",
+        views.EvaluationRunDetailView.as_view(),
+        name="eval-run-detail",
+    ),
+    path(
+        "eval/runs/<int:run_id>/execute/",
+        views.EvaluationRunExecuteView.as_view(),
+        name="eval-run-execute",
+    ),
+    path(
+        "eval/runs/<int:run_id>/cancel/",
+        views.EvaluationRunCancelView.as_view(),
+        name="eval-run-cancel",
+    ),
+    path(
+        "eval/runs/<int:run_id>/results/",
+        views.EvaluationCaseResultListView.as_view(),
+        name="eval-case-result-list",
+    ),
+    # Comparisons
+    path(
+        "eval/compare/runs/",
+        views.RunComparisonView.as_view(),
+        name="eval-compare-runs",
+    ),
+    path(
+        "eval/compare/models/",
+        views.ModelComparisonView.as_view(),
+        name="eval-compare-models",
+    ),
+    path(
+        "eval/compare/prompts/",
+        views.PromptComparisonView.as_view(),
+        name="eval-compare-prompts",
+    ),
+    # Regression + baselines
+    path(
+        "eval/regression/check/",
+        views.RegressionCheckView.as_view(),
+        name="eval-regression-check",
+    ),
+    path(
+        "eval/baselines/",
+        views.BaselineListView.as_view(),
+        name="eval-baseline-list",
     ),
 ]
