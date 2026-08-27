@@ -14,7 +14,6 @@ import {
 } from "react";
 import { useSearchParams } from "react-router-dom";
 import * as maplibregl from "maplibre-gl";
-import type { StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 // MapLibre v6 loads its worker via `new URL('./maplibre-gl-worker.mjs',
 // import.meta.url)` — a path Vite/Rollup does NOT emit for node_modules libs,
@@ -107,92 +106,10 @@ import {
 } from "../../lib/mapUtils";
 import { cn } from "../../lib/utils";
 
-// Dhaka centre — the default viewport for first-time visitors.
-const DHAKA_CENTER: [number, number] = [90.4125, 23.8103];
-const DHAKA_ZOOM = 11.2;
-
-// Key-free raster tiles (OSM/CARTO). Light/dark follow the app theme.
-// Raster is used deliberately over a vector style: vector tile CDNs
-// (e.g. OpenFreeMap) serve their .pbf through a redirect that some networks
-// and embedded webviews block, which leaves the map a silent black canvas —
-// whereas raster PNG tiles load everywhere. CARTO's dark tiles carry
-// real street labels, and the paint boost below lifts their contrast so the
-// map stays readable in dark mode instead of dissolving into near-black.
-const TILE_LIGHT = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-const TILE_DARK = "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png";
-
-// Raster style. `mode` is "light" | "dark" | "dark-fallback":
-//  - light: plain OSM tiles.
-//  - dark: CARTO dark tiles with a gentle lift (brightness + contrast) so
-//    roads and street labels stay legible instead of dissolving into
-//    near-black (the original complaint).
-//  - dark-fallback: dimmed plain OSM tiles when CARTO's CDN is unreachable,
-//    kept dark enough to match the theme but with labels intact.
-type RasterMode = "light" | "dark" | "dark-fallback";
-const MAP_STYLE = (tiles: string, mode: RasterMode): StyleSpecification => ({
-  version: 8,
-  // Key-free glyph server so symbol layers (zoom-aware area labels) can
-  // render text — the raster basemap carries no glyphs of its own.
-  glyphs: "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf",
-  sources: {
-    osm: {
-      type: "raster",
-      tiles: [tiles],
-      tileSize: 256,
-      attribution: "© OpenStreetMap contributors",
-      maxzoom: 19,
-    },
-  },
-  layers: [
-    {
-      id: "osm",
-      type: "raster",
-      source: "osm",
-      paint:
-        mode === "dark"
-          ? {
-              // Phase 7 v3: lifted brightness floor + gentler contrast so CARTO's
-              // dark tiles keep roads and street labels readable instead of
-              // dissolving into near-black (the original dark-mode complaint).
-              "raster-brightness-min": 0.2,
-              "raster-brightness-max": 0.85,
-              "raster-saturation": 0.2,
-              "raster-contrast": 0.2,
-            }
-          : mode === "dark-fallback"
-            ? {
-                "raster-brightness-min": 0.12,
-                "raster-brightness-max": 0.68,
-                "raster-saturation": -0.4,
-                "raster-contrast": 0.25,
-              }
-            : {},
-    },
-  ],
-});
-
-/** Escape text before it enters popup HTML (defence-in-depth — backend
- * sanitizes titles, but map popups interpolate area names too). */
-function escHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-/** Debounce map-move refetches so panning doesn't hammer the API. */
-function useDebouncedValue<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delayMs);
-    return () => clearTimeout(t);
-  }, [value, delayMs]);
-  return debounced;
-}
-
-type MapLayerId =
-  "universities" | "metro" | "hospital" | "market" | "park" | "mosque" | "bus_terminal";
+// Extracted modules
+import { DHAKA_CENTER, DHAKA_ZOOM, TILE_LIGHT, TILE_DARK, MAP_STYLE } from "./mapConstants";
+import { escHtml, useDebouncedValue, fallbackCopy, SuggestionIcon } from "./mapHelpers";
+import type { MapLayerId } from "./MapToolbar";
 
 export default function Map() {
   const darkMode = useUiStore((s) => s.darkMode);
@@ -2623,37 +2540,6 @@ export default function Map() {
  * Clipboard fallback for non-secure contexts (plain http) where
  * navigator.clipboard is unavailable — a temporary textarea + execCommand.
  */
-function fallbackCopy(text: string, onDone: () => void) {
-  try {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.setAttribute("readonly", "");
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand("copy");
-    document.body.removeChild(ta);
-    onDone();
-  } catch {
-    // Copy failed (e.g. blocked) — surface the URL in the address bar instead.
-    window.prompt("Copy this map link:", text);
-  }
-}
-
-function SuggestionIcon({ kind }: { kind: GeocodeSuggestion["kind"] }) {
-  const cls = "size-4 shrink-0";
-  switch (kind) {
-    case "university":
-      return <GraduationCap className={cn(cls, "text-violet-600 dark:text-violet-400")} />;
-    case "metro":
-      return <TrainFront className={cn(cls, "text-teal-600 dark:text-teal-400")} />;
-    case "area":
-      return <MapPin className={cn(cls, "text-orange-600 dark:text-orange-400")} />;
-    default:
-      return <MapPin className={cn(cls, "text-blue-600 dark:text-blue-400")} />;
-  }
-}
 
 interface MapSidebarProps {
   rooms: Room[];

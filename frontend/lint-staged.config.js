@@ -7,15 +7,15 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-const bin = (sub) => path.join(root, "frontend", "node_modules", ".bin", sub);
+const bin = (sub) => `"${path.join(root, "frontend", "node_modules", ".bin", sub)}"`;
 
 const python = () => {
   if (process.env.PYTHON) return process.env.PYTHON;
   const venvPython = path.join(root, "backend", "venv", "Scripts", "python.exe");
-  return existsSync(venvPython) ? venvPython : "python";
+  return existsSync(venvPython) ? `"${venvPython}"` : "python";
 };
 
-const relFiles = (files) => files.map((f) => path.relative(root, f)).join(" ");
+const relFiles = (files) => files.map((f) => `"${path.relative(root, f)}"`).join(" ");
 
 export default {
   "backend/**/*.py": (files) => {
