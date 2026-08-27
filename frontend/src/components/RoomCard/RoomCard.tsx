@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Check, Star, MapPin, Heart, ShieldCheck, MessageCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useWishlistStore } from "../../stores/wishlistStore";
@@ -18,7 +19,7 @@ interface RoomCardProps {
   matchInfo?: { score: number; reasons: string[] } | null;
 }
 
-export default function RoomCard({
+export default memo(function RoomCard({
   room,
   onClick,
   compareSelected = false,
@@ -224,4 +225,4 @@ export default function RoomCard({
       </CardContent>
     </Card>
   );
-}
+});

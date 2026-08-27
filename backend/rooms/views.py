@@ -507,6 +507,9 @@ class RoomViewSet(viewsets.ModelViewSet):
                     "nl_parsed": parsed,
                     "rank_meta": rank_meta,
                 }
+        # ETag-based caching: the list changes when rooms are added/updated,
+        # so a short TTL avoids stale data while reducing redundant requests.
+        response["Cache-Control"] = "private, max-age=60, stale-while-revalidate=30"
         return response
 
     def _apply_personal_boost(self, queryset):
@@ -608,7 +611,10 @@ class RoomViewSet(viewsets.ModelViewSet):
     )
     @action(detail=False, methods=["get"])
     def landmarks(self, request):
-        return Response(LandmarkSerializer(ALL_LANDMARKS, many=True).data)
+        response = Response(LandmarkSerializer(ALL_LANDMARKS, many=True).data)
+        # Landmarks are static data — cache for 1 hour.
+        response["Cache-Control"] = "public, max-age=3600"
+        return response
 
     @extend_schema(
         tags=["Rooms"],
@@ -749,7 +755,10 @@ class RoomViewSet(viewsets.ModelViewSet):
     )
     @action(detail=False, methods=["get"], url_path="area-boundaries")
     def area_boundaries(self, request):
-        return Response(boundary_feature_collection())
+        response = Response(boundary_feature_collection())
+        # Area boundaries are static data — cache for 1 hour.
+        response["Cache-Control"] = "public, max-age=3600"
+        return response
 
     @extend_schema(
         tags=["Rooms"],

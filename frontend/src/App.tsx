@@ -5,6 +5,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { AppProvider } from "./context/AppContext";
 import { Toaster } from "./components/ui/sonner";
 import ErrorBoundary from "./components/ErrorBoundary";
+import RouteErrorBoundary from "./components/RouteErrorBoundary";
 import PwaBanners from "./components/PwaBanners/PwaBanners";
 import { useBackgroundSync } from "./hooks/useBackgroundSync";
 
@@ -58,16 +59,86 @@ export default function App() {
             <Suspense fallback={<PageLoader />}>
               <Routes>
                 <Route element={<Layout />}>
-                  <Route path="/" element={<Home />} />
-                  <Route path="/rooms" element={<Rooms />} />
-                  <Route path="/rooms/:areaSlug" element={<AreaRooms />} />
-                  <Route path="/map" element={<Map />} />
-                  <Route path="/chat" element={<Chat />} />
-                  <Route path="/roommates" element={<Roommates />} />
-                  <Route path="/services" element={<Services />} />
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/payment/status" element={<PaymentStatus />} />
-                  <Route path="/auth" element={<Auth />} />
+                  <Route
+                    path="/"
+                    element={
+                      <RouteErrorBoundary>
+                        <Home />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/rooms"
+                    element={
+                      <RouteErrorBoundary>
+                        <Rooms />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/rooms/:areaSlug"
+                    element={
+                      <RouteErrorBoundary>
+                        <AreaRooms />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/map"
+                    element={
+                      <RouteErrorBoundary>
+                        <Map />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/chat"
+                    element={
+                      <RouteErrorBoundary>
+                        <Chat />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/roommates"
+                    element={
+                      <RouteErrorBoundary>
+                        <Roommates />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/services"
+                    element={
+                      <RouteErrorBoundary>
+                        <Services />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/dashboard"
+                    element={
+                      <RouteErrorBoundary>
+                        <Dashboard />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/payment/status"
+                    element={
+                      <RouteErrorBoundary>
+                        <PaymentStatus />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/auth"
+                    element={
+                      <RouteErrorBoundary>
+                        <Auth />
+                      </RouteErrorBoundary>
+                    }
+                  />
                 </Route>
               </Routes>
             </Suspense>
