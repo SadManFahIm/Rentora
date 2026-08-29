@@ -29,6 +29,7 @@ import CorporatePanel from "../../components/CorporatePanel/CorporatePanel";
 import MarketplacePanel from "../../components/MarketplacePanel/MarketplacePanel";
 import InsurancePanel from "../../components/InsurancePanel/InsurancePanel";
 import AdminRevenuePanel from "../../components/AdminRevenuePanel/AdminRevenuePanel";
+import AdminAiPanel from "../../components/AdminAiPanel/AdminAiPanel";
 import RoomCard from "../../components/RoomCard/RoomCard";
 import RoomModal from "../../components/RoomModal/RoomModal";
 import RoomForm from "../../components/RoomForm/RoomForm";
@@ -70,7 +71,8 @@ type DashboardTab =
   | "monetization"
   | "broker"
   | "corporate"
-  | "revenue";
+  | "revenue"
+  | "ai";
 const TABS: DashboardTab[] = [
   "overview",
   "listings",
@@ -88,6 +90,7 @@ const TABS: DashboardTab[] = [
   "broker",
   "corporate",
   "revenue",
+  "ai",
 ];
 
 interface StatCard {
@@ -154,6 +157,7 @@ export default function Dashboard() {
   const visibleTabs = TABS.filter((t) => {
     if (t === "kyc" || t === "reports" || t === "moderation" || t === "trust") return isAdmin;
     if (t === "revenue") return isAdmin;
+    if (t === "ai") return isAdmin;
     if (t === "insights") return isLandlord;
     return true;
   });
@@ -628,6 +632,8 @@ export default function Dashboard() {
       {activeTab === "corporate" && <CorporatePanel />}
 
       {activeTab === "revenue" && isAdmin && <AdminRevenuePanel />}
+
+      {activeTab === "ai" && isAdmin && <AdminAiPanel />}
 
       {selectedRoom && <RoomModal room={selectedRoom} onClose={() => setSelectedRoom(null)} />}
 
