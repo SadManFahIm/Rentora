@@ -46,6 +46,9 @@ class CeleryWiringTests(TestCase):
             # Phase 18.3 — Evaluation Framework
             "ai_intelligence.execute_evaluation_run",
             "ai_intelligence.cancel_stale_evaluation_runs",
+            # Phase 18.4 — Alerts + Dashboard
+            "ai_intelligence.evaluate_alert_rules",
+            "ai_intelligence.warm_dashboard_cache",
         ]:
             with self.subTest(task=task_name):
                 self.assertIn(task_name, app.tasks)
@@ -84,6 +87,9 @@ class CeleryWiringTests(TestCase):
                 "purge-old-ai-execution-logs",
                 # Phase 18.3 — Evaluation Framework
                 "cancel-stale-evaluation-runs",
+                # Phase 18.4 — Alerts + Dashboard
+                "evaluate-ai-alert-rules",
+                "warm-ai-dashboard-cache",
             },
         )
 
