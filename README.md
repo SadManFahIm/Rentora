@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript)](https://typescriptlang.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 [![DRF](https://img.shields.io/badge/DRF-3.15-a30000?logo=django)](https://www.django-rest-framework.org/)
-[![Tests](<https://img.shields.io/badge/tests-1722%20(1356%20BE%20%2B%20366%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![Tests](<https://img.shields.io/badge/tests-1777%20(1411%20BE%20%2B%20366%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -17,7 +17,7 @@
 ## 📚 Table of Contents
 
 - [Product Overview](#-product-overview)
-- [Changelog — Phase 18.3 · 18.2 · 18.1 · 17](#changelog)
+- [Changelog — Phase 18.4 · 18.3 · 18.2 · 18.1 · 17](#changelog)
 - [What's New in v2.0](#changelog--whats-new-in-v20)
 - [Delivery Roadmap](#-delivery-roadmap)
 - [Features](#-features)
@@ -69,6 +69,14 @@ Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 ---
 
 ## 🆕 Changelog
+
+**Phase 18.4 — AI Intelligence Dashboard + Alerts**
+
+- **AI Intelligence Dashboard** — cached admin operations dashboards (TTL 300 s) over telemetry + evaluations + provider health + prompts + Phase 17 drift: per-feature health with drift/quality drills, per-(provider, model) health + **read-only A/B variant comparison** (never switches production), provider availability, cost intelligence, latency, errors, quality/evaluator taxonomy, drift tri-state (`healthy`/`warning`/`critical`/`unknown`), prompt health — 12 endpoints under `api/v1/ai/dashboard/`
+- **AI Alerts** — `AIAlertRule` (metric + operator + threshold + scope + severity) and `AIAlert` (full lifecycle), 10 watchable metrics (rates, latencies, cost, evaluation score, drift breach); anti-noise engineered in: **dedup** (repeated breaches fold into one open alert), **cooldown**, **consecutive-checks** streaks; in-app notifications to staff/admins (`ai_alert` type) with deep links; every lifecycle action audited (`ai_intelligence.alert_triggered/acknowledged/resolved/suppressed`)
+- **Celery** — `ai_intelligence.evaluate_alert_rules` (beat 5 min) + `ai_intelligence.warm_dashboard_cache` (beat 30 min)
+- **Admin UI** — Dashboard → **AI** tab: 11 sub-views (Overview/Features/Models/Providers/Cost/Performance/Errors/Quality/Drift/Prompts/Alerts), hand-rolled SVG trend charts, inline rule editor + acknowledge/resolve/suppress, deep-link alert highlighting
+- **Engineering** — 55 new tests (1411 BE total, all green), 2 new models, 3 migrations (`ai_intelligence` 0006+0007, `notifications` 0014), ruff-clean, TS strict + ESLint + production build green. See [`docs/phase-18-4-ai-intelligence-dashboard-alerts.md`](docs/phase-18-4-ai-intelligence-dashboard-alerts.md)
 
 **Phase 18.3 — AI Evaluation Framework**
 
@@ -577,6 +585,7 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 | **18.1**   | AI Intelligence Foundation — 🧠 AI feature registry (central registry + provider tracking), 📊 execution telemetry (latency/tokens/cost/confidence per request), 🏥 provider health monitoring (p95/p99 latency, success rates, auto-degradation), 💰 cost estimation engine (OpenAI + Anthropic pricing), 🔌 TelemetryMixin (drop-in for BaseProvider), 🎛️ admin API (7 endpoints, staff-only) | ✅ Shipped |
 | **18.2**   | AI Intelligence Foundation — 📝 prompt registry (versioned templates, activate/deactivate/rollback), 🔗 feature flag integration (`is_feature_available` checks registry + Django flags), 🌱 `register_ai_features` seeds 30 real features, 🎛️ admin API expanded to 18 endpoints | ✅ Shipped |
 | **18.3**   | AI Evaluation Framework — 📏 evaluation metrics (deterministic/heuristic/LLM-judge), 📊 golden datasets (versioned, publishable), 🔬 evaluator abstraction (26 built-in: search/classification/fraud/LLM/general/prediction), 🧪 evaluation runs (async Celery, per-case results), 📈 model/prompt comparison, 🚨 regression detection (threshold-based), 🎛️ admin API (17 eval endpoints) | ✅ Shipped |
+| **18.4**   | AI Intelligence Dashboard + Alerts — 📊 cached admin dashboard (overview/features/models/providers/cost/performance/errors/quality/drift/prompts), 🔔 configurable alert rules with anti-noise (dedup/cooldown/consecutive), 🔁 alert lifecycle (acknowledge/resolve/suppress, audited), 🔔 in-app admin notifications + deep links, ⚙️ beat tasks (rule evaluation 5 min, cache warm 30 min), 🎛️ admin UI (Dashboard → AI tab, 11 sub-views + rule editor) | ✅ Shipped |
 
 ---
 

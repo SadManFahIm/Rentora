@@ -38,6 +38,8 @@ class Notification(models.Model):
         DISPUTE_OPENED = "dispute_opened", "Dispute Opened"
         DISPUTE_UPDATE = "dispute_update", "Dispute Update"
         SAVED_SEARCH_MATCH = "saved_search_match", "Saved Search Match"
+        # Phase 18.4 — AI Intelligence: alert rules tripped.
+        AI_ALERT = "ai_alert", "AI Alert"
         SYSTEM = "system", "System"
         # Phase 15 — Monetization 2.0 (revenue).
         SUBSCRIPTION_ACTIVE = "subscription_active", "Subscription Active"
