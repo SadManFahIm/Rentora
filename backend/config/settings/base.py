@@ -21,6 +21,11 @@ load_dotenv(BASE_DIR / ".env")
 
 SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-change-me-in-production")
 
+# Runtime environment identifier: dev / staging / test / production.
+# Derived from the environment so CI and local test runs consistently get
+# "test" (debug tools, eager Celery, etc.).
+ENVIRONMENT = os.getenv("DJANGO_ENV", "development").lower()
+
 # ============================================================
 # Sentry — error tracking. No-op when SENTRY_DSN is not set (local dev),
 # so the whole block is safe to leave on everywhere.
@@ -103,6 +108,8 @@ INSTALLED_APPS = [
     "ml_models",
     # Phase 18 — AI Intelligence Layer
     "ai_intelligence",
+    # Phase 19 — Agent SDK foundation
+    "agents",
 ]
 
 # ============================================================
@@ -609,6 +616,37 @@ AI_EXECUTION_LOG_RETENTION_DAYS = int(os.getenv("AI_EXECUTION_LOG_RETENTION_DAYS
 AI_DASHBOARD_CACHE_TTL_SECONDS = int(os.getenv("AI_DASHBOARD_CACHE_TTL_SECONDS", "300"))
 
 # ============================================================
+# Phase 19 — Agent SDK / Agentic AI Foundation (agents app)
+# ============================================================
+# Master switch for agentic execution.
+AGENTS_ENABLED = os.getenv("AGENTS_ENABLED", "True") == "True"
+# Active LLM provider name under the "rentora.agent" feature. Empty means NO
+# auto-agent runs: a run terminates with `provider_not_configured` rather than
+# silently inventing output. Set to "llm" + AGENTS_LLM_* for the real
+# provider, or "mock_llm" (tests/dev only).
+AI_AGENT_LLM_PROVIDER = os.getenv("AI_AGENT_LLM_PROVIDER", "").strip()
+# OpenAI-compatible ChatCompletions endpoint config.
+AGENTS_LLM_API_BASE = os.getenv("AGENTS_LLM_API_BASE", "").strip()
+AGENTS_LLM_API_KEY = os.getenv("AGENTS_LLM_API_KEY", "").strip()
+AGENTS_LLM_MODEL = os.getenv("AGENTS_LLM_MODEL", "").strip()
+AGENTS_LLM_TIMEOUT_SECONDS = int(os.getenv("AGENTS_LLM_TIMEOUT_SECONDS", "30"))
+# Default guardrail limits (per-run; agents may override).
+AGENTS_DEFAULT_MAX_TURNS = int(os.getenv("AGENTS_DEFAULT_MAX_TURNS", "6"))
+AGENTS_DEFAULT_MAX_TOOL_CALLS = int(os.getenv("AGENTS_DEFAULT_MAX_TOOL_CALLS", "20"))
+AGENTS_DEFAULT_MAX_TOKENS = int(os.getenv("AGENTS_DEFAULT_MAX_TOKENS", "4000"))
+AGENTS_DEFAULT_TIMEOUT_SECONDS = int(os.getenv("AGENTS_DEFAULT_TIMEOUT_SECONDS", "180"))
+AGENTS_DEFAULT_MAX_COST_USD = float(os.getenv("AGENTS_DEFAULT_MAX_COST_USD", "2.0"))
+# Stop the loop after N consecutive failed tool calls.
+AGENTS_MAX_CONSECUTIVE_TOOL_FAILURES = int(os.getenv("AGENTS_MAX_CONSECUTIVE_TOOL_FAILURES", "3"))
+# Human-review proposal TTL (seconds). Pending proposals expire after this.
+AGENTS_PROPOSAL_TTL_SECONDS = int(os.getenv("AGENTS_PROPOSAL_TTL_SECONDS", "86400"))
+# How many of the most recent transcript messages are sent to the model.
+AGENTS_CONTEXT_WINDOW_MESSAGES = int(os.getenv("AGENTS_CONTEXT_WINDOW_MESSAGES", "40"))
+# Register debug tools (debug.echo, debug.marker). Forced OFF in production
+# unless explicitly enabled; automatically on under ENVIRONMENT=test or CI.
+AGENTS_DEBUG_TOOLS = os.getenv("AGENTS_DEBUG_TOOLS", "False") == "True"
+
+# ============================================================
 # Chat live translation EN⇄BN (Phase 15, B1) — see chat/translation.py
 # ============================================================
 # Deterministic phrase-table core by default (zero external deps, works in
@@ -1072,6 +1110,11 @@ CELERY_BEAT_SCHEDULE = {
     "warm-ai-dashboard-cache": {
         "task": "ai_intelligence.warm_dashboard_cache",
         "schedule": 1800.0,  # every 30 minutes
+    },
+    # Phase 19 — Agent SDK: expire human-review proposals past their TTL.
+    "expire-agent-proposals": {
+        "task": "agents.expire_proposals",
+        "schedule": 86400.0,  # daily
     },
 }
 

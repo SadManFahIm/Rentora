@@ -123,6 +123,8 @@ urlpatterns = [
     path("api/v1/ml/", include("ml_models.urls")),
     # Phase 18 — AI Intelligence Layer
     path("api/v1/ai/", include("ai_intelligence.urls")),
+    # Phase 19 — Agent SDK foundation
+    path("api/v1/agents/", include("agents.urls")),
 ]
 
 if settings.DEBUG:
