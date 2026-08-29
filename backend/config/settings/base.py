@@ -604,6 +604,9 @@ CHAT_SAFETY_ML_BOOST_CONFIDENCE = float(os.getenv("CHAT_SAFETY_ML_BOOST_CONFIDEN
 AI_TELEMETRY_ENABLED = os.getenv("AI_TELEMETRY_ENABLED", "True") == "True"
 # How long to keep AI execution logs (days). Older logs are purged.
 AI_EXECUTION_LOG_RETENTION_DAYS = int(os.getenv("AI_EXECUTION_LOG_RETENTION_DAYS", "90"))
+# How long dashboard aggregates stay cached (seconds). Short TTL — an ops
+# dashboard must not serve stale outliers for long. (Phase 18.4)
+AI_DASHBOARD_CACHE_TTL_SECONDS = int(os.getenv("AI_DASHBOARD_CACHE_TTL_SECONDS", "300"))
 
 # ============================================================
 # Chat live translation EN⇄BN (Phase 15, B1) — see chat/translation.py
@@ -1057,6 +1060,17 @@ CELERY_BEAT_SCHEDULE = {
     # Phase 18.3 — Evaluation Framework
     "cancel-stale-evaluation-runs": {
         "task": "ai_intelligence.cancel_stale_evaluation_runs",
+        "schedule": 1800.0,  # every 30 minutes
+    },
+    # Phase 18.4 — AI Intelligence Dashboard + Alerts
+    # Alert rules evaluate every 5 minutes; the dashboard cache warms just
+    # after so the admin dashboard's first render is fast.
+    "evaluate-ai-alert-rules": {
+        "task": "ai_intelligence.evaluate_alert_rules",
+        "schedule": 300.0,  # every 5 minutes
+    },
+    "warm-ai-dashboard-cache": {
+        "task": "ai_intelligence.warm_dashboard_cache",
         "schedule": 1800.0,  # every 30 minutes
     },
 }

@@ -1,4 +1,4 @@
-"""AI Intelligence Layer — Phase 18.1 + 18.2 + 18.3 API views.
+"""AI Intelligence Layer — Phase 18.1 + 18.2 + 18.3 + 18.4 API views.
 
 All views require admin authentication (IsAdminUser).
 """
@@ -8,6 +8,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import (
+    AIAlert,
+    AIAlertRule,
     AIExecutionLog,
     AIFeatureRegistry,
     AIPrompt,
@@ -20,6 +22,8 @@ from .models import (
     ProviderHealth,
 )
 from .serializers import (
+    AIAlertRuleSerializer,
+    AIAlertSerializer,
     AIExecutionLogSerializer,
     AIFeatureRegistrySerializer,
     AIPromptCreateSerializer,
@@ -27,6 +31,7 @@ from .serializers import (
     AIPromptListSerializer,
     AIPromptVersionCreateSerializer,
     AIPromptVersionSerializer,
+    AlertLifecycleActionSerializer,
     EvaluationCaseResultSerializer,
     EvaluationCaseSerializer,
     EvaluationDatasetCreateSerializer,
@@ -823,3 +828,350 @@ class BaselineListView(APIView):
 
         runs = get_latest_baselines(feature_id)
         return Response(EvaluationRunListSerializer(runs, many=True).data)
+
+
+# ---------------------------------------------------------------------------
+# Phase 18.4 — AI Intelligence Dashboard
+# ---------------------------------------------------------------------------
+
+
+class _DashboardBase(APIView):
+    """Shared guards/helpers for dashboard endpoints (admin-only)."""
+
+    permission_classes = [_AdminPermission]
+
+    def _days(self, request, default: int = 30) -> int:
+        try:
+            return min(max(int(request.query_params.get("days", default)), 1), 365)
+        except (ValueError, TypeError):
+            return default
+
+
+class AIDashboardSummaryView(_DashboardBase):
+    """Overview KPIs for the AI Intelligence Dashboard."""
+
+    def get(self, request):
+        from .dashboard import get_ai_summary
+
+        data = get_ai_summary(
+            days=self._days(request, 30),
+            feature_id=request.query_params.get("feature_id") or None,
+            provider=request.query_params.get("provider") or None,
+            model=request.query_params.get("model") or None,
+        )
+        return Response(data)
+
+
+class AIFeatureHealthListView(_DashboardBase):
+    """Health summary for every registered AI feature."""
+
+    def get(self, request):
+        from .dashboard import get_feature_health_list
+
+        return Response(get_feature_health_list(days=self._days(request, 30)))
+
+
+class AIFeatureHealthDetailView(_DashboardBase):
+    """Drill-down for a single AI feature."""
+
+    def get(self, request, feature_id: str):
+        from .dashboard import get_feature_health_detail
+
+        return Response(get_feature_health_detail(feature_id, days=self._days(request, 30)))
+
+
+class AIModelHealthView(_DashboardBase):
+    """Model health view: telemetry + evaluation per (provider, model)."""
+
+    def get(self, request):
+        from .dashboard import get_model_health
+
+        return Response(get_model_health(days=self._days(request, 30)))
+
+
+class AIModelCompareView(_DashboardBase):
+    """Compare two model versions on their latest completed evaluations."""
+
+    def get(self, request):
+        from .dashboard import compare_model_versions
+
+        provider = request.query_params.get("provider")
+        model = request.query_params.get("model")
+        version_a = request.query_params.get("version_a")
+        version_b = request.query_params.get("version_b")
+        if not (provider and model and version_a and version_b):
+            return Response(
+                {"error": "provider, model, version_a and version_b query params are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(
+            compare_model_versions(
+                provider=provider,
+                model=model,
+                version_a=version_a,
+                version_b=version_b,
+                days=self._days(request, 90),
+            )
+        )
+
+
+class AIProviderHealthView(_DashboardBase):
+    """Provider-level operational health from telemetry + health windows."""
+
+    def get(self, request):
+        from .dashboard import get_provider_health
+
+        return Response(get_provider_health(days=self._days(request, 30)))
+
+
+class AICostDashboardView(_DashboardBase):
+    """AI cost intelligence (ESTIMATED USD, never claimed as billing)."""
+
+    def get(self, request):
+        from .dashboard import get_cost_dashboard
+
+        return Response(get_cost_dashboard(days=self._days(request, 30)))
+
+
+class AIPerformanceDashboardView(_DashboardBase):
+    """Latency dashboard: overall, per feature/model/provider, daily trend."""
+
+    def get(self, request):
+        from .dashboard import get_performance_dashboard
+
+        return Response(get_performance_dashboard(days=self._days(request, 30)))
+
+
+class AIErrorDashboardView(_DashboardBase):
+    """Error/reliability dashboard."""
+
+    def get(self, request):
+        from .dashboard import get_error_dashboard
+
+        return Response(
+            get_error_dashboard(
+                days=self._days(request, 30),
+                feature_id=request.query_params.get("feature_id") or None,
+            )
+        )
+
+
+class AIQualityDashboardView(_DashboardBase):
+    """Latest evaluation/quality per feature."""
+
+    def get(self, request):
+        from .dashboard import get_quality_dashboard
+
+        return Response(
+            get_quality_dashboard(
+                feature_id=request.query_params.get("feature_id") or None,
+                days=self._days(request, 180),
+            )
+        )
+
+
+class AIDriftStatusView(_DashboardBase):
+    """Latest model drift status (derived from Phase 17 metrics)."""
+
+    def get(self, request):
+        from .dashboard import get_drift_status
+
+        return Response(get_drift_status(model_name=request.query_params.get("model_name") or None))
+
+
+class AIPromptHealthView(_DashboardBase):
+    """Prompt health: active/previous version, feature, model, latest eval."""
+
+    def get(self, request):
+        from .dashboard import get_prompt_health
+
+        return Response(get_prompt_health(days=self._days(request, 90)))
+
+
+# ---------------------------------------------------------------------------
+# Phase 18.4 — AI Alerts
+# ---------------------------------------------------------------------------
+
+
+class AIAlertRuleListCreateView(generics.ListCreateAPIView):
+    """List alert rules or create a new one (admin only)."""
+
+    permission_classes = [_AdminPermission]
+    queryset = AIAlertRule.objects.select_related("feature").all()
+    serializer_class = AIAlertRuleSerializer
+
+    def get_queryset(self):
+        qs = AIAlertRule.objects.select_related("feature").all()
+        alert_type = self.request.query_params.get("alert_type")
+        metric = self.request.query_params.get("metric")
+        enabled = self.request.query_params.get("enabled")
+        if alert_type:
+            qs = qs.filter(alert_type=alert_type)
+        if metric:
+            qs = qs.filter(metric=metric)
+        if enabled is not None:
+            qs = qs.filter(is_enabled=enabled.lower() in ("true", "1"))
+        return qs
+
+    def create(self, request, *args, **kwargs):
+        ser = self.get_serializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        rule = ser.save(created_by=request.user)
+        from audit.services import log_action
+
+        log_action(
+            actor=request.user,
+            action="ai_intelligence.alert_rule_created",
+            target=rule,
+            request=request,
+            detail={
+                "rule_key": rule.rule_key,
+                "metric": rule.metric,
+                "threshold": rule.threshold_value,
+                "severity": rule.severity,
+            },
+        )
+        return Response(AIAlertRuleSerializer(rule).data, status=status.HTTP_201_CREATED)
+
+
+class AIAlertRuleDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Get / update / delete a single alert rule (admin only)."""
+
+    permission_classes = [_AdminPermission]
+    queryset = AIAlertRule.objects.all()
+    serializer_class = AIAlertRuleSerializer
+
+    def perform_update(self, serializer):
+        from audit.services import log_action
+
+        rule = serializer.save()
+        log_action(
+            actor=self.request.user,
+            action="ai_intelligence.alert_rule_updated",
+            target=rule,
+            request=self.request,
+            detail={
+                "rule_key": rule.rule_key,
+                "metric": rule.metric,
+                "threshold": rule.threshold_value,
+                "is_enabled": rule.is_enabled,
+            },
+        )
+
+    def perform_destroy(self, instance):
+        from audit.services import log_action
+
+        log_action(
+            actor=self.request.user,
+            action="ai_intelligence.alert_rule_deleted",
+            target=instance,
+            request=self.request,
+            detail={"rule_key": instance.rule_key},
+        )
+        instance.delete()
+
+
+class AIAlertListView(generics.ListAPIView):
+    """List AI alerts with filters + pagination (admin only)."""
+
+    permission_classes = [_AdminPermission]
+    serializer_class = AIAlertSerializer
+
+    def get_queryset(self):
+        qs = AIAlert.objects.select_related("rule", "feature", "acknowledged_by").all()
+        severity = self.request.query_params.get("severity")
+        alert_status = self.request.query_params.get("status")
+        alert_type = self.request.query_params.get("alert_type")
+        feature_id = self.request.query_params.get("feature_id")
+        if severity:
+            qs = qs.filter(severity=severity)
+        if alert_status:
+            qs = qs.filter(status=alert_status)
+        if alert_type:
+            qs = qs.filter(alert_type=alert_type)
+        if feature_id:
+            qs = qs.filter(feature__feature_id=feature_id)
+        return qs
+
+
+class AIAlertDetailView(generics.RetrieveAPIView):
+    """Get a single AI alert (admin only)."""
+
+    permission_classes = [_AdminPermission]
+    queryset = AIAlert.objects.select_related("rule", "feature").all()
+    serializer_class = AIAlertSerializer
+
+
+class AIAlertAcknowledgeView(APIView):
+    """Acknowledge an alert (admin only, audited)."""
+
+    permission_classes = [_AdminPermission]
+
+    def post(self, request, pk: int):
+        from .alerts import acknowledge_alert
+
+        ser = AlertLifecycleActionSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            alert = acknowledge_alert(
+                pk, request.user, note=ser.validated_data["note"], request=request
+            )
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        if not alert:
+            return Response({"error": "Alert not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(AIAlertSerializer(alert).data)
+
+
+class AIAlertResolveView(APIView):
+    """Resolve an alert (admin only, audited)."""
+
+    permission_classes = [_AdminPermission]
+
+    def post(self, request, pk: int):
+        from .alerts import resolve_alert
+
+        ser = AlertLifecycleActionSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            alert = resolve_alert(
+                pk, request.user, note=ser.validated_data["note"], request=request
+            )
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        if not alert:
+            return Response({"error": "Alert not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(AIAlertSerializer(alert).data)
+
+
+class AIAlertSuppressView(APIView):
+    """Suppress an alert (admin only, audited)."""
+
+    permission_classes = [_AdminPermission]
+
+    def post(self, request, pk: int):
+        from .alerts import suppress_alert
+
+        ser = AlertLifecycleActionSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            alert = suppress_alert(
+                pk, request.user, note=ser.validated_data["note"], request=request
+            )
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        if not alert:
+            return Response({"error": "Alert not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(AIAlertSerializer(alert).data)
+
+
+class AIAlertEvaluateView(APIView):
+    """Manually evaluate all enabled alert rules (admin only, audited)."""
+
+    permission_classes = [_AdminPermission]
+
+    def post(self, request):
+        from .alerts import evaluate_all_rules
+
+        result = evaluate_all_rules(actor=request.user, request=request)
+        return Response(result)

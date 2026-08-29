@@ -3,6 +3,8 @@
 from django.contrib import admin
 
 from .models import (
+    AIAlert,
+    AIAlertRule,
     AIExecutionLog,
     AIFeatureRegistry,
     AIPrompt,
@@ -349,4 +351,77 @@ class EvaluationCaseResultAdmin(admin.ModelAdmin):
         return False
 
     def has_change_permission(self, request, obj=None):
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Phase 18.4 — AI Alerts
+# ---------------------------------------------------------------------------
+
+
+@admin.register(AIAlertRule)
+class AIAlertRuleAdmin(admin.ModelAdmin):
+    list_display = [
+        "rule_key",
+        "name",
+        "alert_type",
+        "metric",
+        "operator",
+        "threshold_value",
+        "severity",
+        "is_enabled",
+        "breach_count",
+        "last_metric_value",
+        "last_checked_at",
+    ]
+    list_filter = ["alert_type", "metric", "severity", "is_enabled"]
+    search_fields = ["rule_key", "name", "provider", "model_name"]
+    readonly_fields = ["breach_count", "last_metric_value", "last_checked_at"]
+
+
+@admin.register(AIAlert)
+class AIAlertAdmin(admin.ModelAdmin):
+    list_display = [
+        "pk",
+        "title_short",
+        "severity",
+        "status",
+        "alert_type",
+        "metric_name",
+        "metric_value",
+        "feature_ref",
+        "triggered_at",
+    ]
+    list_filter = ["severity", "status", "alert_type"]
+    search_fields = ["title", "message", "provider", "model_name", "dedup_key"]
+    readonly_fields = [
+        "alert_key",
+        "rule",
+        "alert_type",
+        "severity",
+        "status",
+        "title",
+        "message",
+        "metric_name",
+        "metric_value",
+        "threshold_value",
+        "feature",
+        "provider",
+        "model_name",
+        "dedup_key",
+        "breach_count",
+        "meta",
+        "triggered_at",
+    ]
+    date_hierarchy = "triggered_at"
+
+    @admin.display(description="Title")
+    def title_short(self, obj):
+        return obj.title[:80]
+
+    @admin.display(description="Feature")
+    def feature_ref(self, obj):
+        return obj.feature.feature_id if obj.feature else "—"
+
+    def has_add_permission(self, request):
         return False

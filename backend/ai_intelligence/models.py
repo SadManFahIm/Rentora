@@ -1161,3 +1161,223 @@ class EvaluationCaseResult(models.Model):
     def __str__(self) -> str:
         status = "PASS" if self.passed else "FAIL"
         return f"Run {str(self.run.run_key)[:8]} Case {self.pk} [{status}]"
+
+
+# ===========================================================================
+# Phase 18.4 — AI Intelligence Alerts
+# ===========================================================================
+
+
+class AIAlertRule(models.Model):
+    """A configurable rule that watches an AI metric against a threshold.
+
+    Rules are evaluated periodically by ``ai_intelligence.evaluate_alert_rules``
+    (Celery beat). Anti-noise controls:
+
+    - ``consecutive_checks`` — only trigger once breached for N consecutive
+      evaluation runs (tracks ``breach_count``).
+    - ``cooldown_minutes`` — do not re-trigger the same rule+scope for the
+      cooldown window after an alert fires.
+    - ``dedup_key`` — alerts are deduplicated per (rule, feature, provider,
+      model) scope.
+    """
+
+    class AlertType(models.TextChoices):
+        RELIABILITY = "reliability", "Reliability"
+        PERFORMANCE = "performance", "Performance"
+        QUALITY = "quality", "Quality"
+        COST = "cost", "Cost"
+        DRIFT = "drift", "Drift"
+        AVAILABILITY = "availability", "Availability"
+
+    class Metric(models.TextChoices):
+        ERROR_RATE = "error_rate", "Error rate"
+        TIMEOUT_RATE = "timeout_rate", "Timeout rate"
+        FALLBACK_RATE = "fallback_rate", "Fallback rate"
+        SUCCESS_RATE = "success_rate", "Success rate"
+        AVG_LATENCY = "avg_latency", "Average latency (ms)"
+        P95_LATENCY = "p95_latency", "P95 latency (ms)"
+        DAILY_COST = "daily_cost", "Daily estimated cost (USD)"
+        COST_PER_EXECUTION = "cost_per_execution", "Cost per execution (USD)"
+        EVALUATION_SCORE = "evaluation_score", "Evaluation score"
+        DRIFT_BREACH = "drift_breach", "Model drift breach"
+
+    class Operator(models.TextChoices):
+        GT = "gt", ">"
+        GTE = "gte", ">="
+        LT = "lt", "<"
+        LTE = "lte", "<="
+
+    class Severity(models.TextChoices):
+        INFO = "info", "Info"
+        WARNING = "warning", "Warning"
+        CRITICAL = "critical", "Critical"
+
+    rule_key = models.CharField(
+        max_length=100,
+        unique=True,
+        help_text="Unique rule identifier (e.g. copilot_error_rate).",
+    )
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True, default="")
+    alert_type = models.CharField(
+        max_length=30,
+        choices=AlertType.choices,
+        default=AlertType.RELIABILITY,
+    )
+    metric = models.CharField(
+        max_length=40,
+        choices=Metric.choices,
+        help_text="The metric this rule watches.",
+    )
+    operator = models.CharField(
+        max_length=10,
+        choices=Operator.choices,
+        default=Operator.GT,
+    )
+    threshold_value = models.FloatField(help_text="Threshold the metric is compared against.")
+    # Scope (all optional = global rule)
+    feature = models.ForeignKey(
+        AIFeatureRegistry,
+        on_delete=models.CASCADE,
+        related_name="alert_rules",
+        null=True,
+        blank=True,
+    )
+    provider = models.CharField(max_length=100, blank=True, default="")
+    model_name = models.CharField(max_length=200, blank=True, default="")
+    # Anti-noise controls
+    duration_minutes = models.PositiveIntegerField(
+        default=5,
+        help_text="Look-back window (minutes) used to compute the metric.",
+    )
+    consecutive_checks = models.PositiveIntegerField(
+        default=1,
+        help_text="Trigger only after this many consecutive breaches.",
+    )
+    cooldown_minutes = models.PositiveIntegerField(
+        default=60,
+        help_text="Minimum minutes between alerts for the same scope.",
+    )
+    # Behaviour
+    severity = models.CharField(
+        max_length=10,
+        choices=Severity.choices,
+        default=Severity.WARNING,
+    )
+    is_enabled = models.BooleanField(default=True)
+    notify_admins = models.BooleanField(
+        default=True,
+        help_text="Create in-app Notification(s) for staff/admins when it fires.",
+    )
+    # Evaluation state (updated by the alert evaluation task)
+    breach_count = models.PositiveIntegerField(default=0)
+    last_metric_value = models.FloatField(null=True, blank=True)
+    last_checked_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_ai_alert_rules",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["rule_key"]
+
+    def __str__(self) -> str:
+        return f"{self.rule_key} [{self.metric} {self.operator} {self.threshold_value}]"
+
+
+class AIAlert(models.Model):
+    """A triggered AI alert instance with a full lifecycle.
+
+    Lifecycle: ``triggered`` → ``acknowledged`` → ``resolved``, or
+    ``suppressed``. Created by the alert evaluation task (or manual
+    ``alerts/evaluate/`` endpoint). Every admin lifecycle action is audited.
+    """
+
+    class Severity(models.TextChoices):
+        INFO = "info", "Info"
+        WARNING = "warning", "Warning"
+        CRITICAL = "critical", "Critical"
+
+    class Status(models.TextChoices):
+        TRIGGERED = "triggered", "Triggered"
+        ACKNOWLEDGED = "acknowledged", "Acknowledged"
+        RESOLVED = "resolved", "Resolved"
+        SUPPRESSED = "suppressed", "Suppressed"
+
+    alert_key = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    rule = models.ForeignKey(
+        AIAlertRule,
+        on_delete=models.SET_NULL,
+        related_name="alerts",
+        null=True,
+        blank=True,
+    )
+    alert_type = models.CharField(max_length=30, choices=AIAlertRule.AlertType.choices)
+    severity = models.CharField(
+        max_length=10,
+        choices=Severity.choices,
+        default=Severity.WARNING,
+    )
+    status = models.CharField(
+        max_length=12,
+        choices=Status.choices,
+        default=Status.TRIGGERED,
+        db_index=True,
+    )
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+    # Metric context
+    metric_name = models.CharField(max_length=40)
+    metric_value = models.FloatField(default=0.0)
+    threshold_value = models.FloatField(default=0.0)
+    # Scope
+    feature = models.ForeignKey(
+        AIFeatureRegistry,
+        on_delete=models.SET_NULL,
+        related_name="ai_alerts",
+        null=True,
+        blank=True,
+    )
+    provider = models.CharField(max_length=100, blank=True, default="")
+    model_name = models.CharField(max_length=200, blank=True, default="")
+    # Anti-noise / traceability
+    dedup_key = models.CharField(max_length=64, db_index=True, blank=True, default="")
+    breach_count = models.PositiveIntegerField(default=1)
+    # Lifecycle
+    acknowledged_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="acknowledged_ai_alerts",
+    )
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="resolved_ai_alerts",
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolution_note = models.TextField(blank=True, default="")
+    meta = models.JSONField(default=dict, blank=True)
+    triggered_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-triggered_at"]
+        indexes = [
+            models.Index(fields=["alert_type", "triggered_at"], name="ai_alert_type_time_idx"),
+            models.Index(fields=["status", "triggered_at"], name="ai_alert_status_time_idx"),
+            models.Index(fields=["severity", "status"], name="ai_alert_sev_status_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"[{self.severity.upper()}] {self.title} ({self.status})"
