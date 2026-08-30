@@ -238,6 +238,16 @@ def register_builtin_tools() -> None:
             )
         )
 
+    # Domain tools are registered through this single SDK registration path so
+    # every agent run sees a complete, current registry. Optional apps degrade
+    # to absent (the registry refuses unregistered tools before execution).
+    try:
+        from property_intelligence.agent_tool import register_property_intelligence_tool
+
+        register_property_intelligence_tool()
+    except Exception:
+        pass  # property intelligence app not installed
+
 
 def render_results_json(results: list[dict[str, Any]]) -> str:
     """Compact, safe rendering of a tool result transcript fragment."""

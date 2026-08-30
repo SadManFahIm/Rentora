@@ -110,6 +110,8 @@ INSTALLED_APPS = [
     "ai_intelligence",
     # Phase 19 — Agent SDK foundation
     "agents",
+    # Phase 19.1 — Property Intelligence Score (composite 0-100)
+    "property_intelligence",
 ]
 
 # ============================================================
@@ -729,6 +731,35 @@ LISTING_QUALITY_LEVELS = [
 # within the already-relevant pool so it can never override query/area/price.
 LISTING_QUALITY_RANKING_ENABLED = os.getenv("LISTING_QUALITY_RANKING_ENABLED", "True") == "True"
 LISTING_QUALITY_RANKING_WEIGHT = float(os.getenv("LISTING_QUALITY_RANKING_WEIGHT", "0.05"))
+
+# ============================================================
+# Property Intelligence score (Phase 19.1) — composite 0-100
+# ============================================================
+# Transparent, deterministic, versioned composite of listing quality, price
+# competitiveness, location/commute, photo authenticity, trust and demand.
+# Reuses existing engines (listing_quality, price insight, market stats,
+# fraud/trust signals, demand counts); see docs/phase-19-property-intelligence.md.
+PROPERTY_INTELLIGENCE_ENABLED = os.getenv("PROPERTY_INTELLIGENCE_ENABLED", "True") == "True"
+# Component weights — must be all six components, non-negative, sum 100.
+# Malformed values log a warning and fall back to these documented defaults.
+PROPERTY_INTELLIGENCE_WEIGHTS = {
+    "listing_quality": 25,
+    "price_value": 20,
+    "location": 15,
+    "photo_trust": 15,
+    "trust": 15,
+    "demand": 10,
+}
+# Redis/LocMem TTL for the computed score (demand self-refreshes on expiry).
+PROPERTY_INTELLIGENCE_CACHE_TTL_SECONDS = int(
+    os.getenv("PROPERTY_INTELLIGENCE_CACHE_TTL_SECONDS", "900")
+)
+# A listing untouched for this many days is treated as stale (lower confidence).
+PROPERTY_INTELLIGENCE_STALE_DAYS = int(os.getenv("PROPERTY_INTELLIGENCE_STALE_DAYS", "90"))
+# Lightweight badge on the room detail serializer (score/confidence/version).
+PROPERTY_INTELLIGENCE_SERIALIZER_ENABLED = (
+    os.getenv("PROPERTY_INTELLIGENCE_SERIALIZER_ENABLED", "True") == "True"
+)
 
 # Fraud-aware search ranking: demote risky listings using the EXISTING fraud
 # engine's score (FraudReport.score / 100). Listings are never hidden — only
