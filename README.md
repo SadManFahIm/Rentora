@@ -1624,10 +1624,31 @@ Below, the detailed phase-by-phase screenshots.
 
 ## 🔄 Team Workflow
 
-- **Branching:** feature work happens on `feature/<name>` branches off `main`; never commit directly to `main`.
-- **Pull requests:** every branch ships as a PR against `main`; CI must be green (tests, coverage, lint, build) before merge.
-- **Pre-commit:** husky + lint-staged format and lint staged files on every commit.
-- **Environments:** local dev (SQLite + runserver) → CI (GitHub Actions) → production (PostgreSQL + Daphne, Phase 8).
+**Branching**
+- `main` is protected — never commit directly to it; all work ships on a branch.
+- Branch naming: `feature/phase-<N>-<slug>` · `fix/<slug>` · `docs/<slug>` · `chore/<slug>` · `refactor/<slug>`.
+- Branch off a freshly fetched upstream `main` (e.g. `git checkout -b feature/phase-19-3-listing-autopilot upstream/main`); keep branches short-lived — one phase per branch, merged within the day.
+- Never force-push a shared branch.
+
+**Pull requests**
+- Every branch ships as a PR against `main` with a required title (`<type>(<scope>): <summary>`) and a description covering what/why, files touched, testing performed and screenshots for any UI change.
+- CI must be **fully green** before merge — all gates: Frontend (Vitest + build + format + lint + coverage), Backend (Django tests + security/static audit), Secret scan (gitleaks), Browser E2E (Playwright), E2E (fraud + payments + KYC), API contract + schema drift, Frontend contract (schema → TS types), npm audit, Lighthouse performance gate.
+- Squash-merge (or fast-forward) by the authorized account; never merge your own open PR; every merge carries an implicit one-click rollback plan.
+
+**Local gates (pre-commit: husky + lint-staged)**
+- Staged `.ts/.tsx/.mjs/.js` → Prettier + ESLint; staged `.py` → ruff; run `tsc --noEmit` and the CI format check locally before pushing so local == CI.
+- Secret scanning runs alongside lint-staged — no commit ships credentials.
+- Prettier (3.9.x) is pinned via the lockfile, so formatting is identical in local, CI and pre-commit.
+
+**Environments**
+- Local dev: SQLite + `manage.py runserver` (+ Redis via Docker when needed).
+- CI: GitHub Actions on every PR and `main` — same tooling and constraints as local.
+- Staging: PostgreSQL 16 + Redis + Celery with feature-flag review before release.
+- Production: PostgreSQL 16 + Redis + Celery + Daphne/Channels + CDN media (Phase 8); secrets live in Actions secrets/environment variables only — never in the repository.
+- Every service reports `/health/`, correlates via `X-Request-ID` and writes an audit log for state changes; releases follow the deploy window + rollback runbook.
+
+**Release cadence**
+- Phase-based delivery: one phase per day → branch → PR → green CI → merge → deploy; the changelog line comes from the PR title using Conventional Commit types (`feat` / `fix` / `docs` / `chore` / `refactor` / `style` / `test`).
 
 ---
 
