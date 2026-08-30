@@ -1,0 +1,9 @@
+# Style-only commits to skip in `git blame`.
+#
+# Usage: `git blame --ignore-revs-file .git-blame-ignore-revs <file>`
+# (Git ≥ 2.23; can be configured globally via `blame.ignoreRevsFile`).
+#
+# Add the full 40-char SHA of any formatting-only commit (Prettier / ruff /
+# style rewrites) here so blame points at the *real* change.
+
+754ecfd1e59d08e0d72233d628de658ded011e35  # style: prettier-format capture scripts

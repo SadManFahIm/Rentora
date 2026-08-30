@@ -1,0 +1,45 @@
+name: Feature request
+description: Propose a new feature or capability
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Rentora ships one phase per day. Feature requests that align with the
+        [roadmap](https://github.com/SadManFahIm/Rentora#-delivery-roadmap)
+        are prioritized.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user need does this solve? Write it from the user's perspective.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What you think should be built and how it should behave.
+    validations:
+      required: true
+  - type: textarea
+    id: alternative
+    attributes:
+      label: Alternatives considered
+      description: Anything already tried or similar features that exist elsewhere.
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Frontend
+        - Backend / API
+        - AI / Agents
+        - Payments
+        - Trust & Safety
+        - Docs / CI / Tooling
+        - Other
+    validations:
+      required: true
