@@ -1,0 +1,25 @@
+{
+  "name": "Rentora Dev (Python 3.12 + Node 22 + PostgreSQL + Redis)",
+  "dockerComposeFile": ["../docker-compose.dev.yml"],
+  "service": "workspace",
+  "workspaceFolder": "/workspaces/rentora",
+  "postCreateCommand": "bash -lc 'python -m venv backend/venv && backend/venv/bin/pip install -r backend/requirements.txt && cd frontend && npm ci'",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "charliermarsh.ruff",
+        "ms-python.python",
+        "bradlc.vscode-tailwindcss"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "python.defaultInterpreterPath": "backend/venv/bin/python",
+        "[python].editor.defaultFormatter": "charliermarsh.ruff",
+        "[typescript].editor.defaultFormatter": "esbenp.prettier-vscode",
+        "[typescriptreact].editor.defaultFormatter": "esbenp.prettier-vscode"
+      }
+    }
+  }
+}

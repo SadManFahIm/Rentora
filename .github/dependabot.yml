@@ -1,0 +1,26 @@
+# Dependabot — automated dependency updates (PRs are CI-gated like all others)
+
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: fix(deps)
+
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: fix(deps)
+
+  - package-ecosystem: github-actions
+    directory: /   # workflow files in .github/workflows
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: chore(ci)

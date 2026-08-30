@@ -399,7 +399,9 @@ class AgentSession:
                     consecutive_failures += 1
                     payload = _json_dumps({"ok": False, "error": failure})
                     self._persist_tool_call_frame(run, tool_call_id, tool_name, arguments)
-                    self._persist_message(run, "tool", payload, {"tool_call_id": tool_call_id})
+                    self._persist_message(
+                        run, "tool", payload, {"tool_call_id": tool_call_id}, limit=200_000
+                    )
                     messages.extend(
                         [
                             {
@@ -430,7 +432,9 @@ class AgentSession:
                         consecutive_failures += 1
                     payload = _json_dumps(self._sanitized_outcome(outcome))
                     self._persist_tool_call_frame(run, tool_call_id, tool.name, arguments)
-                    self._persist_message(run, "tool", payload, {"tool_call_id": tool_call_id})
+                    self._persist_message(
+                        run, "tool", payload, {"tool_call_id": tool_call_id}, limit=200_000
+                    )
                     messages.extend(
                         [
                             {
@@ -466,7 +470,9 @@ class AgentSession:
                         "pending_approval": True,
                     }
                 )
-                self._persist_message(run, "tool", payload, {"tool_call_id": tool_call_id})
+                self._persist_message(
+                    run, "tool", payload, {"tool_call_id": tool_call_id}, limit=200_000
+                )
                 messages.extend(
                     [
                         {
@@ -708,26 +714,29 @@ class AgentSession:
         Outcome payloads come from tool executors (and potentially future
         LLM-echoed data) — mask sensitive keys at every level, truncate long
         strings, and never store an unbounded structure in
-        ``AgentToolCall.result``.
+        ``AgentToolCall.result``. Depth is bounded deep enough that a
+        structured tool envelope (``ok -> data -> list -> row -> fields``)
+        survives intact — deep rows must not be nulled out, or the LLM (and
+        any consumer) loses the grounded facts those rows carry.
         """
         from fraud.services.privacy import mask_value
 
-        if _depth >= 4:
+        if _depth >= 8:
             return None
         if isinstance(outcome, dict):
             return {
                 k: self._sanitized_outcome(mask_value(k, v), _depth + 1)
-                for k, v in list(outcome.items())[:50]
+                for k, v in list(outcome.items())[:200]
             }
         if isinstance(outcome, (list, tuple)):
-            return [self._sanitized_outcome(v, _depth + 1) for v in list(outcome)[:50]]
+            return [self._sanitized_outcome(v, _depth + 1) for v in list(outcome)[:200]]
         if isinstance(outcome, str):
             return outcome[:2000]
         if isinstance(outcome, (bool, int, float)) or outcome is None:
             return outcome
         return str(outcome)[:2000]
 
-    def _persist_message(self, run, role, content, metadata):
+    def _persist_message(self, run, role, content, metadata, *, limit: int = 8000):
         from .models import AgentMessage
 
         last = (
@@ -740,7 +749,9 @@ class AgentSession:
             conversation=self.conversation,
             run=run,
             role=role,
-            content=sanitize_message_text(content) if isinstance(content, str) else content,
+            content=sanitize_message_text(content, limit=limit)
+            if isinstance(content, str)
+            else content,
             sequence=(last or 0) + 1,
             metadata=metadata or {},
         )

@@ -1,6 +1,38 @@
-# Shell scripts must stay LF — CRLF breaks shebangs on fresh Windows clones.
+# Git attributes — consistent line endings and clean repo boundaries.
+#
+# The repo stores everything as LF. `text=auto` lets Git normalize on
+# commit and converts back to CRLF on Windows checkouts only where needed.
+
+# --- Line endings (LF everywhere in the repo) -------------------------------
+* text=auto
+
+# Shell + hooks must stay LF — CRLF breaks shebangs on fresh Windows clones.
 *.sh text eol=lf
+husky/** text eol=lf
 .husky/** text eol=lf
 
-# Normalize everything else to LF for consistency.
-* text=auto
+# Source files explicitly LF.
+*.{py,ts,tsx,js,mjs,cjs,jsx,css,scss,html,json,yml,yaml,toml,cfg,ini,md} text eol=lf
+
+# --- Binary / generated artifacts -------------------------------------------
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.zip binary
+
+# Generated / non-source artifacts should never be inspected as diff.
+frontend/build/** linguist-generated
+frontend/dist/** linguist-generated
+frontend/coverage/** linguist-generated
+backend/htmlcov/** linguist-generated
+frontend/src/generated/** linguist-generated
+
+# GitHub Linguist hints — keep repo language stats honest.
+scripts/*.py linguist-documentation=false
+**/*.min.js linguist-vendored

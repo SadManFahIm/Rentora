@@ -75,6 +75,18 @@ _LISTING_QUALITY_SCHEMA = {
     },
 }
 
+_PROPERTY_INTELLIGENCE_BADGE_SCHEMA = {
+    "type": "object",
+    "nullable": True,
+    "properties": {
+        "score": {"type": "integer", "nullable": True},
+        "confidence": {"type": "string", "enum": ["high", "medium", "low", "none"]},
+        "score_version": {"type": "string"},
+        "computed_at": {"type": "string"},
+        "disclaimer": {"type": "string"},
+    },
+}
+
 
 class RoomProximityMixin(serializers.Serializer):
     """Adds map/proximity fields shared by the list and detail representations.
@@ -282,6 +294,12 @@ class RoomDetailSerializer(_EffectiveTierMixin, RoomProximityMixin, serializers.
         help_text="Transparent 0-100 listing completeness score with actionable "
         "suggestions; empty payload when the feature is disabled."
     )
+    property_intelligence_score = serializers.SerializerMethodField(
+        allow_null=True,
+        help_text="Lightweight 0-100 Property Intelligence badge (score, "
+        "confidence, version); null when disabled. Full breakdown lives at "
+        "/api/v1/property-intelligence/<id>/.",
+    )
     nearby_landmarks = serializers.SerializerMethodField(
         help_text="All universities and metro stations within NEARBY_RADIUS_KM of the room, nearest first."
     )
@@ -316,6 +334,7 @@ class RoomDetailSerializer(_EffectiveTierMixin, RoomProximityMixin, serializers.
             "images",
             "price_insight",
             "listing_quality",
+            "property_intelligence_score",
             "proximity",
             "nearby_landmarks",
             "distance_km",
@@ -333,6 +352,32 @@ class RoomDetailSerializer(_EffectiveTierMixin, RoomProximityMixin, serializers.
         from .listing_quality import get_listing_quality as quality_for
 
         return quality_for(obj)
+
+    @extend_schema_field(_PROPERTY_INTELLIGENCE_BADGE_SCHEMA)
+    def get_property_intelligence_score(self, obj: Room) -> dict | None:
+        """Lightweight Property Intelligence badge (score/confidence/version).
+
+        Deliberately a summary: the per-category breakdown + suggestions live
+        at the dedicated endpoint, so this field stays cheap for the detail
+        page (single room, Redis-cached compute).
+        """
+        if not getattr(settings, "PROPERTY_INTELLIGENCE_SERIALIZER_ENABLED", True):
+            return None
+        if not obj.pk:
+            return None
+        try:
+            from property_intelligence.engine import get_property_intelligence
+
+            payload = get_property_intelligence(obj)
+        except Exception:
+            return None
+        return {
+            "score": payload.get("score"),
+            "confidence": payload.get("confidence"),
+            "score_version": payload.get("score_version"),
+            "computed_at": payload.get("computed_at"),
+            "disclaimer": payload.get("disclaimer"),
+        }
 
     @extend_schema_field({"type": "object", "nullable": True})
     def get_price_insight(self, obj):

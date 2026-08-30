@@ -10,6 +10,7 @@
 [![Tests](<https://img.shields.io/badge/tests-1777%20(1411%20BE%20%2B%20366%20FE)-success>)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![Coverage](https://img.shields.io/badge/coverage-BE%2060%25%20%E2%80%A2%20FE%2099%25-success)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions)](https://github.com/SadmaFaahiim/Rentora/actions)
+[![CI status](https://img.shields.io/github/actions/workflow/status/SadmaFaahiim/Rentora/ci.yml?branch=main&label=CI%20build)](https://github.com/SadmaFaahiim/Rentora/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
@@ -17,7 +18,7 @@
 ## 📚 Table of Contents
 
 - [Product Overview](#-product-overview)
-- [Changelog — Phase 19.0 · 18.4 · 18.3 · 18.2 · 18.1 · 17](#changelog)
+- [Changelog — Phase 19.2 · 19.1 · 19.0 · 18.4 · 18.3 · 18.2 · 18.1 · 17](#changelog)
 - [What's New in v2.0](#changelog--whats-new-in-v20)
 - [Delivery Roadmap](#-delivery-roadmap)
 - [Features](#-features)
@@ -64,11 +65,32 @@ One platform, four surfaces — **browse smarter**, **trust the listings**, **se
 | 📱 **Reach** | SMS OTP phone sign-in for the Bangladesh market, one-tap **Share on WhatsApp** with an AI listing summary, per-area SEO landing pages + sitemap, Lighthouse gate in CI | [`phase13-area-page.png`](docs/screenshots/phase13-area-page.png) |
 | 👁️ **AI Vision** | **Photo intelligence** — analyze a listing's photos (caption, palette, observations), AI draft title + description from the actual photos, suggested amenity tags (review-then-apply), and **AI image search** ("upload a photo, find rooms that look like it") with match scores | [`phase14-vision-panel.png`](docs/screenshots/phase14-vision-panel.png) |
 
-Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screenshots](#-screenshots). Live verification notes in [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md).
+Full gallery (79 screenshots, light + dark, desktop + mobile) in [🖼️ Screenshots](#-screenshots). Live verification notes in [`docs/guides/LIVE_VERIFICATION.md`](docs/guides/LIVE_VERIFICATION.md).
 
 ---
 
 ## 🆕 Changelog
+
+**Phase 19.2 — AI Rental Agent (tenant-facing agentic chat)**
+
+- **Conversational rental agent** — a Bengali-first agent (বাংলা / Banglish / English) inside the Copilot widget that searches the live Dhaka catalogue, explains listings, estimates commutes, compares prices and can request a bookmark — every answer grounded in the platform's own tools, never invented
+- **6 tools, 1 new app** (`rental_agent`) — `search` (grounded room cards + area median/peak/cheapest), `room_details` (card + property-intelligence badge), `commute` (map-intel estimate or honest `available:false`), `price_compare` (segment P10/P50/P90 + overpriced flag), `area_overview` (median + trend or honest no), `bookmark` (`STATE_CHANGING` proposal); all results flow through the one shared privacy-first `room_card` shape (28 public-only keys) rebuilt per message so the UI renders the stored ground truth
+- **Dignified consent for the only side effect** — bookmarking needs human review: token-holding **self-consent** (the tenant's own turn is the authorization) moves PENDING → APPROVED, then applies once and **expires sibling PENDING bookmark proposals across all of that tenant's conversations** (one booking intent, no duplicates); the UI deliberately shows both stages ("await approval" → "applied") so the tenant stays in control
+- **API** — `POST /api/v1/rental/chat/` (creates+continues conversations, async run with eager fallback), `GET /conversations/` + `GET /conversations/<pk>/` (enriched transcript with attached cards, proposals, suggestion chips, feature state), `GET /runs/<key>/` (poll), `POST /proposals/<key>/approve|reject/` (owner-only, concurrency-safe, TTL) — auth + 40/h throttle
+- **Agent** — seeded via idempotent `register_rental_agent` command: flag `ai.rental_agent` (**disabled by default**), prompt `rentora.rental_agent` v1, agent `ai.rental_agent` (gpt-4o-mini, 6 tools, max_turns=6, max_tool_calls=20, max_tokens=4000, 60s); provider/prompt resolved through the Phase 18.1/18.2 registries
+- **SDK hardening (shared)** — `_sanitized_outcome` depth limit raised 4 → 8 and dict/list caps 50 → 200 so deep structured tool results survive into persistence and context (was nulling room-card fields — a grounding hazard); `_persist_message` gained `limit=` and tool payloads persist at 200 K so বাংলা (6× via `ensure_ascii`) never truncates mid-JSON; +1 regression test
+- **Frontend** — `rentalAgentService.ts` + `useRentalAgent` (send → poll run → reload enriched payload, honest errors, unmount-safe) + `RentalAgentPanel` (EN/BN examples, grounded cards opening the real RoomModal, amber "await approval" rows with Approve/Reject, suggestion chips, feature-off banner) as a new **Rental Agent** tab in the Copilot AI Tools, defaulted on open
+- **Engineering** — 42 new `rental_agent` tests + 1 SDK regression (81 combined OK, adjacent suites 886 OK), ruff-clean, `manage.py check` clean, TS strict + ESLint + Prettier clean. See [`docs/phases/phase-19-2-ai-rental-agent.md`](docs/phases/phase-19-2-ai-rental-agent.md)
+
+**Phase 19.1 — Property Intelligence Score**
+
+- **Composite, explainable 0–100** — deterministic score on top of existing signals with zero new tables: listing quality (25), price competitiveness vs. segment market (20), metro/commute value (15), photo authenticity (15), verification + fraud severity (15), and 30-day demand (10); unavailable signals **redistribute their weight** over the live ones so missing data never inflates or punishes
+- **Transparent by law** — every payload carries a per-component breakdown (`score`, `weight`, `effective_weight`, `contribution`, `availability`), confidence tier (`high/medium/low/none`) with reasons (availability, price sample size, freshness/staleness), strengths and rule-based suggestions (max 5, never LLM-invented), plus an explicit disclaimer ("not a valuation, fraud verdict, or guarantee")
+- **Privacy by construction** — public output **never** includes internal fraud risk scores, detector names, graph/ring IDs, KYC or provenance; a staff-only detail endpoint — gated by `is_staff`/admin role and audited via `audit_log_access` — attaches signal provenance, market benchmarks and engine metadata; photo anomalies and fraud severity only ever lower the *trust* component, never a verdict
+- **Versioned + cached** — `score_version` mixed into a config-signature cache key (`property-intelligence:{room_id}:{sha256(version+weights+thresholds)}`, TTL 900 s via the hardening `safe_cache_*` helpers); invalidation signals on room/image/owner-verification changes, small-sample guards on price (min 3, confidence down <5) and demand (no own signals + area < 3 signals → unavailable)
+- **API** — `GET /api/v1/property-intelligence/{id}/` (public) + `/{id}/staff/` (staff) + a read-only `property_intelligence_score` badge on room detail (flag-toggleable); **Agent SDK** — new READ_ONLY `property.intelligence` tool (schema-validated, executor is authoritative, audited `AgentToolCall` + telemetry, enabled-taskable per agent)
+- **Admin UI** — read-only **Property Intelligence** inspector per room (`/admin/rooms/room/{id}/property-intelligence/`) rendering score, breakdown, strengths/suggestions, provenance and engine metadata for operators
+- **Engineering** — 36 new tests (new `property_intelligence` app, 12 files), 0 migrations, ruff-clean, existing suite green. See [`docs/phases/phase-19-property-intelligence.md`](docs/phases/phase-19-property-intelligence.md)
 
 **Phase 19.0 — Agent SDK / Agentic AI Foundation**
 
@@ -78,7 +100,7 @@ Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 - **Providers** — `ChatLlmProvider` (OpenAI-compatible chat completions, HTTP-error bodies never echoed) and `MockAgentProvider` (deterministic scripted plan for tests; **refused outside test/debug** — no built-in provider means runs terminate with `provider_not_configured`, never invented answers)
 - **Safety by construction** — `agents.execute_agent_run` has **no autoretry** (never duplicate side effects) plus its own finished-run idempotency guard; telemetry enrichment failures never break a run; run-outcome notifications + audit on failed/terminated (`ai_alert` stream)
 - **API** — minimal public surface (catalog, own conversations/runs/messages) + admin-only registry, run/tool-call, and proposal review/apply endpoints (`/api/v1/agents/`)
-- **Engineering** — 38 new tests (1449 BE total, all green), 1 app + 6 models + 1 migration, ruff-clean. See [`docs/phase-19-ai-agents.md`](docs/phase-19-ai-agents.md)
+- **Engineering** — 38 new tests (1449 BE total, all green), 1 app + 6 models + 1 migration, ruff-clean. See [`docs/phases/phase-19-ai-agents.md`](docs/phases/phase-19-ai-agents.md)
 
 **Phase 18.4 — AI Intelligence Dashboard + Alerts**
 
@@ -86,7 +108,7 @@ Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 - **AI Alerts** — `AIAlertRule` (metric + operator + threshold + scope + severity) and `AIAlert` (full lifecycle), 10 watchable metrics (rates, latencies, cost, evaluation score, drift breach); anti-noise engineered in: **dedup** (repeated breaches fold into one open alert), **cooldown**, **consecutive-checks** streaks; in-app notifications to staff/admins (`ai_alert` type) with deep links; every lifecycle action audited (`ai_intelligence.alert_triggered/acknowledged/resolved/suppressed`)
 - **Celery** — `ai_intelligence.evaluate_alert_rules` (beat 5 min) + `ai_intelligence.warm_dashboard_cache` (beat 30 min)
 - **Admin UI** — Dashboard → **AI** tab: 11 sub-views (Overview/Features/Models/Providers/Cost/Performance/Errors/Quality/Drift/Prompts/Alerts), hand-rolled SVG trend charts, inline rule editor + acknowledge/resolve/suppress, deep-link alert highlighting
-- **Engineering** — 55 new tests (1411 BE total, all green), 2 new models, 3 migrations (`ai_intelligence` 0006+0007, `notifications` 0014), ruff-clean, TS strict + ESLint + production build green. See [`docs/phase-18-4-ai-intelligence-dashboard-alerts.md`](docs/phase-18-4-ai-intelligence-dashboard-alerts.md)
+- **Engineering** — 55 new tests (1411 BE total, all green), 2 new models, 3 migrations (`ai_intelligence` 0006+0007, `notifications` 0014), ruff-clean, TS strict + ESLint + production build green. See [`docs/phases/phase-18-4-ai-intelligence-dashboard-alerts.md`](docs/phases/phase-18-4-ai-intelligence-dashboard-alerts.md)
 
 **Phase 18.3 — AI Evaluation Framework**
 
@@ -98,7 +120,7 @@ Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 - **Model/Prompt Comparison** — `compare_runs()` (side-by-side), `compare_models()` (same feature, different models), `compare_prompts()` (same feature, different prompts), `compare_with_baseline()` with delta analysis
 - **Admin API** — 17 new endpoints under `api/v1/ai/eval/`: metrics, datasets, cases, thresholds, runs (CRUD + execute + cancel), case results, comparisons, regression check, baselines
 - **Celery** — `execute_evaluation_run_task` (async run execution), `cancel_stale_evaluation_runs` (every 30 min, cancels runs stuck >1 hour)
-- **Engineering** — 44 new tests (107 ai_intelligence total), 6 new models, 1 new app file (evaluators.py), migration 0005, ruff-clean. See [`docs/phase-18-3-evaluation-framework.md`](docs/phase-18-3-evaluation-framework.md)
+- **Engineering** — 44 new tests (107 ai_intelligence total), 6 new models, 1 new app file (evaluators.py), migration 0005, ruff-clean. See [`docs/phases/phase-18-3-evaluation-framework.md`](docs/phases/phase-18-3-evaluation-framework.md)
 
 **Phase 18.2 — AI Intelligence Foundation (Prompt Registry + Feature Integration)**
 
@@ -106,7 +128,7 @@ Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 - **Feature Flag Integration** — `is_feature_available(feature_id)` now checks both `AIFeatureRegistry.is_enabled` AND linked `FeatureFlag.is_enabled()` (lazy import to avoid circular deps), `AIFeatureRegistry` extended with `status` (active/deprecated/disabled), `owner`, `default_model`, `fallback_strategy`, `feature_flag_key`
 - **AI Feature Seeding** — `register_ai_features` management command seeds 30 real AI features from codebase audit (NLP, recommendation, pricing, vision, fraud, KYC, embedding, matching, agreements, analytics)
 - **Expanded Admin API** — 18 endpoints under `api/v1/ai/`: 3 feature (list/detail/update), 7 prompt (CRUD + versions), 2 log (list/detail), 3 health (list/stats/update), 3 version management (activate/deactivate/rollback)
-- **Engineering** — 63 ai_intelligence tests, 4 database migrations, ruff-clean, existing 1312 tests all pass (was 1270). See [`docs/phase-18-2-prompt-feature-registry.md`](docs/phase-18-2-prompt-feature-registry.md)
+- **Engineering** — 63 ai_intelligence tests, 4 database migrations, ruff-clean, existing 1312 tests all pass (was 1270). See [`docs/phases/phase-18-2-prompt-feature-registry.md`](docs/phases/phase-18-2-prompt-feature-registry.md)
 
 **Phase 18.1 — AI Intelligence Foundation (Provider Registry + Telemetry)**
 
@@ -118,7 +140,7 @@ Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 - **Admin API** — 7 read-only endpoints under `api/v1/ai/` (feature list/detail, execution log list/detail, provider health list, stats, manual health update), all staff-only
 - **Celery beat tasks** — `update_provider_health` (hourly aggregation of execution logs into `ProviderHealth`), `purge_old_execution_logs` (daily cleanup of logs older than `AI_EXECUTION_LOG_RETENTION_DAYS`, default 90)
 - **Provider health aggregation** — calculates success rate, p95/p99 latency, timeout counts, token totals, cost totals per (provider, feature) combination; marks providers unhealthy when success_rate drops below 95%
-- **Engineering** — 21 new tests, 3 database migrations, ruff-clean, existing 1270 tests all pass. See [`docs/phase-18-ai-intelligence-audit.md`](docs/phase-18-ai-intelligence-audit.md)
+- **Engineering** — 21 new tests, 3 database migrations, ruff-clean, existing 1270 tests all pass. See [`docs/phases/phase-18-ai-intelligence-audit.md`](docs/phases/phase-18-ai-intelligence-audit.md)
 
 **Phase 17 — Graph & Deep Trust (ML Anti-Fraud v2)**
 
@@ -129,7 +151,7 @@ Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 - **Model drift monitoring** — `model_monitor` service (check_all_drift, DriftMetric recording, retrain-request creation), `check_model_drift` beat task, admin drift/retrain endpoints. Feature-flagged via `MODEL_DRIFT_ENABLED`
 - **Shared provider abstraction** — `BaseProvider`/`ProviderResult`/`ProviderFailure`/`Registry` in `fraud/services/provider_base.py`; all providers (liveness, face-match, OCR) share a common failure taxonomy (`USER_FAILURE`/`PROVIDER_FAILURE`/`SYSTEM_FAILURE`)
 - **Security/privacy** — PII masking (phone, NID, email), reason sanitization, audit logging, sensitive-field scrubbing from logs/analytics/URLs/CSVs; `ProviderResult.fail()` auto-sanitizes
-- **Engineering** — 262 new backend tests (350 fraud total), 10 stages, pre-commit ruff-clean, Celery beat schedule updated. See [`docs/phase-17-final-report.md`](docs/phase-17-final-report.md) + [`docs/phase-17-graph-trust-audit.md`](docs/phase-17-graph-trust-audit.md)
+- **Engineering** — 262 new backend tests (350 fraud total), 10 stages, pre-commit ruff-clean, Celery beat schedule updated. See [`docs/phases/phase-17-final-report.md`](docs/phases/phase-17-final-report.md) + [`docs/phases/phase-17-graph-trust-audit.md`](docs/phases/phase-17-graph-trust-audit.md)
 
 **Phase 16 — Hardening & Scale**
 
@@ -140,11 +162,11 @@ Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 - **Rate limiting / abuse** — proxy-aware client-IP resolution (`NUM_PROXIES`, XFF opt-in), trusted throttle classes wired site-wide, `experiments` scope actually enforced (was a no-op), 429 envelope verified
 - **Celery reliability** — broker retry on startup, ack-late + reject-on-worker-lost, soft/hard time limits, default retry policy; prod warns loudly if the broker URL is missing
 - **App hardening** — `/health/` liveness endpoint (DB probe, no auth/throttle), `X-Request-ID` correlation middleware, 10 MB request body limits
-- **Engineering** — 4 new apps (`embeddings`, `feature_flags`, `experiments`, `images`), ~12 migrations, **960 backend tests passing**, frontend tsc/eslint clean. See [`docs/phase-16-hardening.md`](docs/phase-16-hardening.md)
+- **Engineering** — 4 new apps (`embeddings`, `feature_flags`, `experiments`, `images`), ~12 migrations, **960 backend tests passing**, frontend tsc/eslint clean. See [`docs/phases/phase-16-hardening.md`](docs/phases/phase-16-hardening.md)
 
 **Phase 15 — Monetization 2.0 (Revenue)**
 
-- **Landlord SaaS — subscriptions & entitlements** — plan catalog (monthly/yearly), self-serve checkout via SSLCommerz/bKash with **server-side pricing**, subscription activation tied to a confirmed payment (atomic), cancel-at-period-end + renewal, and **entitlements enforced server-side** (`SUBSCRIPTION_FREE_FEATURES`); the AI price-prediction v2 endpoint is gated behind `price_prediction_basic` with a graceful free-tier fallback. See [`docs/phase-15-monetization-2.0.md`](docs/phase-15-monetization-2.0.md)
+- **Landlord SaaS — subscriptions & entitlements** — plan catalog (monthly/yearly), self-serve checkout via SSLCommerz/bKash with **server-side pricing**, subscription activation tied to a confirmed payment (atomic), cancel-at-period-end + renewal, and **entitlements enforced server-side** (`SUBSCRIPTION_FREE_FEATURES`); the AI price-prediction v2 endpoint is gated behind `price_prediction_basic` with a graceful free-tier fallback. See [`docs/phases/phase-15-monetization-2.0.md`](docs/phases/phase-15-monetization-2.0.md)
 - **Revenue ledger & commission engine** — idempotent `RevenueLedgerEntry` + `Commission` records (unique `idempotency_key` so a booking/order can never double-credit), platform/partner splits per scope with default rates (broker 2.0%, corporate 1.0%, marketplace 10%, insurance 8%, credit 3%), a **payout lifecycle** (pending → approved → paid / rejected) that deducts the balance atomically and masks account details, and a Celery-beat **subscription renewal + reminder** pipeline
 - **Verified Broker/Agent Network** — broker profiles with license + referral code, rule-based auto-screen verification, **attributed booking commissions** (signal-driven, idempotent), broker dashboard (balance, pending/paid, recent commissions) and self-serve payout requests
 - **B2B Corporate Housing** — corporate accounts (pending/active/suspended), member invites, **bulk booking with partial success**, corporate invoices (draft → generate), company-admin overview/approvals and platform-admin controls
@@ -167,26 +189,26 @@ Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 
 **Phase 14 — AI v3: Vision & Content AI**
 
-- **Photo intelligence** — `rooms/vision.py` fingerprints a listing's photos (pHash + 64-bucket colour histogram + brightness + palette, Pillow-only, offline) and derives honest, confidence-scored observations: lighting, tone, décor, composition. `POST /api/v1/rooms/<id>/vision/analyze/` stores a `RoomVisionAnalysis` (OneToOne), `GET /vision/` serves it, `POST /vision/description/` drafts a copy-ready title + description from the **actual photos** (reuses the AI draft pipeline with the vision image profile), and suggested amenity tags can be **reviewed then applied** to the listing. Object-level tags need an optional `http` vision gateway (`VISION_PROVIDER=http`) with graceful fallback; every response carries the honesty note that this is statistical pixel vision, not object recognition. See [`docs/phase-14-ai-v3.md`](docs/phase-14-ai-v3.md)
+- **Photo intelligence** — `rooms/vision.py` fingerprints a listing's photos (pHash + 64-bucket colour histogram + brightness + palette, Pillow-only, offline) and derives honest, confidence-scored observations: lighting, tone, décor, composition. `POST /api/v1/rooms/<id>/vision/analyze/` stores a `RoomVisionAnalysis` (OneToOne), `GET /vision/` serves it, `POST /vision/description/` drafts a copy-ready title + description from the **actual photos** (reuses the AI draft pipeline with the vision image profile), and suggested amenity tags can be **reviewed then applied** to the listing. Object-level tags need an optional `http` vision gateway (`VISION_PROVIDER=http`) with graceful fallback; every response carries the honesty note that this is statistical pixel vision, not object recognition. See [`docs/phases/phase-14-ai-v3.md`](docs/phases/phase-14-ai-v3.md)
 - **AI image search** — `POST /api/v1/rooms/vision/search/` (public, throttled 30/min): upload any room photo, get look-alike listings ranked **50% phash + 25% histogram + 25% brightness** with match scores and reasons; the rooms grid shows `88% match` badges.
 - **Frontend** — `VisionCard` panel in the landlord dashboard (My Listings) with palette swatches, evidence chips, Apply tags, AI draft + copy; Image search dialog on `/rooms` with photo preview and results mode; all strings in English + বাংলা.
 - **Engineering** — 716 backend (was 689) + 342 frontend (was 333) tests, tsc/eslint/prettier clean, migration `rooms/0007_roomvisionanalysis.py`, 3 new Playwright screenshots (`capture_phase14_shots.mjs`).
 
 **Phase 13 — Reach (SMS OTP, WhatsApp sharing, area SEO)**
 
-- **SMS OTP sign-in** — phone-first login for the Bangladesh market: `POST /api/v1/auth/sms/request|verify/` with a SHA-256-hashed challenge (TTL 600s, max 5 attempts, 30s resend cooldown), masked-phone responses (`+8801••••78`) and **auto-registration** for new numbers. Provider contract (`users.sms.send_sms`) ships `console` (logs the code — zero-config dev/CI) and `http` (generic gateway POST); **disabled by default** (`SMS_OTP_ENABLED=False` → endpoints answer `503` until a real gateway is plugged in). 19 tests including the disabled→503 path. See [`docs/phase-13-reach.md`](docs/phase-13-reach.md)
+- **SMS OTP sign-in** — phone-first login for the Bangladesh market: `POST /api/v1/auth/sms/request|verify/` with a SHA-256-hashed challenge (TTL 600s, max 5 attempts, 30s resend cooldown), masked-phone responses (`+8801••••78`) and **auto-registration** for new numbers. Provider contract (`users.sms.send_sms`) ships `console` (logs the code — zero-config dev/CI) and `http` (generic gateway POST); **disabled by default** (`SMS_OTP_ENABLED=False` → endpoints answer `503` until a real gateway is plugged in). 19 tests including the disabled→503 path. See [`docs/phases/phase-13-reach.md`](docs/phases/phase-13-reach.md)
 - **WhatsApp listing share with AI summary** — **Share on WhatsApp** on every room card + in the room modal. `GET /api/v1/copilot/share-summary/<id>/` builds a compact, deterministic summary **only from public listing fields** (no owner contact details); the frontend falls back to a client-side summary when the AI call fails, then opens `wa.me/?text=…` pre-filled with the summary + deep link.
 - **Per-area SEO landing pages** — `/rooms/:areaSlug` for 10 Dhaka areas (own `<title>` "Rooms for rent in Dhanmondi, Dhaka", meta description, live room grid, `?room=<id>` deep links), a navbar **Areas** dropdown, `npm run generate:sitemap` → `public/sitemap.xml` (5 core + 10 area routes), and `robots.txt` updated. Honest limits: SPA, not SSR — the area pages are crawlable metadata + sitemap.
 - **Lighthouse gate in CI** — `scripts/lighthouse-gate.mjs` audits the **built** app (chrome-launcher, `--min-score` threshold 70; local run **70/70 PASS**) and a new `lighthouse` CI job uploads the report as an artifact.
-- **Engineering** — 689 backend (was 667) + 333 frontend (was 322) tests, tsc/eslint/prettier clean, migration `users/0010_smsotpchallenge.py`. React Native remains a separate, unfunded track ([`docs/MOBILE_APP_PLAN.md`](docs/MOBILE_APP_PLAN.md)).
+- **Engineering** — 689 backend (was 667) + 333 frontend (was 322) tests, tsc/eslint/prettier clean, migration `users/0010_smsotpchallenge.py`. React Native remains a separate, unfunded track ([`docs/guides/MOBILE_APP_PLAN.md`](docs/guides/MOBILE_APP_PLAN.md)).
 
 **Phase 12 — Trust & Safety V2 (Marketplace Integrity)**
 
-- **Tenant KYC + verified-tenant badge** — tenants upload a NID/passport (multipart, MIME/size-validated, UUID-renamed private storage); statuses not_started → pending → verified / rejected / needs_review / expired. Landlords only ever see the **✓ Identity Verified badge** — never the document, the NID number, or the file URL. Admin queue (`/admin/trust/tenant-verification`) with approve/reject/resubmission, each decision audited (`tenant_kyc.*`) and notified. Badge renders in chat, booking requests and the tenant profile. See [`docs/TENANT_KYC.md`](docs/TENANT_KYC.md)
-- **Chat safety engine** — the fraud engine now analyses every chat message: suspicious payment requests, payment/bKash redirects, phishing URLs, contact-info harvesting, impersonation, scam phrases and urgency. Outcomes: LOW (allow) / MEDIUM (warn banner) / HIGH (flag + warning) / CRITICAL (blocked message, replaced with a safety notice — never silently deleted). Admin feed `GET /chat/safety/events/` (metadata only, no raw content). See [`docs/CHAT_SAFETY.md`](docs/CHAT_SAFETY.md)
+- **Tenant KYC + verified-tenant badge** — tenants upload a NID/passport (multipart, MIME/size-validated, UUID-renamed private storage); statuses not_started → pending → verified / rejected / needs_review / expired. Landlords only ever see the **✓ Identity Verified badge** — never the document, the NID number, or the file URL. Admin queue (`/admin/trust/tenant-verification`) with approve/reject/resubmission, each decision audited (`tenant_kyc.*`) and notified. Badge renders in chat, booking requests and the tenant profile. See [`docs/guides/TENANT_KYC.md`](docs/guides/TENANT_KYC.md)
+- **Chat safety engine** — the fraud engine now analyses every chat message: suspicious payment requests, payment/bKash redirects, phishing URLs, contact-info harvesting, impersonation, scam phrases and urgency. Outcomes: LOW (allow) / MEDIUM (warn banner) / HIGH (flag + warning) / CRITICAL (blocked message, replaced with a safety notice — never silently deleted). Admin feed `GET /chat/safety/events/` (metadata only, no raw content). See [`docs/guides/CHAT_SAFETY.md`](docs/guides/CHAT_SAFETY.md)
 - **Report / block / dispute** — report a user, message (anchored to the exact message) or listing across 7 categories (scam, harassment, fake listing, payment fraud, impersonation, spam, other); block/unblock a user closes the conversation both ways (server-enforced); structured moderation tickets with admin warn / restrict / suspend / escalate actions — all audited (`report.*`, `user.blocked`) and both parties notified
 - **Photo + review moderation** — the moderation app auto-scores every new review (URLs, phone/email, spam phrasing, all-caps/exclamation, gibberish, cross-user duplicate text, review velocity) and photo (pHash duplicate-image reuse, blank-image guard) — high-risk content is **held** in a moderation queue instead of published; admin approve/reject with notes, audited (`content_moderated`) and the author notified
-- **Dispute resolution + deposit protection** — one structured dispute per approved booking (6 categories: deposit, property condition, cancellation, misrepresentation, payment, other) with participant-only evidence (text/photo/document, IDOR-guarded), a full status lifecycle, and admin resolution (release-to-landlord / refund-to-tenant / partial) that marks the booking deposit released/refunded. Wording is honest — the platform never claims "escrow". See [`docs/phase-12-trust-safety-v2.md`](docs/phase-12-trust-safety-v2.md)
+- **Dispute resolution + deposit protection** — one structured dispute per approved booking (6 categories: deposit, property condition, cancellation, misrepresentation, payment, other) with participant-only evidence (text/photo/document, IDOR-guarded), a full status lifecycle, and admin resolution (release-to-landlord / refund-to-tenant / partial) that marks the booking deposit released/refunded. Wording is honest — the platform never claims "escrow". See [`docs/phases/phase-12-trust-safety-v2.md`](docs/phases/phase-12-trust-safety-v2.md)
 - **Admin Trust & Safety Operations Center** — one dashboard (`/dashboard?tab=trust`) aggregating KYC pending, chat-safety events, open reports, moderation queues and open disputes with sub-tabs into each queue, plus the generic read-only **audit trail** (`GET /api/v1/audit/`) covering every Phase 12 decision
 - **Engineering** — 3 new backend apps (moderation, disputes + audit endpoint) and 6 new frontend admin/user panels; **473 backend + 312 frontend tests**, tsc/eslint/prettier clean
 
@@ -200,7 +222,7 @@ Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 - **Graceful offline** — an amber "You're offline" banner (safe-area aware) while already-loaded UI stays visible — never fake listings or stale data
 - **Shortcuts** — Search Rooms `/rooms` · Explore Map `/map` · Post Listing `/dashboard?tab=listings`
 - **Branding** — the app name is now **Rentora 🇧🇩** (gradient wordmark in the navbar/footer, Bangladesh-flag badge) matching the push notifications, Copilot and README
-- **Engineering** — 11 new unit tests (`src/lib/pwa.test.ts`), PWA validation wired into the Frontend CI job. See [`docs/PWA.md`](docs/PWA.md)
+- **Engineering** — 11 new unit tests (`src/lib/pwa.test.ts`), PWA validation wired into the Frontend CI job. See [`docs/guides/PWA.md`](docs/guides/PWA.md)
 
 **Phase 12 P1 — Offline & App Polish**
 
@@ -276,7 +298,7 @@ Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
   `Permissions-Policy` and HSTS (prod) on every response; RFC 9116
   `/.well-known/security.txt`.
 - **Dependency bump audit** — safe patch/minor bumps applied to backend +
-  frontend deps and documented in `docs/tier1-dependency-audit.md` (majors
+  frontend deps and documented in `docs/phases/tier1-dependency-audit.md` (majors
   like React 19 / Vite 8 / Django 6 held for a dedicated upgrade cycle).
 
 **Tier-3 Upgrades (RAG Copilot, i18n, embeddings, E2E, trust signals)**
@@ -486,7 +508,7 @@ Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 - **Destination pin** — click the map to drop a teal destination flag for commute/ideal-area ranking; the pin is persisted in the shareable URL
 - **Everything real** — no fabricated statistics: ETAs are labelled heuristics, transit ETA only exists along the MRT Line-6 corridor, and areas without data say "—"
 
-See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`docs/MAP_API.md`](docs/MAP_API.md) (endpoints) · [`docs/MAP_SCORING.md`](docs/MAP_SCORING.md) (formulas).
+See [`docs/guides/INTELLIGENT_MAP.md`](docs/guides/INTELLIGENT_MAP.md) (architecture) · [`docs/guides/MAP_API.md`](docs/guides/MAP_API.md) (endpoints) · [`docs/guides/MAP_SCORING.md`](docs/guides/MAP_SCORING.md) (formulas).
 
 **Listing Location Picker (landlord)**
 
@@ -533,9 +555,9 @@ See [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) (architecture) · [`doc
 
 **Core AI & Fraud Intelligence (Phase 11++) — Rentora Copilot, AI pricing v2, duplicate-image fraud**
 
-- **🤖 Rentora Copilot** (`COPILOT_ENABLED`) — a floating conversational assistant (bottom-right, every page): ask in Bangla, English or Banglish ("Uttara-তে ১০ হাজারের মধ্যে furnished student room চাই") and it searches the **live** listings. Hybrid and free: intent parsing (reusing the NL parser + an amenity/property word table) feeds the existing search/ranking pipeline, and the reply is generated over the *retrieved* rows only — **it can never hallucinate a room, price or amenity**, and no LLM is required. Follow-up turns keep context ("শুধু furnished দেখাও" retains Uttara + budget via a session_id), listing cards open the full RoomModal, quick-reply chips are backend-generated (`POST /api/v1/copilot/chat/`, 60/hr throttle). See `docs/RENTORA_COPILOT.md`
-- **🏷️ AI pricing suggestion v2** (`GET /pricing/suggestion/:id/`, owner/admin) — the fair-price model upgraded with **demand**: recommended price + range (rounded to ৳500), a 0–100 demand score from real engagement (views vs area peers, wishlist saves, booking requests, area heat), **estimated time-to-rent** from actual booking history (never fabricated — "Insufficient historical data" when there aren't 5 samples), composite confidence, and explainable reasons ("Similar Mirpur singles average ৳8,500"). Cached per room + market snapshot. Dashboard → **Insights** → **AI Price** expands the suggestion card with a **Use ৳12,500** button — the landlord always decides; nothing changes automatically. See `docs/AI_PRICING_V2.md`
-- **🖼️ Cross-listing duplicate-image fraud detection** (`DUPLICATE_IMAGE_FRAUD_ENABLED`) — the pHash pipeline (already powering look-alike rooms) now feeds a 7th fraud detector: the same photo re-used across listings is flagged with contextual severity (same-owner agency posts → low; different owners → medium; different owner **and** area, or 3+ matches → high). Hex-prefix pre-filtering keeps scans from N×N; same-listing galleries and blank images are never flagged; the signal feeds the existing fraud score → search ranking, and the admin **Fraud Operations** panel shows matched-listing chips + similarity %. See `docs/DUPLICATE_IMAGE_FRAUD.md`
+- **🤖 Rentora Copilot** (`COPILOT_ENABLED`) — a floating conversational assistant (bottom-right, every page): ask in Bangla, English or Banglish ("Uttara-তে ১০ হাজারের মধ্যে furnished student room চাই") and it searches the **live** listings. Hybrid and free: intent parsing (reusing the NL parser + an amenity/property word table) feeds the existing search/ranking pipeline, and the reply is generated over the *retrieved* rows only — **it can never hallucinate a room, price or amenity**, and no LLM is required. Follow-up turns keep context ("শুধু furnished দেখাও" retains Uttara + budget via a session_id), listing cards open the full RoomModal, quick-reply chips are backend-generated (`POST /api/v1/copilot/chat/`, 60/hr throttle). See `docs/guides/RENTORA_COPILOT.md`
+- **🏷️ AI pricing suggestion v2** (`GET /pricing/suggestion/:id/`, owner/admin) — the fair-price model upgraded with **demand**: recommended price + range (rounded to ৳500), a 0–100 demand score from real engagement (views vs area peers, wishlist saves, booking requests, area heat), **estimated time-to-rent** from actual booking history (never fabricated — "Insufficient historical data" when there aren't 5 samples), composite confidence, and explainable reasons ("Similar Mirpur singles average ৳8,500"). Cached per room + market snapshot. Dashboard → **Insights** → **AI Price** expands the suggestion card with a **Use ৳12,500** button — the landlord always decides; nothing changes automatically. See `docs/guides/AI_PRICING_V2.md`
+- **🖼️ Cross-listing duplicate-image fraud detection** (`DUPLICATE_IMAGE_FRAUD_ENABLED`) — the pHash pipeline (already powering look-alike rooms) now feeds a 7th fraud detector: the same photo re-used across listings is flagged with contextual severity (same-owner agency posts → low; different owners → medium; different owner **and** area, or 3+ matches → high). Hex-prefix pre-filtering keeps scans from N×N; same-listing galleries and blank images are never flagged; the signal feeds the existing fraud score → search ranking, and the admin **Fraud Operations** panel shows matched-listing chips + similarity %. See `docs/guides/DUPLICATE_IMAGE_FRAUD.md`
 
 ---
 
@@ -1271,7 +1293,9 @@ Tiers: **Free** (default) → **Featured** (৳199/30d: boosted above free, badg
 | `/api/v1/redoc/`  | ReDoc                 |
 | `/api/v1/schema/` | OpenAPI schema (YAML) |
 
-> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook) · [`docs/RENTORA_COPILOT.md`](docs/RENTORA_COPILOT.md) (Copilot architecture, API, config) · [`docs/AI_PRICING_V2.md`](docs/AI_PRICING_V2.md) (pricing suggestion v2) · [`docs/DUPLICATE_IMAGE_FRAUD.md`](docs/DUPLICATE_IMAGE_FRAUD.md) (duplicate-image detector) · [`docs/INTELLIGENT_MAP.md`](docs/INTELLIGENT_MAP.md) + [`docs/MAP_API.md`](docs/MAP_API.md) + [`docs/MAP_SCORING.md`](docs/MAP_SCORING.md) (intelligent map v2) · [`docs/VOICE_SEARCH_PLAYBOOK.md`](docs/VOICE_SEARCH_PLAYBOOK.md) (voice search) · [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md) (verified feature matrix) · [`docs/PWA.md`](docs/PWA.md) (PWA architecture, manifest, SW strategy, install/update/offline behavior) · [`docs/phase-12-trust-safety-v2.md`](docs/phase-12-trust-safety-v2.md) (Phase 12 Trust & Safety V2) · [`docs/TENANT_KYC.md`](docs/TENANT_KYC.md) + [`docs/CHAT_SAFETY.md`](docs/CHAT_SAFETY.md) (tenant KYC + chat safety) · [`docs/tier2-upgrades.md`](docs/tier2-upgrades.md) (AI chat-safety classifier, self-hosted analytics, photo forensics, OSRM ETA, ClamAV, KYC auto pre-screen, react-router v7) · [`docs/tier3-upgrades.md`](docs/tier3-upgrades.md) (RAG Copilot listing mode, EN⇄BN i18n, production-grade embeddings, E2E expansion, tenant trust signals) · [`docs/tier4-upgrades.md`](docs/tier4-upgrades.md) (AI advisor, negotiation assistant, agreement checker, landlord copilot, property comparison, demand forecast, smart alerts, hosted embeddings, KYC auto pre-screen, Playwright E2E) · [`docs/tier5-upgrades.md`](docs/tier5-upgrades.md) (funnel analytics wiring, photo forensics v2, price recommendation, Copilot image understanding, AI listing draft) · [`docs/phase-15-monetization-2.0.md`](docs/phase-15-monetization-2.0.md) (Phase 15 Monetization 2.0 — subscriptions, revenue ledger, brokers, corporate, marketplace, insurance/credit) · [`docs/phase-15-communication-trust-ai.md`](docs/phase-15-communication-trust-ai.md) (Phase 15 Communication & Trust AI — chat translation, support copilot, KYC OCR, review summary, market report, fraud rings) · [`docs/phase-16-hardening.md`](docs/phase-16-hardening.md) (Phase 16 Hardening & Scale — embeddings, feature flags, image pipeline, Redis, rate limiting, Celery) · [`docs/phase-17-final-report.md`](docs/phase-17-final-report.md) (Phase 17 Graph & Deep Trust — scam-network graph, KYC liveness, photo-geo, fake-review detection, model drift, PII masking)
+> 🗂️ **Start here:** [`docs/`](docs/README.md) — the documentation index (architecture, API reference, ADR, phase specs, guides, ops, security, screenshots).
+>
+> 📖 Deeper reading: [`docs/architecture.md`](docs/architecture.md) (system design, data model, flows, deployment) · [`docs/api-reference.md`](docs/api-reference.md) (full endpoint reference + curl examples) · [`docs/ops/backup-restore.md`](docs/ops/backup-restore.md) (backup/restore runbook) · [`docs/guides/RENTORA_COPILOT.md`](docs/guides/RENTORA_COPILOT.md) (Copilot architecture, API, config) · [`docs/guides/AI_PRICING_V2.md`](docs/guides/AI_PRICING_V2.md) (pricing suggestion v2) · [`docs/guides/DUPLICATE_IMAGE_FRAUD.md`](docs/guides/DUPLICATE_IMAGE_FRAUD.md) (duplicate-image detector) · [`docs/guides/INTELLIGENT_MAP.md`](docs/guides/INTELLIGENT_MAP.md) + [`docs/guides/MAP_API.md`](docs/guides/MAP_API.md) + [`docs/guides/MAP_SCORING.md`](docs/guides/MAP_SCORING.md) (intelligent map v2) · [`docs/guides/VOICE_SEARCH_PLAYBOOK.md`](docs/guides/VOICE_SEARCH_PLAYBOOK.md) (voice search) · [`docs/guides/LIVE_VERIFICATION.md`](docs/guides/LIVE_VERIFICATION.md) (verified feature matrix) · [`docs/guides/PWA.md`](docs/guides/PWA.md) (PWA architecture, manifest, SW strategy, install/update/offline behavior) · [`docs/phases/phase-12-trust-safety-v2.md`](docs/phases/phase-12-trust-safety-v2.md) (Phase 12 Trust & Safety V2) · [`docs/guides/TENANT_KYC.md`](docs/guides/TENANT_KYC.md) + [`docs/guides/CHAT_SAFETY.md`](docs/guides/CHAT_SAFETY.md) (tenant KYC + chat safety) · [`docs/phases/tier2-upgrades.md`](docs/phases/tier2-upgrades.md) (AI chat-safety classifier, self-hosted analytics, photo forensics, OSRM ETA, ClamAV, KYC auto pre-screen, react-router v7) · [`docs/phases/tier3-upgrades.md`](docs/phases/tier3-upgrades.md) (RAG Copilot listing mode, EN⇄BN i18n, production-grade embeddings, E2E expansion, tenant trust signals) · [`docs/phases/tier4-upgrades.md`](docs/phases/tier4-upgrades.md) (AI advisor, negotiation assistant, agreement checker, landlord copilot, property comparison, demand forecast, smart alerts, hosted embeddings, KYC auto pre-screen, Playwright E2E) · [`docs/phases/tier5-upgrades.md`](docs/phases/tier5-upgrades.md) (funnel analytics wiring, photo forensics v2, price recommendation, Copilot image understanding, AI listing draft) · [`docs/phases/phase-15-monetization-2.0.md`](docs/phases/phase-15-monetization-2.0.md) (Phase 15 Monetization 2.0 — subscriptions, revenue ledger, brokers, corporate, marketplace, insurance/credit) · [`docs/phases/phase-15-communication-trust-ai.md`](docs/phases/phase-15-communication-trust-ai.md) (Phase 15 Communication & Trust AI — chat translation, support copilot, KYC OCR, review summary, market report, fraud rings) · [`docs/phases/phase-16-hardening.md`](docs/phases/phase-16-hardening.md) (Phase 16 Hardening & Scale — embeddings, feature flags, image pipeline, Redis, rate limiting, Celery) · [`docs/phases/phase-17-final-report.md`](docs/phases/phase-17-final-report.md) (Phase 17 Graph & Deep Trust — scam-network graph, KYC liveness, photo-geo, fake-review detection, model drift, PII masking)
 
 ---
 
@@ -1323,7 +1347,7 @@ Passwordless sign-in is live — the phishing-resistant successor to passwords +
 - **Native polish** — Apple splash screens, dark maskable icon, iOS "Add to Home Screen" hint, and the brand flag rendered as an **inline SVG** (no emoji-rendering issues)
 - **Shortcuts** — right-click / long-press the installed icon → Search Rooms · Explore Map · Post Listing
 
-See [`docs/PWA.md`](docs/PWA.md) for the manifest, icon system, service-worker strategy, update/offline behavior, security review and browser support.
+See [`docs/guides/PWA.md`](docs/guides/PWA.md) for the manifest, icon system, service-worker strategy, update/offline behavior, security review and browser support.
 
 ---
 
@@ -1378,6 +1402,12 @@ Every shipped phase with its captured screenshots (all in `docs/screenshots/`):
 | 12.10 | Tier-5 upgrades (funnel analytics, price recommendation, Copilot vision, AI draft) | [`tier5-price-recommendation.png`](docs/screenshots/tier5-price-recommendation.png) · [`tier5-ai-draft.png`](docs/screenshots/tier5-ai-draft.png) · [`tier5-copilot-photos.png`](docs/screenshots/tier5-copilot-photos.png) |
 | 13 | Reach (SMS OTP, WhatsApp share, area SEO) | [`phase13-area-page.png`](docs/screenshots/phase13-area-page.png) · [`phase13-whatsapp-share.png`](docs/screenshots/phase13-whatsapp-share.png) · [`phase13-sms-login.png`](docs/screenshots/phase13-sms-login.png) |
 | 14 | AI v3 Vision & Content (photo intelligence, AI image search) | [`phase14-vision-panel.png`](docs/screenshots/phase14-vision-panel.png) · [`phase14-image-search-dialog.png`](docs/screenshots/phase14-image-search-dialog.png) · [`phase14-image-search-results.png`](docs/screenshots/phase14-image-search-results.png) |
+| 15 | Communication & Trust AI + Monetization 2.0 | [`phase15-market-report.png`](docs/screenshots/phase15-market-report.png) · [`phase15-chat-translate.png`](docs/screenshots/phase15-chat-translate.png) · [`phase15-copilot-support.png`](docs/screenshots/phase15-copilot-support.png) · [`phase15-copilot-tts.png`](docs/screenshots/phase15-copilot-tts.png) · [`phase15-kyc-ocr.png`](docs/screenshots/phase15-kyc-ocr.png) · [`phase15-review-ai-summary.png`](docs/screenshots/phase15-review-ai-summary.png) · [`phase15-price-v2.png`](docs/screenshots/phase15-price-v2.png) · [`phase15-fraud-rings.png`](docs/screenshots/phase15-fraud-rings.png) |
+| 16 | Hardening & Scale (similar-rooms embeddings, pgvector) | [`phase16-similar-rooms.png`](docs/screenshots/phase16-similar-rooms.png) |
+| 17 | Graph & Deep Trust (fraud graph admin) | [`phase17-fraud-graph-admin.png`](docs/screenshots/phase17-fraud-graph-admin.png) |
+| 18 | AI Intelligence (dashboard + alerts) | [`phase18-ai-dashboard.png`](docs/screenshots/phase18-ai-dashboard.png) |
+| 19.1 | Property Intelligence (admin inspector) | [`phase19-1-property-intelligence.png`](docs/screenshots/phase19-1-property-intelligence.png) |
+| 19.2 | AI Rental Agent (grounded chat + bookmark consent) | [`phase19-2-rental-agent.png`](docs/screenshots/phase19-2-rental-agent.png) |
 
 Below, the detailed phase-by-phase screenshots.
 
@@ -1457,7 +1487,7 @@ Below, the detailed phase-by-phase screenshots.
 
 <img width="1440" alt="AI Pricing Suggestion" src="docs/screenshots/pricing-suggestion.png" />
 
-**Phase 7 v2 — Intelligent Map** — AI map search ("উত্তরায় ১২ হাজারের মধ্যে furnished room" → intent chips + real rooms + map flies to Uttara), metro commute scores, value-score pins, area intelligence with comparison, and the affordability budget view (screenshots in [🖼️ Screenshots](#-screenshots); architecture in [docs/INTELLIGENT_MAP.md](docs/INTELLIGENT_MAP.md)):
+**Phase 7 v2 — Intelligent Map** — AI map search ("উত্তরায় ১২ হাজারের মধ্যে furnished room" → intent chips + real rooms + map flies to Uttara), metro commute scores, value-score pins, area intelligence with comparison, and the affordability budget view (screenshots in [🖼️ Screenshots](#-screenshots); architecture in [docs/guides/INTELLIGENT_MAP.md](docs/guides/INTELLIGENT_MAP.md)):
 
 **Phase 7 v3 — Map UX polish** — zoom-aware area labels + boundary highlights in light mode (left) and dark mode (right):
 
@@ -1543,6 +1573,49 @@ Below, the detailed phase-by-phase screenshots.
 
 <img width="1440" alt="Phase 14 Image Search Results" src="docs/screenshots/phase14-image-search-results.png" />
 
+**Phase 15 — Weekly market report (admin Analytics)** — area-level median rent, WoW movement and index for `Mirpur` (product analytics are first-party, the funnel is baked from events) — condensed rendering of the areas table in the **Analytics** tab of the Trust & Safety center:
+
+<img width="1440" alt="Phase 15 Market Report" src="docs/screenshots/phase15-market-report.png" />
+
+**Phase 15 — KYC OCR** (auto-extracted NID number/name/DOB with confidence), **AI review summary** (sentiment breakdown + topic tags on the room modal), **dynamic pricing v2** and **fraud rings** (coordinated accounts flagged via shared phone):
+
+<img width="640" alt="Phase 15 KYC OCR" src="docs/screenshots/phase15-kyc-ocr.png" />
+<img width="640" alt="Phase 15 Review AI Summary" src="docs/screenshots/phase15-review-ai-summary.png" />
+
+**Phase 15 — Chat translation (EN⇄BN)** with honest quality flag, **support Copilot** (grounded FAQ answers, BN fallback), **voice TTS** on Copilot replies, and **price suggestion v2** (demand-momentum window):
+
+<img width="640" alt="Phase 15 Chat Translate" src="docs/screenshots/phase15-chat-translate.png" />
+<img width="640" alt="Phase 15 Copilot Support" src="docs/screenshots/phase15-copilot-support.png" />
+
+**Phase 15 — Copilot voice (TTS)** on assistant replies and **fraud rings** surfaced in the admin Frauds panel:
+
+<img width="640" alt="Phase 15 Copilot TTS" src="docs/screenshots/phase15-copilot-tts.png" />
+<img width="640" alt="Phase 15 Fraud Rings" src="docs/screenshots/phase15-fraud-rings.png" />
+
+**Phase 15 — Dynamic pricing v2** — demand-momentum-adjusted price windows with area-specific drivers, replacing static v1:
+
+<img width="640" alt="Phase 15 Price V2" src="docs/screenshots/phase15-price-v2.png" />
+
+**Phase 16 — Similar Rooms (embeddings runtime)** — the content-based carousel in every room modal: listings ranked by area, room type, price band and amenity overlap with match % and explainable reasons:
+
+<img width="1440" alt="Phase 16 Similar Rooms" src="docs/screenshots/phase16-similar-rooms.png" />
+
+**Phase 17 — Fraud graph admin** — the `GraphNode` changelist: entities (hosts/tenants/phone), labels, risk scores and detected communities after a rebuild:
+
+<img width="1440" alt="Phase 17 Fraud Graph Admin" src="docs/screenshots/phase17-fraud-graph-admin.png" />
+
+**Phase 18 — AI Intelligence Dashboard** — admin **AI** tab: per-feature/ provider/model health, cost, latency, error taxonomy, drift tri-state and a read-only A/B variant comparison over live telemetry:
+
+<img width="1440" alt="Phase 18 AI Dashboard" src="docs/screenshots/phase18-ai-dashboard.png" />
+
+**Phase 19.1 — Property Intelligence inspector (admin)** — the read-only per-room inspector: composite 0–100 score with weight/confidence breakdown, strengths + rule-based suggestions and staff-only provenance/market benchmarks:
+
+<img width="1440" alt="Phase 19.1 Property Intelligence" src="docs/screenshots/phase19-1-property-intelligence.png" />
+
+**Phase 19.2 — AI Rental Agent (tenant-facing grounded chat)** — Bengali-first agent inside the Copilot AI Tools: a real search turn ("মিরপুরে ২২০০০ টাকার মধ্যে একটা স্টুডিও রুম দেখাও") returns **grounded room cards** (Premium Studio · Cozy Studio), and the bookmark request sits in an amber **"await approval"** consent row the tenant reviews before the agent applies:
+
+<img width="1440" alt="Phase 19.2 AI Rental Agent" src="docs/screenshots/phase19-2-rental-agent.png" />
+
 **Home & Listing Pages:**
 
 <img width="1920" height="2178" alt="RentRoom_BD" src="https://github.com/user-attachments/assets/8e7cd2b5-174e-4855-a8d6-beea394a12cc" />
@@ -1554,10 +1627,33 @@ Below, the detailed phase-by-phase screenshots.
 
 ## 🔄 Team Workflow
 
-- **Branching:** feature work happens on `feature/<name>` branches off `main`; never commit directly to `main`.
-- **Pull requests:** every branch ships as a PR against `main`; CI must be green (tests, coverage, lint, build) before merge.
-- **Pre-commit:** husky + lint-staged format and lint staged files on every commit.
-- **Environments:** local dev (SQLite + runserver) → CI (GitHub Actions) → production (PostgreSQL + Daphne, Phase 8).
+**Branching**
+- `main` is protected — never commit directly to it; all work ships on a branch.
+- Branch naming: `feature/phase-<N>-<slug>` · `fix/<slug>` · `docs/<slug>` · `chore/<slug>` · `refactor/<slug>`.
+- Branch off a freshly fetched upstream `main` (e.g. `git checkout -b feature/phase-19-3-listing-autopilot upstream/main`); keep branches short-lived — one phase per branch, merged within the day.
+- Never force-push a shared branch.
+
+**Pull requests**
+- Every branch ships as a PR against `main` with a required title (`<type>(<scope>): <summary>`) and a description covering what/why, files touched, testing performed and screenshots for any UI change.
+- CI must be **fully green** before merge — all gates: Frontend (Vitest + build + format + lint + coverage), Backend (Django tests + security/static audit), Secret scan (gitleaks), Browser E2E (Playwright), E2E (fraud + payments + KYC), API contract + schema drift, Frontend contract (schema → TS types), npm audit, Lighthouse performance gate.
+- Squash-merge (or fast-forward) by the authorized account; never merge your own open PR; every merge carries an implicit one-click rollback plan.
+
+**Local gates (pre-commit: husky + lint-staged)**
+- Staged `.ts/.tsx/.mjs/.js` → Prettier + ESLint; staged `.py` → ruff; run `tsc --noEmit` and the CI format check locally before pushing so local == CI.
+- Secret scanning runs alongside lint-staged — no commit ships credentials.
+- Prettier (3.9.x) is pinned via the lockfile, so formatting is identical in local, CI and pre-commit.
+
+**Environments**
+- Local dev: SQLite + `manage.py runserver` (+ Redis via Docker when needed).
+- CI: GitHub Actions on every PR and `main` — same tooling and constraints as local.
+- Staging: PostgreSQL 16 + Redis + Celery with feature-flag review before release.
+- Production: PostgreSQL 16 + Redis + Celery + Daphne/Channels + CDN media (Phase 8); secrets live in Actions secrets/environment variables only — never in the repository.
+- Every service reports `/health/`, correlates via `X-Request-ID` and writes an audit log for state changes; releases follow the deploy window + rollback runbook.
+
+**Release cadence**
+- Phase-based delivery: one phase per day → branch → PR → green CI → merge → deploy; the changelog line comes from the PR title using Conventional Commit types (`feat` / `fix` / `docs` / `chore` / `refactor` / `style` / `test`).
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the contributor guide, [CHANGELOG.md](CHANGELOG.md) for the release history, [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community norms and [SUPPORT.md](SUPPORT.md) for help channels.
 
 ---
 
