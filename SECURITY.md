@@ -39,7 +39,7 @@ The repository is public; the protection is defense-in-depth:
 | **Legal** | License terms restrict reuse — see `LICENSE`. |
 | **Secrets** | No credentials in the repo or the frontend bundle; every secret is an environment variable injected at deploy time (`.env.example` holds placeholders only). |
 | **Automated detection** | Gitleaks secret scanning, `pip-audit` / `npm audit` dependency audits, GitHub CodeQL (Python + JavaScript), and `dependency-review` run in CI on every push/PR. |
-| **Production defaults** | `config/settings/prod.py`: `DEBUG=False`, HTTPS-only redirect, HSTS, secure cookies, `X_FRAME_OPTIONS=DENY`, restricted `CORS_ALLOWED_ORIGINS`, rate limiting — verified by `docs/SECURITY_CHECKLIST.md`. |
+| **Production defaults** | `config/settings/prod.py`: `DEBUG=False`, HTTPS-only redirect, HSTS, secure cookies, `X_FRAME_OPTIONS=DENY`, restricted `CORS_ALLOWED_ORIGINS`, rate limiting — verified by `docs/security/SECURITY_CHECKLIST.md`. |
 | **Hardened transport & headers** | CSP, `Referrer-Policy`, `X-Content-Type-Options: nosniff`, `Permissions-Policy` and HSTS on every response; RFC 9116 `/.well-known/security.txt`. |
 
 Nothing here claims a public repo "cannot be copied" — that is technically
@@ -143,7 +143,7 @@ advisory changes understanding.
   safe defaults) and non-sensitive identifiers.
 - **If a secret is suspected of leaking:** rotate it immediately, then remove
   it from the file **and** from history, then open an advisory so we can check
-  blast radius. See `docs/SECURITY_CHECKLIST.md`.
+  blast radius. See `docs/security/SECURITY_CHECKLIST.md`.
 
 ---
 
@@ -207,10 +207,10 @@ logging** are deliberately built to make steps 2–5 tractable.
 
 ## 10. Checklist and Audits
 
-- `docs/SECURITY_CHECKLIST.md` — the full, living checklist for production
+- `docs/security/SECURITY_CHECKLIST.md` — the full, living checklist for production
   hardening.
-- `docs/SECURITY_AUDIT.md` — the latest audit report.
-- `docs/LIVE_VERIFICATION.md` — what was manually verified against a running
+- `docs/security/SECURITY_AUDIT.md` — the latest audit report.
+- `docs/guides/LIVE_VERIFICATION.md` — what was manually verified against a running
   stack, and how.
 
 ---

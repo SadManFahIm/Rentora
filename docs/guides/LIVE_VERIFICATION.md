@@ -43,7 +43,7 @@ non-trivial size).
 | Admin Fraud Operations (summary/filters/review/audit) | `rooms.tests_security.py` — admin-only gating (non-admin 403 on summary/review) + full backend suite | ✅ PASS |
 | Saved-search match tuning command | Tuning command exists + covered by saved-searches tests in full suite | ✅ PASS |
 | Upload validation (`config/uploads.py`) | `rooms.tests_security.py` — non-image extension 400, oversized 400, valid PNG 201 | ✅ PASS |
-| Security audit docs | `SECURITY.md`, `docs/SECURITY_CHECKLIST.md`, `docs/SECURITY_AUDIT.md` committed | ✅ PASS |
+| Security audit docs | `SECURITY.md`, `docs/security/SECURITY_CHECKLIST.md`, `docs/security/SECURITY_AUDIT.md` committed | ✅ PASS |
 | Voice search | `useVoiceSearch.test.tsx` suite (transcript / unsupported / denied / error / cleanup) | ✅ PASS |
 | Price anomaly / listing quality / saved-search match | Screenshots captured (`price-anomaly.png`, `listing-quality.png`, `saved-search-match.png`) | ✅ PASS (visual) |
 | Full backend regression | `manage.py test` — **368 tests** (was 334; +34 map-intel) | ✅ PASS |
