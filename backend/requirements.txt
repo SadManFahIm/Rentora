@@ -31,7 +31,7 @@ jsonschema-specifications==2025.9.1
 msgpack==1.2.1
 narwhals==2.24.0
 numpy==2.5.2
-packaging==26.2
+packaging==26.3
 pandas==2.3.3
 pillow==12.3.0
 psycopg2-binary==2.9.12
