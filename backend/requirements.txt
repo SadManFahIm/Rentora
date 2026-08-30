@@ -64,6 +64,6 @@ uritemplate==4.2.0
 urllib3==2.7.0
 webencodings==0.5.1
 zope.interface==8.5
-ruff==0.16.3
+ruff==0.16.5
 coverage==7.15.4
 webauthn>=2.2
