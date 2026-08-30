@@ -8,7 +8,7 @@ Scope notes up front (honest):
 
 - **This phase is web-only.** A native React Native app is still a separate,
   unfunded track. What ships here are the web-feasible reach features plus a
-  mobile-product plan in [docs/MOBILE_APP_PLAN.md](docs/MOBILE_APP_PLAN.md).
+  mobile-product plan in [docs/guides/MOBILE_APP_PLAN.md](docs/guides/MOBILE_APP_PLAN.md).
 - **SMS sending is gated off by default.** No gateway credentials ship with
   the repo. The provider contract is real and tested, but until you plug in a
   gateway (`SMS_OTP_ENABLED=True`) the SMS endpoints answer `503`.
@@ -128,7 +128,7 @@ stack). All three are public pages, so the script does **not** log in.
 
 ## What this phase does NOT do (deferred)
 
-- **React Native app** — see [docs/MOBILE_APP_PLAN.md](docs/MOBILE_APP_PLAN.md).
+- **React Native app** — see [docs/guides/MOBILE_APP_PLAN.md](docs/guides/MOBILE_APP_PLAN.md).
 - **Real SMS gateway credentials** — wire up `SMS_PROVIDER=http` + a gateway
   in production settings, then flip `SMS_OTP_ENABLED=True`.
 - **Server-side rendering** — the SPA still renders client-side; area pages

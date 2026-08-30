@@ -1,0 +1,66 @@
+# Dev infrastructure for Rentora — PostgreSQL 16 + Redis 7.
+#
+# Usage (Docker optional — plain SQLite dev works without it):
+#   docker compose -f docker-compose.dev.yml up -d
+# then in backend/.env set DB_ENGINE=postgres, DB_PASSWORD=rentora and
+# CHANNELS_BACKEND=redis. Phase 8 ships the full production compose
+# (backend + frontend + Daphne/Celery + HTTPS).
+
+name: rentora-dev
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: rentora
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: rentora
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rentora"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Workspace container used by the VS Code devcontainer.
+  workspace:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile
+    command: sleep infinity
+    working_dir: /workspaces/rentora
+    volumes:
+      - .:/workspaces/rentora
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.dev
+      DB_ENGINE: postgres
+      DB_NAME: rentora
+      DB_USER: postgres
+      DB_PASSWORD: rentora
+      DB_HOST: db
+      DB_PORT: "5432"
+      REDIS_URL: redis://redis:6379/0
+
+volumes:
+  pgdata:
+  redisdata:
