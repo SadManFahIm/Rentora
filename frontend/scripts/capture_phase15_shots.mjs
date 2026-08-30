@@ -119,7 +119,9 @@ async function main() {
   let summaryCard = page
     .locator("text=/Overall:/i")
     .first()
-    .locator("xpath=ancestor::*[contains(@class,'rounded-xl') or contains(@class,'rounded-2xl')][1]");
+    .locator(
+      "xpath=ancestor::*[contains(@class,'rounded-xl') or contains(@class,'rounded-2xl')][1]"
+    );
   if (!(await summaryCard.count().catch(() => 0))) {
     summaryCard = page
       .locator("text=/AI review summary/i")

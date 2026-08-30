@@ -35,7 +35,8 @@ async function apiToken(email, password) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-  if (res.status === 429) throw new Error(`auth rate-limited for ${email} — restart backend to reset`);
+  if (res.status === 429)
+    throw new Error(`auth rate-limited for ${email} — restart backend to reset`);
   if (!res.ok) throw new Error(`token failed for ${email}: ${res.status}`);
   return (await res.json()).access;
 }
@@ -94,8 +95,12 @@ async function main() {
   let reportCard = page
     .locator("text=/Rental market report/i")
     .first()
-    .locator("xpath=ancestor::*[contains(@class,'rounded-2xl') or contains(@class,'rounded-xl')][1]");
-  await reportCard.waitFor({ timeout: 25000 }).catch(() => console.warn("market report card not found"));
+    .locator(
+      "xpath=ancestor::*[contains(@class,'rounded-2xl') or contains(@class,'rounded-xl')][1]"
+    );
+  await reportCard
+    .waitFor({ timeout: 25000 })
+    .catch(() => console.warn("market report card not found"));
   await sleep(2000);
   await reportCard.scrollIntoViewIfNeeded().catch(() => {});
   await sleep(1200);
@@ -129,8 +134,9 @@ async function main() {
   await sleep(3500);
   const aiHeading = page.locator("text=AI Intelligence").first();
   await aiHeading.waitFor({ timeout: 25000 }).catch(() => console.warn("AI panel not found"));
-  let aiPanel = aiHeading
-    .locator("xpath=ancestor::*[contains(@class,'rounded-2xl') or contains(@class,'rounded-xl')][1]");
+  let aiPanel = aiHeading.locator(
+    "xpath=ancestor::*[contains(@class,'rounded-2xl') or contains(@class,'rounded-xl')][1]"
+  );
   await aiPanel.scrollIntoViewIfNeeded().catch(() => {});
   await sleep(1500);
   // Fall back to the main column if the ancestor lookup misses the panel.
@@ -164,10 +170,14 @@ async function main() {
   // The rooms nav has its own "AI Tools" entry (links to a non-route 404); the
   // toggler we want lives INSIDE the Copilot dialog, so scope the search there.
   const opened = await page.evaluate(() => {
-    const dlg = [...document.querySelectorAll("div.fixed")]
-      .find((d) => (d.textContent || "").includes("Rentora Copilot") && (d.textContent || "").includes("AI Tools"));
-    const btn = dlg && [...dlg.querySelectorAll("button")]
-      .find((b) => (b.textContent || "").trim() === "AI Tools");
+    const dlg = [...document.querySelectorAll("div.fixed")].find(
+      (d) =>
+        (d.textContent || "").includes("Rentora Copilot") &&
+        (d.textContent || "").includes("AI Tools")
+    );
+    const btn =
+      dlg &&
+      [...dlg.querySelectorAll("button")].find((b) => (b.textContent || "").trim() === "AI Tools");
     if (!btn) return false;
     btn.click();
     return true;
@@ -190,7 +200,9 @@ async function main() {
     .first()
     .locator("xpath=ancestor::*[contains(@class,'fixed')][1]");
   await agentPanel.waitFor({ timeout: 10000 }).catch(() => {});
-  const target = (await agentPanel.boundingBox().catch(() => null)) ? agentPanel : page.locator("body");
+  const target = (await agentPanel.boundingBox().catch(() => null))
+    ? agentPanel
+    : page.locator("body");
   await snap(page, target, "phase19-2-rental-agent.png");
 
   await browser.close();
