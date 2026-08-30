@@ -21,6 +21,11 @@ load_dotenv(BASE_DIR / ".env")
 
 SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-change-me-in-production")
 
+# Runtime environment identifier: dev / staging / test / production.
+# Derived from the environment so CI and local test runs consistently get
+# "test" (debug tools, eager Celery, etc.).
+ENVIRONMENT = os.getenv("DJANGO_ENV", "development").lower()
+
 # ============================================================
 # Sentry — error tracking. No-op when SENTRY_DSN is not set (local dev),
 # so the whole block is safe to leave on everywhere.
@@ -103,6 +108,8 @@ INSTALLED_APPS = [
     "ml_models",
     # Phase 18 — AI Intelligence Layer
     "ai_intelligence",
+    # Phase 19 — Agent SDK foundation
+    "agents",
 ]
 
 # ============================================================
@@ -1072,6 +1079,11 @@ CELERY_BEAT_SCHEDULE = {
     "warm-ai-dashboard-cache": {
         "task": "ai_intelligence.warm_dashboard_cache",
         "schedule": 1800.0,  # every 30 minutes
+    },
+    # Phase 19 — Agent SDK: expire human-review proposals past their TTL.
+    "expire-agent-proposals": {
+        "task": "agents.expire_proposals",
+        "schedule": 86400.0,  # daily
     },
 }
 
