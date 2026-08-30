@@ -17,7 +17,7 @@
 ## 📚 Table of Contents
 
 - [Product Overview](#-product-overview)
-- [Changelog — Phase 18.4 · 18.3 · 18.2 · 18.1 · 17](#changelog)
+- [Changelog — Phase 19.0 · 18.4 · 18.3 · 18.2 · 18.1 · 17](#changelog)
 - [What's New in v2.0](#changelog--whats-new-in-v20)
 - [Delivery Roadmap](#-delivery-roadmap)
 - [Features](#-features)
@@ -69,6 +69,16 @@ Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 ---
 
 ## 🆕 Changelog
+
+**Phase 19.0 — Agent SDK / Agentic AI Foundation**
+
+- **Guarded session loop** — `agents.AgentSession` turns a run into a bounded, telemetried conversation: provider resolved through the Phase 18 registry, system prompt rendered through the Phase 18.2 prompt registry (with safe fallback to inline instructions), and a loop bounded by hard guardrails — max turns/6, tool calls/20, tokens/4000, **estimated cost** (exact provider-reported `cost_usd` when present, else Phase 18 cost model), wall-clock timeout, and consecutive tool failures — each landing a machine-readable `termination_reason` for the Phase 18.4 dashboards
+- **Server-side tool permission layer** — the authoritative gate (the model only *requests*): read-only tools execute immediately and are audited (`AgentToolCall` with sanitized, depth-bounded results); **state-changing** tools become human-review proposals; **high-risk** tools require role-level **admin** approval (staff is not enough). Proposals are concurrency-safe (`select_for_update`), TTL-expiring (5-min beat), and **idempotent** — applying an applied proposal is a no-op, never re-executes the tool, and rejected/expired proposals can never become actionable
+- **Agent registry + seed** — `Agent` definitions (status, audience, permission ceiling, enabled tools, prompt attribution, provider, per-run limits) served at `api/v1/agents/`, seeded by `register_agents` under feature `rentora.agent`
+- **Providers** — `ChatLlmProvider` (OpenAI-compatible chat completions, HTTP-error bodies never echoed) and `MockAgentProvider` (deterministic scripted plan for tests; **refused outside test/debug** — no built-in provider means runs terminate with `provider_not_configured`, never invented answers)
+- **Safety by construction** — `agents.execute_agent_run` has **no autoretry** (never duplicate side effects) plus its own finished-run idempotency guard; telemetry enrichment failures never break a run; run-outcome notifications + audit on failed/terminated (`ai_alert` stream)
+- **API** — minimal public surface (catalog, own conversations/runs/messages) + admin-only registry, run/tool-call, and proposal review/apply endpoints (`/api/v1/agents/`)
+- **Engineering** — 38 new tests (1449 BE total, all green), 1 app + 6 models + 1 migration, ruff-clean. See [`docs/phase-19-ai-agents.md`](docs/phase-19-ai-agents.md)
 
 **Phase 18.4 — AI Intelligence Dashboard + Alerts**
 
