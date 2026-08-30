@@ -3,6 +3,7 @@ import {
   approveRentalAgentProposal,
   getRentalAgentConversation,
   getRentalAgentRun,
+  listRentalAgentConversations,
   rejectRentalAgentProposal,
   sendRentalAgentTurn,
   type RentalAgentMessage,
@@ -81,13 +82,6 @@ export default function useRentalAgent(): UseRentalAgentReturn {
   const conversationIdRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
 
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
   // ---- payload loading (same shape the chat API returns) ----
   const loadConversation = useCallback(async (conversationId: number) => {
     const payload = await getRentalAgentConversation(conversationId);
@@ -106,6 +100,25 @@ export default function useRentalAgent(): UseRentalAgentReturn {
       lastAction: "",
     }));
   }, []);
+
+  // Mount-resume: returning tenants land on their latest agent conversation
+  // (kept welcome-state when there is none).
+  useEffect(() => {
+    mountedRef.current = true;
+    void (async () => {
+      try {
+        const convos = await listRentalAgentConversations();
+        if (mountedRef.current && convos[0]) {
+          await loadConversation(convos[0].id);
+        }
+      } catch {
+        // no conversations or unreachable backend — keep the welcome state
+      }
+    })();
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [loadConversation]);
 
   // ---- poll a run until terminal, then pull the fresh transcript ----
   const waitForRun = useCallback(async (runKey: string): Promise<RentalAgentRun> => {

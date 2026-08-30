@@ -48,8 +48,23 @@ export function track(event: string, properties?: Record<string, unknown>, path?
 }
 
 export async function fetchAnalyticsSummary(days = 30): Promise<AnalyticsSummary> {
-  const { data } = await api.get<AnalyticsSummary>("/api/v1/analytics/summary/", {
+  // The backend serializes this admin summary in snake_case; map it to the
+  // camelCase shape the dashboard renders (single source of truth = the API).
+  const { data } = await api.get("/analytics/summary/", {
     params: { days },
   });
-  return data;
+  return {
+    days: data.days ?? days,
+    totals: {
+      events: data.totals?.events ?? 0,
+      sessions: data.totals?.sessions ?? 0,
+      activeUsers: data.totals?.active_users ?? 0,
+    },
+    topEvents: data.top_events ?? [],
+    topPages: data.top_pages ?? [],
+    daily: data.daily ?? [],
+    funnel: data.funnel ?? {},
+    funnelSteps: data.funnel_steps ?? [],
+    note: data.note ?? "",
+  };
 }
