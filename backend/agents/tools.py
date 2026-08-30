@@ -248,6 +248,13 @@ def register_builtin_tools() -> None:
     except Exception:
         pass  # property intelligence app not installed
 
+    try:
+        from rental_agent.tools import register_rental_agent_tools
+
+        register_rental_agent_tools()
+    except Exception:
+        pass  # rental agent app not installed
+
 
 def render_results_json(results: list[dict[str, Any]]) -> str:
     """Compact, safe rendering of a tool result transcript fragment."""
