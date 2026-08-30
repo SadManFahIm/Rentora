@@ -1650,6 +1650,8 @@ Below, the detailed phase-by-phase screenshots.
 **Release cadence**
 - Phase-based delivery: one phase per day → branch → PR → green CI → merge → deploy; the changelog line comes from the PR title using Conventional Commit types (`feat` / `fix` / `docs` / `chore` / `refactor` / `style` / `test`).
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the contributor guide and [CHANGELOG.md](CHANGELOG.md) for the release history.
+
 ---
 
 ## 👨‍💻 Developer
