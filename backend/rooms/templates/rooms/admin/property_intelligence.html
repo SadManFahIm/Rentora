@@ -1,0 +1,64 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div id="content-main">
+  <h2>
+    <a href="{% url 'admin:rooms_room_change' room.pk %}">{{ room.title }}</a>
+    — Property Intelligence
+  </h2>
+
+  {% if pi.error %}
+    <p class="errornote">Score could not be computed for this listing.</p>
+  {% endif %}
+
+  <table>
+    <tr><th>Score</th><td>{{ pi.score|default:"—" }}</td></tr>
+    <tr><th>Confidence</th><td>{{ pi.confidence }}</td></tr>
+    <tr><th>Reasons</th>
+      <td>
+        {% for reason in pi.confidence_reasons %}<div>{{ reason }}</div>{% empty %}—{% endfor %}
+      </td>
+    </tr>
+    <tr><th>Version</th><td>{{ pi.score_version }}</td></tr>
+    <tr><th>Computed</th><td>{{ pi.computed_at }}</td></tr>
+  </table>
+
+  <h3>Components</h3>
+  <table>
+    <thead>
+      <tr><th>Component</th><th>Score</th><th>Weight</th><th>Effective</th><th>Contribution</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      {% for name, meta in pi.breakdown.items %}
+      <tr>
+        <td>{{ name }}</td>
+        <td>{{ meta.score|default:"—" }}</td>
+        <td>{{ meta.weight }}</td>
+        <td>{{ meta.effective_weight }}</td>
+        <td>{{ meta.contribution|default:"—" }}</td>
+        <td>{{ meta.availability }}</td>
+      </tr>
+      {% if meta.note %}
+      <tr><td colspan="6" class="help">{{ meta.note }}</td></tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h3>Strengths</h3>
+  <ul>{% for s in pi.strengths %}<li>{{ s }}</li>{% empty %}<li>None</li>{% endfor %}</ul>
+
+  <h3>Suggestions</h3>
+  <ul>{% for s in pi.suggestions %}<li>{{ s }}</li>{% empty %}<li>None</li>{% endfor %}</ul>
+
+  {% if pi.provenance %}
+  <h3>Staff provenance</h3>
+  <pre>{{ pi.provenance|pprint }}</pre>
+  {% endif %}
+
+  <h3>Engine metadata</h3>
+  <pre>{{ engine_meta|pprint }}</pre>
+
+  <p class="help">{{ pi.disclaimer }}</p>
+  <a href="{% url 'admin:rooms_room_changelist' %}">Back to rooms</a>
+</div>
+{% endblock %}
