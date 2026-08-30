@@ -64,7 +64,7 @@ One platform, four surfaces — **browse smarter**, **trust the listings**, **se
 | 📱 **Reach** | SMS OTP phone sign-in for the Bangladesh market, one-tap **Share on WhatsApp** with an AI listing summary, per-area SEO landing pages + sitemap, Lighthouse gate in CI | [`phase13-area-page.png`](docs/screenshots/phase13-area-page.png) |
 | 👁️ **AI Vision** | **Photo intelligence** — analyze a listing's photos (caption, palette, observations), AI draft title + description from the actual photos, suggested amenity tags (review-then-apply), and **AI image search** ("upload a photo, find rooms that look like it") with match scores | [`phase14-vision-panel.png`](docs/screenshots/phase14-vision-panel.png) |
 
-Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screenshots](#-screenshots). Live verification notes in [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md).
+Full gallery (79 screenshots, light + dark, desktop + mobile) in [🖼️ Screenshots](#-screenshots). Live verification notes in [`docs/LIVE_VERIFICATION.md`](docs/LIVE_VERIFICATION.md).
 
 ---
 
@@ -1399,6 +1399,12 @@ Every shipped phase with its captured screenshots (all in `docs/screenshots/`):
 | 12.10 | Tier-5 upgrades (funnel analytics, price recommendation, Copilot vision, AI draft) | [`tier5-price-recommendation.png`](docs/screenshots/tier5-price-recommendation.png) · [`tier5-ai-draft.png`](docs/screenshots/tier5-ai-draft.png) · [`tier5-copilot-photos.png`](docs/screenshots/tier5-copilot-photos.png) |
 | 13 | Reach (SMS OTP, WhatsApp share, area SEO) | [`phase13-area-page.png`](docs/screenshots/phase13-area-page.png) · [`phase13-whatsapp-share.png`](docs/screenshots/phase13-whatsapp-share.png) · [`phase13-sms-login.png`](docs/screenshots/phase13-sms-login.png) |
 | 14 | AI v3 Vision & Content (photo intelligence, AI image search) | [`phase14-vision-panel.png`](docs/screenshots/phase14-vision-panel.png) · [`phase14-image-search-dialog.png`](docs/screenshots/phase14-image-search-dialog.png) · [`phase14-image-search-results.png`](docs/screenshots/phase14-image-search-results.png) |
+| 15 | Communication & Trust AI + Monetization 2.0 | [`phase15-market-report.png`](docs/screenshots/phase15-market-report.png) · [`phase15-chat-translate.png`](docs/screenshots/phase15-chat-translate.png) · [`phase15-copilot-support.png`](docs/screenshots/phase15-copilot-support.png) · [`phase15-copilot-tts.png`](docs/screenshots/phase15-copilot-tts.png) · [`phase15-kyc-ocr.png`](docs/screenshots/phase15-kyc-ocr.png) · [`phase15-review-ai-summary.png`](docs/screenshots/phase15-review-ai-summary.png) · [`phase15-price-v2.png`](docs/screenshots/phase15-price-v2.png) · [`phase15-fraud-rings.png`](docs/screenshots/phase15-fraud-rings.png) |
+| 16 | Hardening & Scale (similar-rooms embeddings, pgvector) | [`phase16-similar-rooms.png`](docs/screenshots/phase16-similar-rooms.png) |
+| 17 | Graph & Deep Trust (fraud graph admin) | [`phase17-fraud-graph-admin.png`](docs/screenshots/phase17-fraud-graph-admin.png) |
+| 18 | AI Intelligence (dashboard + alerts) | [`phase18-ai-dashboard.png`](docs/screenshots/phase18-ai-dashboard.png) |
+| 19.1 | Property Intelligence (admin inspector) | [`phase19-1-property-intelligence.png`](docs/screenshots/phase19-1-property-intelligence.png) |
+| 19.2 | AI Rental Agent (grounded chat + bookmark consent) | [`phase19-2-rental-agent.png`](docs/screenshots/phase19-2-rental-agent.png) |
 
 Below, the detailed phase-by-phase screenshots.
 
@@ -1563,6 +1569,49 @@ Below, the detailed phase-by-phase screenshots.
 **Phase 14 — Image search results** — look-alike listings ranked by perceptual similarity, each card carrying its match score badge with the reasons in the tooltip:
 
 <img width="1440" alt="Phase 14 Image Search Results" src="docs/screenshots/phase14-image-search-results.png" />
+
+**Phase 15 — Weekly market report (admin Analytics)** — area-level median rent, WoW movement and index for `Mirpur` (product analytics are first-party, the funnel is baked from events) — condensed rendering of the areas table in the **Analytics** tab of the Trust & Safety center:
+
+<img width="1440" alt="Phase 15 Market Report" src="docs/screenshots/phase15-market-report.png" />
+
+**Phase 15 — KYC OCR** (auto-extracted NID number/name/DOB with confidence), **AI review summary** (sentiment breakdown + topic tags on the room modal), **dynamic pricing v2** and **fraud rings** (coordinated accounts flagged via shared phone):
+
+<img width="640" alt="Phase 15 KYC OCR" src="docs/screenshots/phase15-kyc-ocr.png" />
+<img width="640" alt="Phase 15 Review AI Summary" src="docs/screenshots/phase15-review-ai-summary.png" />
+
+**Phase 15 — Chat translation (EN⇄BN)** with honest quality flag, **support Copilot** (grounded FAQ answers, BN fallback), **voice TTS** on Copilot replies, and **price suggestion v2** (demand-momentum window):
+
+<img width="640" alt="Phase 15 Chat Translate" src="docs/screenshots/phase15-chat-translate.png" />
+<img width="640" alt="Phase 15 Copilot Support" src="docs/screenshots/phase15-copilot-support.png" />
+
+**Phase 15 — Copilot voice (TTS)** on assistant replies and **fraud rings** surfaced in the admin Frauds panel:
+
+<img width="640" alt="Phase 15 Copilot TTS" src="docs/screenshots/phase15-copilot-tts.png" />
+<img width="640" alt="Phase 15 Fraud Rings" src="docs/screenshots/phase15-fraud-rings.png" />
+
+**Phase 15 — Dynamic pricing v2** — demand-momentum-adjusted price windows with area-specific drivers, replacing static v1:
+
+<img width="640" alt="Phase 15 Price V2" src="docs/screenshots/phase15-price-v2.png" />
+
+**Phase 16 — Similar Rooms (embeddings runtime)** — the content-based carousel in every room modal: listings ranked by area, room type, price band and amenity overlap with match % and explainable reasons:
+
+<img width="1440" alt="Phase 16 Similar Rooms" src="docs/screenshots/phase16-similar-rooms.png" />
+
+**Phase 17 — Fraud graph admin** — the `GraphNode` changelist: entities (hosts/tenants/phone), labels, risk scores and detected communities after a rebuild:
+
+<img width="1440" alt="Phase 17 Fraud Graph Admin" src="docs/screenshots/phase17-fraud-graph-admin.png" />
+
+**Phase 18 — AI Intelligence Dashboard** — admin **AI** tab: per-feature/ provider/model health, cost, latency, error taxonomy, drift tri-state and a read-only A/B variant comparison over live telemetry:
+
+<img width="1440" alt="Phase 18 AI Dashboard" src="docs/screenshots/phase18-ai-dashboard.png" />
+
+**Phase 19.1 — Property Intelligence inspector (admin)** — the read-only per-room inspector: composite 0–100 score with weight/confidence breakdown, strengths + rule-based suggestions and staff-only provenance/market benchmarks:
+
+<img width="1440" alt="Phase 19.1 Property Intelligence" src="docs/screenshots/phase19-1-property-intelligence.png" />
+
+**Phase 19.2 — AI Rental Agent (tenant-facing grounded chat)** — Bengali-first agent inside the Copilot AI Tools: a real search turn ("মিরপুরে ২২০০০ টাকার মধ্যে একটা স্টুডিও রুম দেখাও") returns **grounded room cards** (Premium Studio · Cozy Studio), and the bookmark request sits in an amber **"await approval"** consent row the tenant reviews before the agent applies:
+
+<img width="1440" alt="Phase 19.2 AI Rental Agent" src="docs/screenshots/phase19-2-rental-agent.png" />
 
 **Home & Listing Pages:**
 
