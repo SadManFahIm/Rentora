@@ -163,7 +163,7 @@ jobs:
 
       - name: Post drift comment
         if: steps.drift.outputs.drift_found == '1'
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         continue-on-error: true
         with:
           header: api-schema-drift
@@ -366,7 +366,7 @@ jobs:
         # Fork PRs get a read-only GITHUB_TOKEN, so commenting can fail there
         # (office fork -> personal repo PRs). Never fail the check for it.
         if: steps.e2e.outputs.exit_code != '0' && github.event_name == 'pull_request'
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         continue-on-error: true
         with:
           path: e2e-comment.md
@@ -477,7 +477,7 @@ jobs:
       - name: Add Coverage PR Comment
         # Fork PRs get a read-only GITHUB_TOKEN, so commenting can fail there
         # (e.g. office fork -> personal repo PRs). Never fail the check for it.
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         continue-on-error: true
         with:
           recreate: true
