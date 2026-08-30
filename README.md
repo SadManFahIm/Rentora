@@ -17,7 +17,7 @@
 ## 📚 Table of Contents
 
 - [Product Overview](#-product-overview)
-- [Changelog — Phase 19.0 · 18.4 · 18.3 · 18.2 · 18.1 · 17](#changelog)
+- [Changelog — Phase 19.1 · 19.0 · 18.4 · 18.3 · 18.2 · 18.1 · 17](#changelog)
 - [What's New in v2.0](#changelog--whats-new-in-v20)
 - [Delivery Roadmap](#-delivery-roadmap)
 - [Features](#-features)
@@ -69,6 +69,16 @@ Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 ---
 
 ## 🆕 Changelog
+
+**Phase 19.1 — Property Intelligence Score**
+
+- **Composite, explainable 0–100** — deterministic score on top of existing signals with zero new tables: listing quality (25), price competitiveness vs. segment market (20), metro/commute value (15), photo authenticity (15), verification + fraud severity (15), and 30-day demand (10); unavailable signals **redistribute their weight** over the live ones so missing data never inflates or punishes
+- **Transparent by law** — every payload carries a per-component breakdown (`score`, `weight`, `effective_weight`, `contribution`, `availability`), confidence tier (`high/medium/low/none`) with reasons (availability, price sample size, freshness/staleness), strengths and rule-based suggestions (max 5, never LLM-invented), plus an explicit disclaimer ("not a valuation, fraud verdict, or guarantee")
+- **Privacy by construction** — public output **never** includes internal fraud risk scores, detector names, graph/ring IDs, KYC or provenance; a staff-only detail endpoint — gated by `is_staff`/admin role and audited via `audit_log_access` — attaches signal provenance, market benchmarks and engine metadata; photo anomalies and fraud severity only ever lower the *trust* component, never a verdict
+- **Versioned + cached** — `score_version` mixed into a config-signature cache key (`property-intelligence:{room_id}:{sha256(version+weights+thresholds)}`, TTL 900 s via the hardening `safe_cache_*` helpers); invalidation signals on room/image/owner-verification changes, small-sample guards on price (min 3, confidence down <5) and demand (no own signals + area < 3 signals → unavailable)
+- **API** — `GET /api/v1/property-intelligence/{id}/` (public) + `/{id}/staff/` (staff) + a read-only `property_intelligence_score` badge on room detail (flag-toggleable); **Agent SDK** — new READ_ONLY `property.intelligence` tool (schema-validated, executor is authoritative, audited `AgentToolCall` + telemetry, enabled-taskable per agent)
+- **Admin UI** — read-only **Property Intelligence** inspector per room (`/admin/rooms/room/{id}/property-intelligence/`) rendering score, breakdown, strengths/suggestions, provenance and engine metadata for operators
+- **Engineering** — 36 new tests (new `property_intelligence` app, 12 files), 0 migrations, ruff-clean, existing suite green. See [`docs/phase-19-property-intelligence.md`](docs/phase-19-property-intelligence.md)
 
 **Phase 19.0 — Agent SDK / Agentic AI Foundation**
 
