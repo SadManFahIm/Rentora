@@ -1,0 +1,9 @@
+# Default code owners for the Rentora repository.
+# Changes require review/approval from the listed owners when branch
+# protection is enabled.
+
+* @SadManFahIm
+
+# High-sensitivity paths — security policy and CI must never change unreviewed.
+SECURITY.md @SadManFahIm
+.github/workflows/ @SadManFahIm

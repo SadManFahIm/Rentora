@@ -175,7 +175,7 @@ export default function CopilotWidget() {
               AI Tools
             </button>
             <span className="text-[10px] text-gray-400">
-              advisor · agreement · negotiation · support
+              rental agent · advisor · agreement · negotiation · support
             </span>
           </div>
 
@@ -186,7 +186,8 @@ export default function CopilotWidget() {
                 listingId={listingMode ? listingContext?.id : undefined}
                 listingPrice={listingContext?.price}
                 initialTool={
-                  (initialTool as "advisor" | "agreement" | "negotiate" | "support") ?? "advisor"
+                  (initialTool as "rental" | "advisor" | "agreement" | "negotiate" | "support") ??
+                  "rental"
                 }
               />
             </div>

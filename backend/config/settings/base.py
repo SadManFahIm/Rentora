@@ -110,6 +110,10 @@ INSTALLED_APPS = [
     "ai_intelligence",
     # Phase 19 — Agent SDK foundation
     "agents",
+    # Phase 19.1 — Property Intelligence Score (composite 0-100)
+    "property_intelligence",
+    # Phase 19.2 — AI Rental Agent (tenant-facing, grounded in real tool data)
+    "rental_agent",
 ]
 
 # ============================================================
@@ -299,6 +303,10 @@ REST_FRAMEWORK = {
         "payment_initiate": "5/hour",
         # Copilot turns hit the search engine — generous but bounded.
         "copilot": "60/hour",
+        # AI Rental Agent turns run the full agent loop (LLM + tools), so the
+        # scope is tighter than copilot — a chatty human is fine, a scripted
+        # flood is not.
+        "rental_agent": "40/hour",
         # Gateway callbacks have no user session (AllowAny/no auth), so they
         # can't use the "user" scope; keyed per-IP to absorb legitimate
         # gateway retries while still capping flood/replay attempts.
@@ -616,6 +624,37 @@ AI_EXECUTION_LOG_RETENTION_DAYS = int(os.getenv("AI_EXECUTION_LOG_RETENTION_DAYS
 AI_DASHBOARD_CACHE_TTL_SECONDS = int(os.getenv("AI_DASHBOARD_CACHE_TTL_SECONDS", "300"))
 
 # ============================================================
+# Phase 19 — Agent SDK / Agentic AI Foundation (agents app)
+# ============================================================
+# Master switch for agentic execution.
+AGENTS_ENABLED = os.getenv("AGENTS_ENABLED", "True") == "True"
+# Active LLM provider name under the "rentora.agent" feature. Empty means NO
+# auto-agent runs: a run terminates with `provider_not_configured` rather than
+# silently inventing output. Set to "llm" + AGENTS_LLM_* for the real
+# provider, or "mock_llm" (tests/dev only).
+AI_AGENT_LLM_PROVIDER = os.getenv("AI_AGENT_LLM_PROVIDER", "").strip()
+# OpenAI-compatible ChatCompletions endpoint config.
+AGENTS_LLM_API_BASE = os.getenv("AGENTS_LLM_API_BASE", "").strip()
+AGENTS_LLM_API_KEY = os.getenv("AGENTS_LLM_API_KEY", "").strip()
+AGENTS_LLM_MODEL = os.getenv("AGENTS_LLM_MODEL", "").strip()
+AGENTS_LLM_TIMEOUT_SECONDS = int(os.getenv("AGENTS_LLM_TIMEOUT_SECONDS", "30"))
+# Default guardrail limits (per-run; agents may override).
+AGENTS_DEFAULT_MAX_TURNS = int(os.getenv("AGENTS_DEFAULT_MAX_TURNS", "6"))
+AGENTS_DEFAULT_MAX_TOOL_CALLS = int(os.getenv("AGENTS_DEFAULT_MAX_TOOL_CALLS", "20"))
+AGENTS_DEFAULT_MAX_TOKENS = int(os.getenv("AGENTS_DEFAULT_MAX_TOKENS", "4000"))
+AGENTS_DEFAULT_TIMEOUT_SECONDS = int(os.getenv("AGENTS_DEFAULT_TIMEOUT_SECONDS", "180"))
+AGENTS_DEFAULT_MAX_COST_USD = float(os.getenv("AGENTS_DEFAULT_MAX_COST_USD", "2.0"))
+# Stop the loop after N consecutive failed tool calls.
+AGENTS_MAX_CONSECUTIVE_TOOL_FAILURES = int(os.getenv("AGENTS_MAX_CONSECUTIVE_TOOL_FAILURES", "3"))
+# Human-review proposal TTL (seconds). Pending proposals expire after this.
+AGENTS_PROPOSAL_TTL_SECONDS = int(os.getenv("AGENTS_PROPOSAL_TTL_SECONDS", "86400"))
+# How many of the most recent transcript messages are sent to the model.
+AGENTS_CONTEXT_WINDOW_MESSAGES = int(os.getenv("AGENTS_CONTEXT_WINDOW_MESSAGES", "40"))
+# Register debug tools (debug.echo, debug.marker). Forced OFF in production
+# unless explicitly enabled; automatically on under ENVIRONMENT=test or CI.
+AGENTS_DEBUG_TOOLS = os.getenv("AGENTS_DEBUG_TOOLS", "False") == "True"
+
+# ============================================================
 # Chat live translation EN⇄BN (Phase 15, B1) — see chat/translation.py
 # ============================================================
 # Deterministic phrase-table core by default (zero external deps, works in
@@ -698,6 +737,35 @@ LISTING_QUALITY_LEVELS = [
 # within the already-relevant pool so it can never override query/area/price.
 LISTING_QUALITY_RANKING_ENABLED = os.getenv("LISTING_QUALITY_RANKING_ENABLED", "True") == "True"
 LISTING_QUALITY_RANKING_WEIGHT = float(os.getenv("LISTING_QUALITY_RANKING_WEIGHT", "0.05"))
+
+# ============================================================
+# Property Intelligence score (Phase 19.1) — composite 0-100
+# ============================================================
+# Transparent, deterministic, versioned composite of listing quality, price
+# competitiveness, location/commute, photo authenticity, trust and demand.
+# Reuses existing engines (listing_quality, price insight, market stats,
+# fraud/trust signals, demand counts); see docs/phase-19-property-intelligence.md.
+PROPERTY_INTELLIGENCE_ENABLED = os.getenv("PROPERTY_INTELLIGENCE_ENABLED", "True") == "True"
+# Component weights — must be all six components, non-negative, sum 100.
+# Malformed values log a warning and fall back to these documented defaults.
+PROPERTY_INTELLIGENCE_WEIGHTS = {
+    "listing_quality": 25,
+    "price_value": 20,
+    "location": 15,
+    "photo_trust": 15,
+    "trust": 15,
+    "demand": 10,
+}
+# Redis/LocMem TTL for the computed score (demand self-refreshes on expiry).
+PROPERTY_INTELLIGENCE_CACHE_TTL_SECONDS = int(
+    os.getenv("PROPERTY_INTELLIGENCE_CACHE_TTL_SECONDS", "900")
+)
+# A listing untouched for this many days is treated as stale (lower confidence).
+PROPERTY_INTELLIGENCE_STALE_DAYS = int(os.getenv("PROPERTY_INTELLIGENCE_STALE_DAYS", "90"))
+# Lightweight badge on the room detail serializer (score/confidence/version).
+PROPERTY_INTELLIGENCE_SERIALIZER_ENABLED = (
+    os.getenv("PROPERTY_INTELLIGENCE_SERIALIZER_ENABLED", "True") == "True"
+)
 
 # Fraud-aware search ranking: demote risky listings using the EXISTING fraud
 # engine's score (FraudReport.score / 100). Listings are never hidden — only

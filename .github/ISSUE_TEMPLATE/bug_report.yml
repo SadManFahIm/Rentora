@@ -1,0 +1,44 @@
+name: Bug report
+description: Report a reproducible problem
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please fill in what you can — every detail helps.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What the bug is, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact steps, from a clean `make setup` if possible.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. See error
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      value: |
+        - OS:
+        - Browser (if frontend):
+        - Node / Python version:
+        - Branch / commit:
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs & screenshots
+      description: Paste error output/call stacks or attach screenshots (UI bugs should have a screenshot).
+    validations:
+      required: false

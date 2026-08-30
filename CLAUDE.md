@@ -15,9 +15,12 @@
 - TypeScript strict mode for frontend
 - Django apps: snake_case (rooms, bookings, chat, payments, ai_features)
 - API prefix: /api/v1/
-- Git branches: feature/phase-{N}-{feature-name}
+- Git branches: feature/phase-{N}-{feature-name}, fix/{slug}, docs/{slug}, chore/{slug}, refactor/{slug}; never commit directly to main
+- Commit messages: Conventional Commits (<type>(<scope>): <summary>)
 - Always generate full files, not diffs
-- PR descriptions required for every merge
+- PR descriptions required for every merge (what/why, files, testing, screenshots)
+- Pre-commit: husky + lint-staged (Prettier + ESLint on TS, ruff on Python); run tsc --noEmit before push
+- CI must be fully green before merge (Vitest+build, Django tests, gitleaks, Playwright, contract/schema drift, npm audit, Lighthouse)
 
 ## Developer
 - Name: Sadman Chowdhury Fahim

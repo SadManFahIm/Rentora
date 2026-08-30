@@ -6,8 +6,8 @@ import { chromium } from "playwright";
 import fs from "node:fs";
 import path from "node:path";
 
-const BASE = "http://localhost:3000";
-const API = "http://127.0.0.1:8000/api/v1";
+const BASE = process.env.BASE || "http://localhost:3000";
+const API = process.env.API || "http://127.0.0.1:8000/api/v1";
 const OUT = "../docs/screenshots/";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -112,44 +112,22 @@ async function main() {
   await ocrPanel.waitFor({ timeout: 15000 }).catch(() => {});
   await snap(page, ocrPanel, "phase15-kyc-ocr.png");
 
-  // --- 5. Review AI summary: room 90009 modal ----------------------------
+  // --- 5. Review AI summary: room 90009 modal (deep-link opens the modal) ---
   await setUser(page, rahim);
-  await page.goto(`${BASE}/rooms`, { waitUntil: "networkidle" });
-  await sleep(2500);
-  const meta = await page.evaluate(async (api) => {
-    const tok = localStorage.getItem("rentora_access");
-    const res = await fetch(`${api}/rooms/90009/`, {
-      headers: { Authorization: `Bearer ${tok}` },
-    });
-    const j = await res.json();
-    return { price: Math.round(Number(j.price)).toLocaleString(), area: j.area };
-  }, API);
-  if (!meta) throw new Error("could not fetch room 90009 meta");
-  const clicked = await page.evaluate(({ price, area }) => {
-    const cands = [
-      ...document.querySelectorAll("article, [class*='card'], [class*='rounded-2xl']"),
-    ].filter((el) => {
-      const t = el.textContent || "";
-      return t.includes(area) && t.includes(price);
-    });
-    for (const el of cands) {
-      let node = el;
-      while (node) {
-        if (typeof node.onclick === "function") {
-          node.click();
-          return true;
-        }
-        node = node.parentElement;
-      }
-    }
-    return false;
-  }, meta);
-  if (!clicked) throw new Error("could not click room 90009 card");
+  await page.goto(`${BASE}/rooms/mirpur?room=90009`, { waitUntil: "networkidle" });
   await sleep(3000);
-  const summaryCard = page
+  let summaryCard = page
     .locator("text=/Overall:/i")
     .first()
-    .locator("xpath=ancestor::*[contains(@class,'rounded-2xl')][1]");
+    .locator(
+      "xpath=ancestor::*[contains(@class,'rounded-xl') or contains(@class,'rounded-2xl')][1]"
+    );
+  if (!(await summaryCard.count().catch(() => 0))) {
+    summaryCard = page
+      .locator("text=/AI review summary/i")
+      .first()
+      .locator("xpath=ancestor::*[contains(@class,'rounded-xl')][1]");
+  }
   await summaryCard.waitFor({ timeout: 20000 }).catch(() => {});
   await summaryCard.scrollIntoViewIfNeeded().catch(() => {});
   await sleep(1200);
@@ -165,13 +143,14 @@ async function main() {
     );
     btns[0]?.click();
   });
-  await sleep(4000);
   const reportCard = page
     .locator("text=/Rental market report/i")
     .first()
     .locator("xpath=ancestor::*[contains(@class,'rounded-2xl')][1]");
-  await reportCard.waitFor({ timeout: 15000 }).catch(() => {});
+  await reportCard.waitFor({ timeout: 25000 }).catch(() => {});
   await sleep(1500);
+  await reportCard.scrollIntoViewIfNeeded().catch(() => {});
+  await sleep(1000);
   await snap(page, reportCard, "phase15-market-report.png");
 
   // --- 7. Dynamic pricing v2: landlord listings --------------------------
