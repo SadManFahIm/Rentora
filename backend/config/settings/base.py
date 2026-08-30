@@ -112,6 +112,8 @@ INSTALLED_APPS = [
     "agents",
     # Phase 19.1 — Property Intelligence Score (composite 0-100)
     "property_intelligence",
+    # Phase 19.2 — AI Rental Agent (tenant-facing, grounded in real tool data)
+    "rental_agent",
 ]
 
 # ============================================================
@@ -301,6 +303,10 @@ REST_FRAMEWORK = {
         "payment_initiate": "5/hour",
         # Copilot turns hit the search engine — generous but bounded.
         "copilot": "60/hour",
+        # AI Rental Agent turns run the full agent loop (LLM + tools), so the
+        # scope is tighter than copilot — a chatty human is fine, a scripted
+        # flood is not.
+        "rental_agent": "40/hour",
         # Gateway callbacks have no user session (AllowAny/no auth), so they
         # can't use the "user" scope; keyed per-IP to absorb legitimate
         # gateway retries while still capping flood/replay attempts.

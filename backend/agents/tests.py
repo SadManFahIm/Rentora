@@ -424,6 +424,64 @@ class SessionLoopTests(AgentTestCase):
         self.assertNotIn("\x00", clean)
         self.assertNotIn("\r", clean)
 
+    def test_deep_structured_tool_result_survives_persistence(self):
+        """A deep tool envelope (ok -> data -> rows -> row -> fields) must not
+        be nulled out by the outcome sanitizer or truncated by the message cap
+        — the LLM and any consumer depend on those grounded facts."""
+        import json
+
+        def exec(context, label="deep"):
+            return {
+                "ok": True,
+                "data": {
+                    "rows": [
+                        {
+                            "id": 42,
+                            "title": "একটি বাংলা রুম",
+                            "address": "House 12, Road 4, Uttara 47, Dhaka 1230",
+                            "price_bdt": 12000.0,
+                            "tags": ["wifi", "furnished"],
+                        }
+                    ]
+                },
+            }
+
+        AgentToolRegistry.register(
+            AgentTool(
+                name="test.deepresult",
+                description="d",
+                input_schema={"type": "object", "properties": {"label": {"type": "string"}}},
+                capability="read_only",
+                executor=exec,
+            )
+        )
+        try:
+            agent = self.make_agent(enabled_tools=["test.deepresult"])
+            conv = self.make_conversation(agent)
+            run, _ = create_run(conv, "deep", actor=self.owner)
+            run.metadata["mock_plan"] = [
+                {"type": "tool_call", "name": "test.deepresult", "arguments": {}},
+                {"type": "text", "content": "done"},
+            ]
+            run.save()
+            AgentSession(conv, actor=self.owner).execute(run)
+            run.refresh_from_db()
+            self.assertEqual(run.status, "completed")
+
+            call = run.tool_calls.get(tool_name="test.deepresult")
+            self.assertTrue(call.result.get("ok"))
+            stored_card = call.result["data"]["rows"][0]
+            self.assertEqual(stored_card["id"], 42)
+            self.assertEqual(stored_card["price_bdt"], 12000.0)
+            self.assertEqual(stored_card["title"], "একটি বাংলা রুম")
+
+            tool_msg = conv.messages.filter(role="tool").order_by("-sequence").first()
+            parsed = json.loads(tool_msg.content)
+            self.assertTrue(parsed["ok"])
+            self.assertEqual(parsed["data"]["rows"][0]["id"], 42)
+        finally:
+            AgentToolRegistry._tools.pop("test.deepresult", None)
+
     def test_telemetry_rows_created_and_enriched(self):
         from ai_intelligence.services import register_feature as rf
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ClipboardCheck, HandCoins, LifeBuoy, Loader2, Wand2 } from "lucide-react";
+import { Bot, ClipboardCheck, HandCoins, LifeBuoy, Loader2, Wand2 } from "lucide-react";
 import { sendSupportQuestion, type SupportAnswer } from "../../services/copilotService";
 import tier4Service, {
   type AgreementCheck,
@@ -9,8 +9,9 @@ import tier4Service, {
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import RentalAgentPanel from "../RentalAgentPanel/RentalAgentPanel";
 
-type Tool = "advisor" | "agreement" | "negotiate" | "support";
+type Tool = "rental" | "advisor" | "agreement" | "negotiate" | "support";
 
 interface AiToolsPanelProps {
   listingId?: number;
@@ -19,8 +20,9 @@ interface AiToolsPanelProps {
 }
 
 const TOOLS: { id: Tool; label: string; icon: typeof Wand2 }[] = [
-  { id: "advisor", label: "Rental Advisor", icon: Wand2 },
-  { id: "agreement", label: "Agreement Checker", icon: ClipboardCheck },
+  { id: "rental", label: "Rental Agent", icon: Bot },
+  { id: "advisor", label: "Advisor", icon: Wand2 },
+  { id: "agreement", label: "Agreement", icon: ClipboardCheck },
   { id: "negotiate", label: "Negotiation", icon: HandCoins },
   { id: "support", label: "Support", icon: LifeBuoy },
 ];
@@ -39,14 +41,14 @@ export default function AiToolsPanel({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex gap-1 border-b border-gray-100 px-3 py-2 dark:border-gray-800">
+      <div className="flex gap-1 overflow-x-auto border-b border-gray-100 px-3 py-2 dark:border-gray-800">
         {TOOLS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             type="button"
             onClick={() => setTool(id)}
             className={cn(
-              "inline-flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition",
+              "inline-flex shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg px-2 py-1.5 text-[11px] font-semibold transition",
               tool === id
                 ? "bg-orange-500/10 text-orange-600 dark:text-orange-400"
                 : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
@@ -57,11 +59,19 @@ export default function AiToolsPanel({
           </button>
         ))}
       </div>
-      <div className="flex-1 overflow-y-auto px-3 py-3">
-        {tool === "advisor" && <AdvisorTab />}
-        {tool === "agreement" && <AgreementTab />}
-        {tool === "negotiate" && <NegotiateTab listingId={listingId} listingPrice={listingPrice} />}
-        {tool === "support" && <SupportTab />}
+      <div className="min-h-0 flex-1">
+        {tool === "rental" ? (
+          <RentalAgentPanel />
+        ) : (
+          <div className="flex-1 overflow-y-auto px-3 py-3">
+            {tool === "advisor" && <AdvisorTab />}
+            {tool === "agreement" && <AgreementTab />}
+            {tool === "negotiate" && (
+              <NegotiateTab listingId={listingId} listingPrice={listingPrice} />
+            )}
+            {tool === "support" && <SupportTab />}
+          </div>
+        )}
       </div>
     </div>
   );

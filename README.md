@@ -17,7 +17,7 @@
 ## 📚 Table of Contents
 
 - [Product Overview](#-product-overview)
-- [Changelog — Phase 19.1 · 19.0 · 18.4 · 18.3 · 18.2 · 18.1 · 17](#changelog)
+- [Changelog — Phase 19.2 · 19.1 · 19.0 · 18.4 · 18.3 · 18.2 · 18.1 · 17](#changelog)
 - [What's New in v2.0](#changelog--whats-new-in-v20)
 - [Delivery Roadmap](#-delivery-roadmap)
 - [Features](#-features)
@@ -69,6 +69,17 @@ Full gallery (64 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 ---
 
 ## 🆕 Changelog
+
+**Phase 19.2 — AI Rental Agent (tenant-facing agentic chat)**
+
+- **Conversational rental agent** — a Bengali-first agent (বাংলা / Banglish / English) inside the Copilot widget that searches the live Dhaka catalogue, explains listings, estimates commutes, compares prices and can request a bookmark — every answer grounded in the platform's own tools, never invented
+- **6 tools, 1 new app** (`rental_agent`) — `search` (grounded room cards + area median/peak/cheapest), `room_details` (card + property-intelligence badge), `commute` (map-intel estimate or honest `available:false`), `price_compare` (segment P10/P50/P90 + overpriced flag), `area_overview` (median + trend or honest no), `bookmark` (`STATE_CHANGING` proposal); all results flow through the one shared privacy-first `room_card` shape (28 public-only keys) rebuilt per message so the UI renders the stored ground truth
+- **Dignified consent for the only side effect** — bookmarking needs human review: token-holding **self-consent** (the tenant's own turn is the authorization) moves PENDING → APPROVED, then applies once and **expires sibling PENDING bookmark proposals across all of that tenant's conversations** (one booking intent, no duplicates); the UI deliberately shows both stages ("await approval" → "applied") so the tenant stays in control
+- **API** — `POST /api/v1/rental/chat/` (creates+continues conversations, async run with eager fallback), `GET /conversations/` + `GET /conversations/<pk>/` (enriched transcript with attached cards, proposals, suggestion chips, feature state), `GET /runs/<key>/` (poll), `POST /proposals/<key>/approve|reject/` (owner-only, concurrency-safe, TTL) — auth + 40/h throttle
+- **Agent** — seeded via idempotent `register_rental_agent` command: flag `ai.rental_agent` (**disabled by default**), prompt `rentora.rental_agent` v1, agent `ai.rental_agent` (gpt-4o-mini, 6 tools, max_turns=6, max_tool_calls=20, max_tokens=4000, 60s); provider/prompt resolved through the Phase 18.1/18.2 registries
+- **SDK hardening (shared)** — `_sanitized_outcome` depth limit raised 4 → 8 and dict/list caps 50 → 200 so deep structured tool results survive into persistence and context (was nulling room-card fields — a grounding hazard); `_persist_message` gained `limit=` and tool payloads persist at 200 K so বাংলা (6× via `ensure_ascii`) never truncates mid-JSON; +1 regression test
+- **Frontend** — `rentalAgentService.ts` + `useRentalAgent` (send → poll run → reload enriched payload, honest errors, unmount-safe) + `RentalAgentPanel` (EN/BN examples, grounded cards opening the real RoomModal, amber "await approval" rows with Approve/Reject, suggestion chips, feature-off banner) as a new **Rental Agent** tab in the Copilot AI Tools, defaulted on open
+- **Engineering** — 42 new `rental_agent` tests + 1 SDK regression (81 combined OK, adjacent suites 886 OK), ruff-clean, `manage.py check` clean, TS strict + ESLint + Prettier clean. See [`docs/phase-19-2-ai-rental-agent.md`](docs/phase-19-2-ai-rental-agent.md)
 
 **Phase 19.1 — Property Intelligence Score**
 
