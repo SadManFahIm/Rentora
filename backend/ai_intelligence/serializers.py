@@ -3,6 +3,8 @@
 from rest_framework import serializers
 
 from .models import (
+    AIAlert,
+    AIAlertRule,
     AIExecutionLog,
     AIFeatureRegistry,
     AIPrompt,
@@ -535,3 +537,142 @@ class RegressionCheckSerializer(serializers.Serializer):
 class RunComparisonSerializer(serializers.Serializer):
     run_a_id = serializers.IntegerField()
     run_b_id = serializers.IntegerField()
+
+
+# ---------------------------------------------------------------------------
+# Phase 18.4 — AI Intelligence Alerts
+# ---------------------------------------------------------------------------
+
+
+class AIAlertRuleSerializer(serializers.ModelSerializer):
+    """Alert rule CRUD serializer.
+
+    Accepts ``feature_id`` (the string identifier, not the integer PK) as a
+    write field and exposes read-only evaluation state (breach_count,
+    last_metric_value, last_checked_at) plus display labels.
+    """
+
+    feature_id = serializers.SerializerMethodField()
+    metric_display = serializers.CharField(source="get_metric_display", read_only=True)
+    operator_display = serializers.CharField(source="get_operator_display", read_only=True)
+    alert_type_display = serializers.CharField(source="get_alert_type_display", read_only=True)
+    severity_display = serializers.CharField(source="get_severity_display", read_only=True)
+
+    class Meta:
+        model = AIAlertRule
+        fields = [
+            "id",
+            "rule_key",
+            "name",
+            "description",
+            "alert_type",
+            "metric",
+            "operator",
+            "threshold_value",
+            "feature_id",
+            "provider",
+            "model_name",
+            "duration_minutes",
+            "consecutive_checks",
+            "cooldown_minutes",
+            "severity",
+            "is_enabled",
+            "notify_admins",
+            "breach_count",
+            "last_metric_value",
+            "last_checked_at",
+            "created_by",
+            "created_at",
+            "updated_at",
+            "metric_display",
+            "operator_display",
+            "alert_type_display",
+            "severity_display",
+        ]
+        read_only_fields = [
+            "id",
+            "breach_count",
+            "last_metric_value",
+            "last_checked_at",
+            "created_by",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_feature_id(self, obj):
+        return obj.feature.feature_id if obj.feature else None
+
+    def validate(self, attrs):
+        raw_feature_id = self.initial_data.get("feature_id")
+        if raw_feature_id:
+            feature = AIFeatureRegistry.objects.filter(feature_id=raw_feature_id).first()
+            if not feature:
+                raise serializers.ValidationError({"feature_id": "Unknown feature"})
+            attrs["feature"] = feature
+        else:
+            if not self.instance or ("feature_id" in self.initial_data and not raw_feature_id):
+                attrs["feature"] = None
+        return attrs
+
+
+class AIAlertSerializer(serializers.ModelSerializer):
+    """Alert output serializer (alerts are created by the rule evaluator)."""
+
+    rule_key = serializers.SerializerMethodField()
+    feature_id = serializers.SerializerMethodField()
+    severity_display = serializers.CharField(source="get_severity_display", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    alert_type_display = serializers.CharField(source="get_alert_type_display", read_only=True)
+    acknowledged_by_username = serializers.SerializerMethodField()
+    resolved_by_username = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AIAlert
+        fields = [
+            "id",
+            "alert_key",
+            "rule",
+            "rule_key",
+            "alert_type",
+            "alert_type_display",
+            "severity",
+            "severity_display",
+            "status",
+            "status_display",
+            "title",
+            "message",
+            "metric_name",
+            "metric_value",
+            "threshold_value",
+            "feature",
+            "feature_id",
+            "provider",
+            "model_name",
+            "dedup_key",
+            "breach_count",
+            "acknowledged_by",
+            "acknowledged_by_username",
+            "acknowledged_at",
+            "resolved_by",
+            "resolved_by_username",
+            "resolved_at",
+            "resolution_note",
+            "meta",
+            "triggered_at",
+        ]
+
+    def get_rule_key(self, obj):
+        return obj.rule.rule_key if obj.rule else None
+
+    def get_feature_id(self, obj):
+        return obj.feature.feature_id if obj.feature else None
+
+    def get_acknowledged_by_username(self, obj):
+        return obj.acknowledged_by.username if obj.acknowledged_by else None
+
+    def get_resolved_by_username(self, obj):
+        return obj.resolved_by.username if obj.resolved_by else None
+
+
+class AlertLifecycleActionSerializer(serializers.Serializer):
+    note = serializers.CharField(required=False, allow_blank=True, default="")

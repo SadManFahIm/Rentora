@@ -1,10 +1,12 @@
-"""AI Intelligence Layer — Phase 18.1 + 18.3 Celery tasks.
+"""AI Intelligence Layer — Phase 18.1 + 18.3 + 18.4 Celery tasks.
 
 Provides:
 - Provider health aggregation (periodic)
 - Execution log cleanup (periodic)
 - Evaluation run execution (on-demand)
 - Stale evaluation cleanup (periodic)
+- Alert rule evaluation (periodic, Phase 18.4)
+- Dashboard cache warm-up (periodic, Phase 18.4)
 """
 
 from __future__ import annotations
@@ -105,3 +107,54 @@ def cancel_stale_evaluation_runs() -> dict:
     except Exception as exc:
         logger.exception("Stale evaluation cleanup failed")
         return {"cancelled": 0, "status": "error", "error": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Phase 18.4 — Alerts + Dashboard
+# ---------------------------------------------------------------------------
+
+
+@shared_task(name="ai_intelligence.evaluate_alert_rules")
+def evaluate_alert_rules_task() -> dict:
+    """Evaluate every enabled AI alert rule.
+
+    Called periodically by Celery beat. Triggered alerts notify admins and
+    are written to the audit log by the alert service.
+    """
+    from .alerts import evaluate_all_rules
+
+    try:
+        result = evaluate_all_rules()
+        logger.info("Alert evaluation complete: %s", result.get("counts"))
+        return result
+    except Exception as exc:
+        logger.exception("Alert rule evaluation failed")
+        return {"evaluated": 0, "status": "error", "error": str(exc)}
+
+
+@shared_task(name="ai_intelligence.warm_dashboard_cache")
+def warm_dashboard_cache() -> dict:
+    """Pre-compute the AI dashboard aggregates into cache.
+
+    Runs a few seconds after ``evaluate_alert_rules_task`` in the beat
+    schedule so the admin dashboard's first render does not pay the full
+    aggregation cost synchronously.
+    """
+    from . import dashboard
+
+    try:
+        dashboard.get_ai_summary()
+        dashboard.get_feature_health_list()
+        dashboard.get_model_health()
+        dashboard.get_provider_health()
+        dashboard.get_cost_dashboard()
+        dashboard.get_performance_dashboard()
+        dashboard.get_error_dashboard()
+        dashboard.get_quality_dashboard()
+        dashboard.get_prompt_health()
+        dashboard.get_drift_status()
+        logger.info("AI dashboard cache warmed")
+        return {"warmed": True, "status": "success"}
+    except Exception as exc:
+        logger.exception("AI dashboard cache warm-up failed")
+        return {"warmed": False, "status": "error", "error": str(exc)}

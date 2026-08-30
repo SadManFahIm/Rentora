@@ -1,12 +1,22 @@
-"""AI Intelligence Layer — Phase 18.1 + 18.2 + 18.3 tests."""
+"""AI Intelligence Layer — Phase 18.1 + 18.2 + 18.3 + 18.4 tests."""
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from .models import AIExecutionLog, AIFeatureRegistry, AIPrompt, AIPromptVersion, ProviderHealth
+from .alerts import _is_breach, compute_metric_value
+from .models import (
+    AIAlert,
+    AIAlertRule,
+    AIExecutionLog,
+    AIFeatureRegistry,
+    AIPrompt,
+    AIPromptVersion,
+    ProviderHealth,
+)
 from .services import (
     activate_prompt_version,
     create_prompt,
@@ -1164,4 +1174,853 @@ class EvaluationAPITests(TestCase):
     def test_unauthenticated_access_denied(self):
         self.client.force_authenticate(user=None)
         resp = self.client.get("/api/v1/ai/eval/metrics/")
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+# ===========================================================================
+# Phase 18.4 — AI Intelligence Dashboard + Alerts
+# ===========================================================================
+
+
+class AIAlertRuleModelTests(TestCase):
+    def test_create_rule_defaults(self):
+        rule = AIAlertRule.objects.create(
+            rule_key="test.r1",
+            name="Test Rule",
+            metric="error_rate",
+            operator="gte",
+            threshold_value=50.0,
+        )
+        self.assertTrue(rule.is_enabled)
+        self.assertEqual(rule.consecutive_checks, 1)
+        self.assertEqual(rule.cooldown_minutes, 60)
+        self.assertEqual(rule.severity, "warning")
+        self.assertEqual(rule.breach_count, 0)
+        self.assertIsNone(rule.last_checked_at)
+
+    def test_unique_rule_key(self):
+        from django.db import IntegrityError
+
+        AIAlertRule.objects.create(
+            rule_key="test.uniq", name="A", metric="error_rate", operator="gt", threshold_value=1
+        )
+        with self.assertRaises(IntegrityError):
+            AIAlertRule.objects.create(
+                rule_key="test.uniq",
+                name="B",
+                metric="error_rate",
+                operator="gt",
+                threshold_value=1,
+            )
+
+
+class AlertMetricComputationTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        self.feature = AIFeatureRegistry.objects.create(
+            feature_id="alerts.metric", name="Metric Feature", category="search"
+        )
+        self.base = {
+            "feature_key": "alerts.metric",
+            "feature": self.feature,
+            "provider": "rules",
+            "model_name": "m1",
+        }
+
+    def _log(self, status_st="success", latency_ms=100, cost=0.0, fallback=False, **kw):
+        kwargs = dict(self.base)
+        kwargs.update(kw)
+        return AIExecutionLog.objects.create(
+            status=status_st,
+            latency_ms=latency_ms,
+            estimated_cost_usd=cost,
+            is_fallback=fallback,
+            **kwargs,
+        )
+
+    def _rule(self, metric, **kw):
+        defaults = dict(
+            rule_key="m." + metric,
+            name=metric,
+            metric=metric,
+            operator="gte",
+            threshold_value=0,
+            duration_minutes=1440,
+            feature=self.feature,
+        )
+        defaults.update(kw)
+        return AIAlertRule.objects.create(**defaults)
+
+    def test_error_rate(self):
+        self._log(status_st="success")
+        self._log(status_st="failure")
+        self._log(status_st="timeout")
+        rule = self._rule("error_rate")
+        self.assertAlmostEqual(compute_metric_value(rule), 2 / 3 * 100, places=2)
+
+    def test_success_rate(self):
+        self._log(status_st="success")
+        self._log(status_st="failure")
+        rule = self._rule("success_rate")
+        self.assertEqual(compute_metric_value(rule), 50.0)
+
+    def test_fallback_rate(self):
+        self._log()
+        self._log(fallback=True)
+        rule = self._rule("fallback_rate")
+        self.assertEqual(compute_metric_value(rule), 50.0)
+
+    def test_avg_and_p95_latency(self):
+        for ms in (50, 100, 150, 200, 1000):
+            self._log(latency_ms=ms)
+        rule = self._rule("avg_latency")
+        value = compute_metric_value(rule)
+        self.assertAlmostEqual(value, 300.0, places=1)
+        p95 = compute_metric_value(self._rule("p95_latency"))
+        self.assertGreaterEqual(p95, 200)
+
+    def test_daily_cost_and_cost_per_execution(self):
+        self._log(cost="1.00")
+        self._log(cost="2.00")
+        self._log(cost="3.00")
+        daily = compute_metric_value(self._rule("daily_cost"))
+        self.assertEqual(daily, 6.0)
+        per_exec = compute_metric_value(self._rule("cost_per_execution"))
+        self.assertEqual(per_exec, 2.0)
+
+    def test_evaluation_score(self):
+        self._log()
+        from .models import EvaluationRun
+
+        EvaluationRun.objects.create(
+            feature=self.feature,
+            model_name="m1",
+            status="completed",
+            score=0.91,
+            total_cases=10,
+            passed_cases=9,
+            failed_cases=1,
+        )
+        rule = self._rule("evaluation_score", operator="lt", threshold_value=0.95)
+        self.assertEqual(compute_metric_value(rule), 0.91)
+        self.assertTrue(_is_breach(rule, 0.91))
+
+    def test_drift_breach(self):
+        from ml_models.models import DriftMetric, ModelVersion
+
+        mv = ModelVersion.objects.create(name="fraud_model", version="1.0", status="active")
+        DriftMetric.objects.create(
+            model_version=mv,
+            metric_name="confidence",
+            value=0.4,
+            baseline_value=0.9,
+            threshold_min=0.5,
+            window_start=timezone.now() - timezone.timedelta(hours=1),
+            window_end=timezone.now(),
+            threshold_breached=True,
+        )
+        rule = self._rule(
+            "drift_breach", model_name="fraud_model", operator="gte", threshold_value=1
+        )
+        self.assertEqual(compute_metric_value(rule), 1.0)
+
+    def test_no_data_returns_none(self):
+        rule = self._rule("error_rate")
+        self.assertIsNone(compute_metric_value(rule))
+
+
+class AlertEvaluationTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        self.feature = AIFeatureRegistry.objects.create(
+            feature_id="alerts.eval", name="Eval Feature", category="fraud"
+        )
+        self.staff = User.objects.create_user(
+            username="alerts_staff",
+            email="alerts_staff@test.com",
+            password="test12345",
+            is_staff=True,
+        )
+        self.admin_role = User.objects.create_user(
+            username="alerts_admin",
+            email="alerts_admin@test.com",
+            password="test12345",
+            role="admin",
+        )
+        self.rule = AIAlertRule.objects.create(
+            rule_key="eval.error_rate",
+            name="High error rate",
+            metric="error_rate",
+            operator="gte",
+            threshold_value=50.0,
+            feature=self.feature,
+            duration_minutes=60,
+            consecutive_checks=1,
+            cooldown_minutes=60,
+            severity="warning",
+            notify_admins=True,
+        )
+
+    def _populate(self, success=2, fail=2):
+        base = {"feature_key": "alerts.eval", "feature": self.feature, "provider": "rules"}
+        for _ in range(success):
+            AIExecutionLog.objects.create(**base, status="success")
+        for _ in range(fail):
+            AIExecutionLog.objects.create(**base, status="failure")
+
+    def test_triggers_and_notifies(self):
+        from .alerts import evaluate_rule
+
+        self._populate()
+        result = evaluate_rule(self.rule)
+        self.assertTrue(result["triggered"])
+        self.assertEqual(result["status"], "triggered")
+        alert = AIAlert.objects.get(rule=self.rule)
+        self.assertEqual(alert.status, AIAlert.Status.TRIGGERED)
+        self.assertEqual(alert.metric_value, 50.0)
+        from notifications.models import Notification
+
+        self.assertEqual(Notification.objects.filter(notification_type="ai_alert").count(), 2)
+
+    def test_consecutive_checks(self):
+        from .alerts import evaluate_rule
+
+        self.rule.consecutive_checks = 3
+        self.rule.save()
+        self._populate()
+        r1 = evaluate_rule(self.rule)
+        self.assertFalse(r1["triggered"])
+        self.assertEqual(self.rule.breach_count, 1)
+        r2 = evaluate_rule(self.rule)
+        self.assertFalse(r2["triggered"])
+        self.assertEqual(self.rule.breach_count, 2)
+        r3 = evaluate_rule(self.rule)
+        self.assertTrue(r3["triggered"])
+        self.assertEqual(self.rule.breach_count, 3)
+        self.assertEqual(AIAlert.objects.count(), 1)
+
+    def test_breach_streak_resets_on_recovery(self):
+        from .alerts import evaluate_rule
+
+        self._populate(success=1, fail=1)
+        evaluate_rule(self.rule)
+        self.assertEqual(self.rule.breach_count, 1)
+        self._populate(success=4, fail=0)  # error_rate = 0 now
+        evaluate_rule(self.rule)
+        self.rule.refresh_from_db()
+        self.assertEqual(self.rule.breach_count, 0)
+
+    def test_no_data_never_triggers(self):
+        from .alerts import evaluate_rule
+
+        result = evaluate_rule(self.rule)
+        self.assertEqual(result["status"], "no_data")
+        self.assertIsNone(result["value"])
+        self.assertEqual(AIAlert.objects.count(), 0)
+
+    def test_dedup_open_alert_folds_breach(self):
+        from .alerts import evaluate_rule
+
+        self._populate()
+        evaluate_rule(self.rule)
+        self.assertEqual(AIAlert.objects.count(), 1)
+        result = evaluate_rule(self.rule)
+        self.assertEqual(result["status"], "deduplicated")
+        self.assertFalse(result["triggered"])
+        self.assertEqual(AIAlert.objects.count(), 1)
+        alert = AIAlert.objects.get()
+        self.assertEqual(alert.breach_count, 2)
+
+    def test_cooldown_blocks_refire(self):
+        from .alerts import evaluate_rule, resolve_alert
+
+        self._populate()
+        evaluate_rule(self.rule)
+        resolve_alert(AIAlert.objects.get().pk, self.staff, note="fixed")
+        result = evaluate_rule(self.rule)
+        self.assertEqual(result["status"], "cooldown")
+        self.assertEqual(AIAlert.objects.count(), 1)
+
+    def test_cooldown_passes_allows_refire(self):
+        from .alerts import evaluate_rule, resolve_alert
+
+        self._populate()
+        evaluate_rule(self.rule)
+        alert = AIAlert.objects.get()
+        resolve_alert(alert.pk, self.staff, note="fixed")
+        AIAlert.objects.filter(pk=alert.pk).update(
+            triggered_at=timezone.now() - timezone.timedelta(minutes=120)
+        )
+        result = evaluate_rule(self.rule)
+        self.assertEqual(result["status"], "triggered")
+        self.assertEqual(AIAlert.objects.count(), 2)
+
+    def test_disabled_rule_skipped(self):
+        from .alerts import evaluate_rule
+
+        self.rule.is_enabled = False
+        self.rule.save()
+        self._populate()
+        result = evaluate_rule(self.rule)
+        self.assertEqual(result["status"], "disabled")
+        self.assertEqual(AIAlert.objects.count(), 0)
+
+    def test_audit_entry_created_on_trigger(self):
+        from audit.models import AuditLogEntry
+
+        from .alerts import evaluate_rule
+
+        self._populate()
+        evaluate_rule(self.rule)
+        entry = AuditLogEntry.objects.filter(action="ai_intelligence.alert_triggered").first()
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.target_type, "ai_intelligence.AIAlert")
+
+    def test_evaluate_all_rules(self):
+        from .alerts import evaluate_all_rules
+
+        self._populate()
+        result = evaluate_all_rules()
+        self.assertIn("triggered", result["counts"])
+        self.assertEqual(result["evaluated"], AIAlertRule.objects.filter(is_enabled=True).count())
+
+
+class AlertLifecycleTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="lifecycle_admin",
+            email="lifecycle_admin@test.com",
+            password="test12345",
+            is_staff=True,
+        )
+        self.rule = AIAlertRule.objects.create(
+            rule_key="lifecycle.rule",
+            name="R",
+            metric="error_rate",
+            operator="gte",
+            threshold_value=1,
+        )
+        self.alert = AIAlert.objects.create(
+            rule=self.rule,
+            alert_type=AIAlertRule.AlertType.RELIABILITY,
+            severity=AIAlertRule.Severity.WARNING,
+            title="Title",
+            message="Message",
+            metric_name="error_rate",
+            metric_value=80.0,
+            threshold_value=1.0,
+            dedup_key="x",
+        )
+
+    def test_acknowledge(self):
+        from .alerts import acknowledge_alert
+
+        alert = acknowledge_alert(self.alert.pk, self.admin, note="seen")
+        alert.refresh_from_db()
+        self.assertEqual(alert.status, AIAlert.Status.ACKNOWLEDGED)
+        self.assertEqual(alert.acknowledged_by, self.admin)
+        self.assertIsNotNone(alert.acknowledged_at)
+        from audit.models import AuditLogEntry
+
+        self.assertTrue(
+            AuditLogEntry.objects.filter(action="ai_intelligence.alert_acknowledged").exists()
+        )
+
+    def test_resolve(self):
+        from .alerts import resolve_alert
+
+        alert = resolve_alert(self.alert.pk, self.admin, note="fixed")
+        alert.refresh_from_db()
+        self.assertEqual(alert.status, AIAlert.Status.RESOLVED)
+        self.assertEqual(alert.resolution_note, "fixed")
+        from audit.models import AuditLogEntry
+
+        self.assertTrue(
+            AuditLogEntry.objects.filter(action="ai_intelligence.alert_resolved").exists()
+        )
+
+    def test_suppress(self):
+        from .alerts import suppress_alert
+
+        alert = suppress_alert(self.alert.pk, self.admin, note="false positive")
+        alert.refresh_from_db()
+        self.assertEqual(alert.status, AIAlert.Status.SUPPRESSED)
+
+    def test_resolve_resolved_raises(self):
+        from .alerts import resolve_alert
+
+        resolve_alert(self.alert.pk, self.admin, note="ok")
+        with self.assertRaises(ValueError):
+            resolve_alert(self.alert.pk, self.admin, note="again")
+
+    def test_absent_alert_returns_none(self):
+        from .alerts import acknowledge_alert
+
+        self.assertIsNone(acknowledge_alert(999999, self.admin, note="x"))
+
+
+class DashboardServiceTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        self.feature = AIFeatureRegistry.objects.create(
+            feature_id="dash.feature",
+            name="Dash Feature",
+            category="search",
+            default_provider="rules",
+            default_model="model_x",
+            is_enabled=True,
+        )
+        self.base = {
+            "feature_key": "dash.feature",
+            "feature": self.feature,
+            "provider": "rules",
+            "model_name": "model_x",
+        }
+        for i, outcome in enumerate(["success", "failure", "success", "success", "timeout"]):
+            AIExecutionLog.objects.create(
+                **self.base,
+                status=outcome,
+                latency_ms=100 + i * 25,
+                estimated_cost_usd="0.25",
+                is_fallback=(i == 1),
+            )
+        self.prompt = AIPrompt.objects.create(
+            prompt_key="ai.dash.prompt",
+            name="Dash Prompt",
+            template_type=AIPrompt.TemplateType.TEMPLATE,
+            status=AIPrompt.Status.ACTIVE,
+            feature=self.feature,
+            default_model="model_x",
+        )
+        from .services import activate_prompt_version, create_prompt_version
+
+        create_prompt_version(
+            prompt_key="ai.dash.prompt",
+            template="Hello {{name}}",
+            system_instructions="Be nice",
+            variables={"name": {"type": "string"}},
+            change_summary="v1",
+        )
+        activate_prompt_version("ai.dash.prompt", 1)
+
+    def test_percentile(self):
+        from .dashboard import _percentile
+
+        values = [10, 20, 30, 40]
+        self.assertEqual(_percentile(values, 50), 20)
+        self.assertEqual(_percentile([], 50), 0)
+
+    def test_ai_summary(self):
+        from .dashboard import get_ai_summary
+
+        s = get_ai_summary(days=30)
+        self.assertEqual(s["total_executions"], 5)
+        self.assertEqual(s["successful_executions"], 3)
+        self.assertEqual(s["error_rate"], 40.0)
+        self.assertEqual(s["success_rate"], 60.0)
+        self.assertEqual(s["fallback_rate"], 20.0)
+        self.assertEqual(s["avg_latency_ms"], 150)
+        self.assertEqual(s["estimated_cost_usd"], 1.25)
+        self.assertTrue(s["is_estimated_cost"])
+        self.assertEqual(len(s["trend"]), 30)
+        self.assertIn("open_alerts", s)
+
+    def test_ai_summary_filtered_by_feature(self):
+        from .dashboard import get_ai_summary
+
+        s = get_ai_summary(days=30, feature_id="dash.feature")
+        self.assertEqual(s["total_executions"], 5)
+
+    def test_feature_health_list(self):
+        from .dashboard import get_feature_health_list
+
+        rows = get_feature_health_list(days=30)
+        self.assertEqual(len(rows), AIFeatureRegistry.objects.count())
+        row = next(r for r in rows if r["feature_id"] == "dash.feature")
+        self.assertEqual(row["total_executions"], 5)
+        self.assertEqual(row["success_rate"], 60.0)
+        self.assertIn("latest_evaluation_score", row)
+        self.assertIn("active_prompt", row)
+
+    def test_feature_health_detail(self):
+        from .dashboard import get_feature_health_detail
+
+        detail = get_feature_health_detail("dash.feature", days=30)
+        self.assertEqual(detail["usage"]["total_executions"], 5)
+        self.assertEqual(detail["performance"]["p95_latency_ms"], 200)
+        self.assertEqual(detail["cost"]["total_tokens"], 0)
+        self.assertEqual(detail["configuration"]["active_prompt_version"], 1)
+        self.assertEqual(detail["quality"]["regression_status"], "none")
+
+    def test_model_health(self):
+        from .dashboard import get_model_health
+
+        rows = get_model_health(days=30)
+        self.assertTrue(any(r["model_name"] for r in rows))
+
+    def test_provider_health(self):
+        from .dashboard import get_provider_health
+
+        rows = get_provider_health(days=30)
+        rules = next(r for r in rows if r["provider"] == "rules")
+        self.assertEqual(rules["total_requests"], 5)
+        self.assertEqual(rules["success_rate"], 60.0)
+
+    def test_cost_dashboard(self):
+        from .dashboard import get_cost_dashboard
+
+        c = get_cost_dashboard(days=30)
+        self.assertEqual(c["total_estimated_cost_usd"], 1.25)
+        self.assertTrue(c["is_estimated_cost"])
+        self.assertEqual(c["by_feature"][0]["feature_key"], "dash.feature")
+        self.assertEqual(len(c["trend"]), 30)
+
+    def test_performance_dashboard(self):
+        from .dashboard import get_performance_dashboard
+
+        p = get_performance_dashboard(days=30)
+        self.assertEqual(p["overall"]["avg_latency_ms"], 150)
+        self.assertEqual(len(p["daily_trend"]), 30)
+        self.assertTrue(p["by_feature"])
+
+    def test_error_dashboard(self):
+        from .dashboard import get_error_dashboard
+
+        e = get_error_dashboard(days=30)
+        self.assertEqual(e["total_errors"], 2)
+        self.assertEqual(e["timeout_count"], 1)
+        self.assertEqual(e["fallback_count"], 1)
+        self.assertTrue(e["status_breakdown"])
+
+    def test_quality_dashboard(self):
+        from .dashboard import get_quality_dashboard
+        from .models import EvaluationRun
+
+        EvaluationRun.objects.create(
+            feature=self.feature,
+            prompt=self.prompt,
+            prompt_version=1,
+            model_name="model_x",
+            provider="rules",
+            status="completed",
+            score=0.88,
+            total_cases=10,
+            passed_cases=9,
+            failed_cases=1,
+            metric_scores={"f1": 0.88},
+        )
+        q = get_quality_dashboard(days=180)
+        rows = [r for r in q["features"] if r["feature_id"] == "dash.feature"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["score"], 0.88)
+        self.assertIn("evaluator_types", q)
+        self.assertIn("metrics", q)
+
+    def test_prompt_health(self):
+        from .dashboard import get_prompt_health
+
+        rows = get_prompt_health(days=90)
+        row = next(r for r in rows if r["prompt_key"] == "ai.dash.prompt")
+        self.assertEqual(row["active_version"], 1)
+        self.assertEqual(row["version_count"], 1)
+        self.assertEqual(row["feature_id"], "dash.feature")
+
+    def test_drift_unknown_for_unmeasured_models(self):
+        from ml_models.models import ModelVersion
+
+        from .dashboard import get_drift_status
+
+        ModelVersion.objects.create(name="unmeasured", version="1.0", status="active")
+        statuses = get_drift_status()
+        row = next(r for r in statuses if r["model_name"] == "unmeasured")
+        self.assertEqual(row["status"], "unknown")
+
+    def test_drift_critical_for_breached(self):
+        from ml_models.models import DriftMetric, ModelVersion
+
+        from .dashboard import get_drift_status
+
+        mv = ModelVersion.objects.create(name="drifted", version="1.0", status="active")
+        DriftMetric.objects.create(
+            model_version=mv,
+            metric_name="accuracy",
+            value=0.2,
+            baseline_value=0.9,
+            threshold_min=0.5,
+            window_start=timezone.now() - timezone.timedelta(hours=1),
+            window_end=timezone.now(),
+            threshold_breached=True,
+        )
+        statuses = get_drift_status()
+        row = next(r for r in statuses if r["model_name"] == "drifted")
+        self.assertEqual(row["status"], "critical")
+
+    def test_model_compare_missing_runs(self):
+        from .dashboard import compare_model_versions
+
+        result = compare_model_versions("rules", "model_x", "1.0", "2.0", days=90)
+        self.assertIn("error", result)
+
+
+class DashboardAPITests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            username="dash_admin",
+            email="dash_admin@test.com",
+            password="test12345",
+            is_staff=True,
+        )
+        self.user = User.objects.create_user(
+            username="dash_user", email="dash_user@test.com", password="test12345"
+        )
+        AIFeatureRegistry.objects.create(
+            feature_id="dashapi.f", name="API Feature", category="other"
+        )
+        AIExecutionLog.objects.create(
+            feature_key="dashapi.f", provider="rules", status="success", latency_ms=42
+        )
+        self.client.force_authenticate(user=self.admin)
+
+    def _get(self, url):
+        return self.client.get(url)
+
+    def test_all_dashboard_endpoints_admin(self):
+        endpoints = [
+            "/api/v1/ai/dashboard/summary/",
+            "/api/v1/ai/dashboard/features/",
+            "/api/v1/ai/dashboard/features/dashapi.f/",
+            "/api/v1/ai/dashboard/models/",
+            "/api/v1/ai/dashboard/providers/",
+            "/api/v1/ai/dashboard/cost/",
+            "/api/v1/ai/dashboard/performance/",
+            "/api/v1/ai/dashboard/errors/",
+            "/api/v1/ai/dashboard/quality/",
+            "/api/v1/ai/dashboard/drift/",
+            "/api/v1/ai/dashboard/prompts/",
+        ]
+        for endpoint in endpoints:
+            resp = self._get(endpoint)
+            self.assertEqual(resp.status_code, status.HTTP_200_OK, endpoint)
+
+    def test_model_compare_requires_params(self):
+        resp = self._get("/api/v1/ai/dashboard/models/compare/")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_model_compare_with_params(self):
+        resp = self._get(
+            "/api/v1/ai/dashboard/models/compare/?provider=rules&model=model_x"
+            "&version_a=1.0&version_b=2.0"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+    def test_summary_honors_days_clamp(self):
+        resp = self._get("/api/v1/ai/dashboard/summary/?days=500")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["days"], 365)
+
+    def test_non_admin_forbidden(self):
+        self.client.force_authenticate(user=self.user)
+        resp = self._get("/api/v1/ai/dashboard/summary/")
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_role_admin_allowed(self):
+        role_admin = User.objects.create_user(
+            username="dash_role_admin",
+            email="dash_role_admin@test.com",
+            password="test12345",
+            role="admin",
+        )
+        self.client.force_authenticate(user=role_admin)
+        resp = self._get("/api/v1/ai/dashboard/summary/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+
+class AlertAPITests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            username="alert_api_admin",
+            email="alert_api_admin@test.com",
+            password="test12345",
+            is_staff=True,
+        )
+        self.user = User.objects.create_user(
+            username="alert_api_user", email="alert_api_user@test.com", password="test12345"
+        )
+        self.client.force_authenticate(user=self.admin)
+
+    def test_rule_create_and_list(self):
+        resp = self.client.post(
+            "/api/v1/ai/alerts/rules/",
+            {
+                "rule_key": "api.error_rate",
+                "name": "API error rate",
+                "metric": "error_rate",
+                "operator": "gte",
+                "threshold_value": 50,
+                "severity": "warning",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        self.assertEqual(resp.data["created_by"], self.admin.pk)
+        list_resp = self.client.get("/api/v1/ai/alerts/rules/")
+        self.assertEqual(list_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_resp.data["count"], 1)
+
+    def test_rule_create_with_unknown_feature(self):
+        resp = self.client.post(
+            "/api/v1/ai/alerts/rules/",
+            {
+                "rule_key": "api.bad_feature",
+                "name": "R",
+                "metric": "error_rate",
+                "operator": "gte",
+                "threshold_value": 1,
+                "feature_id": "does.not.exist",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_rule_with_feature(self):
+        AIFeatureRegistry.objects.create(feature_id="api.feat", name="F", category="other")
+        resp = self.client.post(
+            "/api/v1/ai/alerts/rules/",
+            {
+                "rule_key": "api.with_feature",
+                "name": "R",
+                "metric": "error_rate",
+                "operator": "gte",
+                "threshold_value": 1,
+                "feature_id": "api.feat",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        rule = AIAlertRule.objects.get(rule_key="api.with_feature")
+        self.assertEqual(rule.feature.feature_id, "api.feat")
+
+    def test_rule_update_and_delete(self):
+        rule = AIAlertRule.objects.create(
+            rule_key="api.upd",
+            name="R",
+            metric="error_rate",
+            operator="gte",
+            threshold_value=1,
+        )
+        resp = self.client.patch(
+            f"/api/v1/ai/alerts/rules/{rule.pk}/",
+            {"threshold_value": 90, "is_enabled": False},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        rule.refresh_from_db()
+        self.assertEqual(rule.threshold_value, 90)
+        self.assertFalse(rule.is_enabled)
+        del_resp = self.client.delete(f"/api/v1/ai/alerts/rules/{rule.pk}/")
+        self.assertEqual(del_resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(AIAlertRule.objects.filter(pk=rule.pk).exists())
+
+    def test_alerts_list_with_filters(self):
+        rule = AIAlertRule.objects.create(
+            rule_key="api.list",
+            name="R",
+            metric="error_rate",
+            operator="gte",
+            threshold_value=1,
+        )
+        AIAlert.objects.create(
+            rule=rule,
+            alert_type="reliability",
+            severity="critical",
+            title="T",
+            message="M",
+            metric_name="error_rate",
+            metric_value=1.0,
+            threshold_value=1.0,
+            dedup_key="a",
+        )
+        AIAlert.objects.create(
+            rule=rule,
+            alert_type="cost",
+            severity="info",
+            title="T2",
+            message="M2",
+            metric_name="daily_cost",
+            metric_value=1.0,
+            threshold_value=1.0,
+            dedup_key="b",
+            status=AIAlert.Status.RESOLVED,
+        )
+        resp = self.client.get("/api/v1/ai/alerts/?severity=critical")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["count"], 1)
+        resp = self.client.get("/api/v1/ai/alerts/?status=resolved")
+        self.assertEqual(resp.data["count"], 1)
+        resp = self.client.get("/api/v1/ai/alerts/")
+        self.assertEqual(resp.data["count"], 2)
+
+    def test_alert_lifecycle_endpoints(self):
+        rule = AIAlertRule.objects.create(
+            rule_key="api.life",
+            name="R",
+            metric="error_rate",
+            operator="gte",
+            threshold_value=1,
+        )
+        alert = AIAlert.objects.create(
+            rule=rule,
+            alert_type="reliability",
+            severity="warning",
+            title="T",
+            message="M",
+            metric_name="error_rate",
+            metric_value=1.0,
+            threshold_value=1.0,
+            dedup_key="c",
+        )
+        ack = self.client.post(
+            f"/api/v1/ai/alerts/{alert.pk}/acknowledge/", {"note": "on it"}, format="json"
+        )
+        self.assertEqual(ack.status_code, status.HTTP_200_OK)
+        self.assertEqual(ack.data["status"], "acknowledged")
+        resolve = self.client.post(
+            f"/api/v1/ai/alerts/{alert.pk}/resolve/", {"note": "done"}, format="json"
+        )
+        self.assertEqual(resolve.status_code, status.HTTP_200_OK)
+        self.assertEqual(resolve.data["status"], "resolved")
+        self.assertEqual(resolve.data["resolution_note"], "done")
+
+    def test_evaluate_endpoint(self):
+        AIFeatureRegistry.objects.create(feature_id="api.eval", name="F", category="other")
+        AIAlertRule.objects.create(
+            rule_key="api.evalrun",
+            name="R",
+            metric="error_rate",
+            operator="gte",
+            threshold_value=1,
+        )
+        resp = self.client.post("/api/v1/ai/alerts/evaluate/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("counts", resp.data)
+
+    def test_alerts_require_admin(self):
+        self.client.force_authenticate(user=self.user)
+        resp = self.client.get("/api/v1/ai/alerts/")
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_unauthenticated_denied(self):
+        self.client.force_authenticate(user=None)
+        resp = self.client.get("/api/v1/ai/alerts/rules/")
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)

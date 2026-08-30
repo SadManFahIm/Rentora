@@ -1,4 +1,4 @@
-"""AI Intelligence Layer — Phase 18.1 + 18.2 + 18.3 URL configuration."""
+"""AI Intelligence Layer — Phase 18.1 + 18.2 + 18.3 + 18.4 URL configuration."""
 
 from django.urls import path
 
@@ -172,5 +172,107 @@ urlpatterns = [
         "eval/baselines/",
         views.BaselineListView.as_view(),
         name="eval-baseline-list",
+    ),
+    # Phase 18.4 — AI Intelligence Dashboard
+    path(
+        "dashboard/summary/",
+        views.AIDashboardSummaryView.as_view(),
+        name="dashboard-summary",
+    ),
+    path(
+        "dashboard/features/",
+        views.AIFeatureHealthListView.as_view(),
+        name="dashboard-features",
+    ),
+    path(
+        "dashboard/features/<str:feature_id>/",
+        views.AIFeatureHealthDetailView.as_view(),
+        name="dashboard-feature-detail",
+    ),
+    path(
+        "dashboard/models/",
+        views.AIModelHealthView.as_view(),
+        name="dashboard-models",
+    ),
+    path(
+        "dashboard/models/compare/",
+        views.AIModelCompareView.as_view(),
+        name="dashboard-models-compare",
+    ),
+    path(
+        "dashboard/providers/",
+        views.AIProviderHealthView.as_view(),
+        name="dashboard-providers",
+    ),
+    path(
+        "dashboard/cost/",
+        views.AICostDashboardView.as_view(),
+        name="dashboard-cost",
+    ),
+    path(
+        "dashboard/performance/",
+        views.AIPerformanceDashboardView.as_view(),
+        name="dashboard-performance",
+    ),
+    path(
+        "dashboard/errors/",
+        views.AIErrorDashboardView.as_view(),
+        name="dashboard-errors",
+    ),
+    path(
+        "dashboard/quality/",
+        views.AIQualityDashboardView.as_view(),
+        name="dashboard-quality",
+    ),
+    path(
+        "dashboard/drift/",
+        views.AIDriftStatusView.as_view(),
+        name="dashboard-drift",
+    ),
+    path(
+        "dashboard/prompts/",
+        views.AIPromptHealthView.as_view(),
+        name="dashboard-prompts",
+    ),
+    # Phase 18.4 — AI Alerts
+    path(
+        "alerts/rules/",
+        views.AIAlertRuleListCreateView.as_view(),
+        name="alert-rule-list",
+    ),
+    path(
+        "alerts/rules/<int:pk>/",
+        views.AIAlertRuleDetailView.as_view(),
+        name="alert-rule-detail",
+    ),
+    path(
+        "alerts/",
+        views.AIAlertListView.as_view(),
+        name="alert-list",
+    ),
+    path(
+        "alerts/evaluate/",
+        views.AIAlertEvaluateView.as_view(),
+        name="alert-evaluate",
+    ),
+    path(
+        "alerts/<int:pk>/",
+        views.AIAlertDetailView.as_view(),
+        name="alert-detail",
+    ),
+    path(
+        "alerts/<int:pk>/acknowledge/",
+        views.AIAlertAcknowledgeView.as_view(),
+        name="alert-acknowledge",
+    ),
+    path(
+        "alerts/<int:pk>/resolve/",
+        views.AIAlertResolveView.as_view(),
+        name="alert-resolve",
+    ),
+    path(
+        "alerts/<int:pk>/suppress/",
+        views.AIAlertSuppressView.as_view(),
+        name="alert-suppress",
     ),
 ]
