@@ -125,6 +125,8 @@ urlpatterns = [
     path("api/v1/ai/", include("ai_intelligence.urls")),
     # Phase 19 — Agent SDK foundation
     path("api/v1/agents/", include("agents.urls")),
+    # Phase 19.1 — Property Intelligence
+    path("api/v1/property-intelligence/", include("property_intelligence.urls")),
 ]
 
 if settings.DEBUG:
