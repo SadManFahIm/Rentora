@@ -112,7 +112,7 @@ export default function useRentalAgent(): UseRentalAgentReturn {
           await loadConversation(convos[0].id);
         }
       } catch {
-        // no conversations or unreachable backend - keep the welcome state
+        // no conversations or unreachable backend — keep the welcome state
       }
     })();
     return () => {

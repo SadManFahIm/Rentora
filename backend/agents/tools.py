@@ -255,6 +255,13 @@ def register_builtin_tools() -> None:
     except Exception:
         pass  # rental agent app not installed
 
+    try:
+        from listing_autopilot.apply_tools import register_listing_autopilot_tools
+
+        register_listing_autopilot_tools()
+    except Exception:
+        pass  # listing autopilot app not installed
+
 
 def render_results_json(results: list[dict[str, Any]]) -> str:
     """Compact, safe rendering of a tool result transcript fragment."""

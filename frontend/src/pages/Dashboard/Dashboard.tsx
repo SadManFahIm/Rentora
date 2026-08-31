@@ -30,6 +30,7 @@ import MarketplacePanel from "../../components/MarketplacePanel/MarketplacePanel
 import InsurancePanel from "../../components/InsurancePanel/InsurancePanel";
 import AdminRevenuePanel from "../../components/AdminRevenuePanel/AdminRevenuePanel";
 import AdminAiPanel from "../../components/AdminAiPanel/AdminAiPanel";
+import AutopilotPanel from "../../components/AutopilotPanel/AutopilotPanel";
 import RoomCard from "../../components/RoomCard/RoomCard";
 import RoomModal from "../../components/RoomModal/RoomModal";
 import RoomForm from "../../components/RoomForm/RoomForm";
@@ -613,6 +614,9 @@ export default function Dashboard() {
           <LandlordInsights />
           <div className="mt-6">
             <LandlordAiWidget />
+          </div>
+          <div className="mt-6">
+            <AutopilotPanel />
           </div>
         </>
       )}
