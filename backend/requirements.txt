@@ -11,7 +11,7 @@ channels==4.3.2
 channels_redis==4.3.0
 charset-normalizer==3.5.1
 constantly==23.10.4
-cryptography==50.0.0
+cryptography==50.0.1
 daphne==4.2.3
 dj-rest-auth==7.2.0
 Django==5.2.17
@@ -28,10 +28,10 @@ inflection==0.5.1
 joblib==1.5.3
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
-msgpack==1.2.1
+msgpack==1.2.2
 narwhals==2.24.0
 numpy==2.5.2
-packaging==26.2
+packaging==26.3
 pandas==2.3.3
 pillow==12.3.0
 psycopg2-binary==2.9.12
@@ -49,7 +49,7 @@ reportlab==5.0.0
 requests==2.34.2
 rpds-py==2026.6.3
 scikit-learn==1.9.0
-scipy==1.17.1
+scipy==1.18.1
 sentry-sdk==2.68.0
 service-identity==26.1.0
 six==1.17.0
@@ -64,6 +64,6 @@ uritemplate==4.2.0
 urllib3==2.7.0
 webencodings==0.5.1
 zope.interface==8.5
-ruff==0.16.3
+ruff==0.16.5
 coverage==7.15.4
-webauthn>=2.2
+webauthn>=3.0.0

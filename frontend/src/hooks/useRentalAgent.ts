@@ -66,7 +66,7 @@ function extractErrorMessage(err: unknown): string {
     const raw = anyErr.response?.data?.error ?? anyErr.response?.data?.message ?? anyErr.message;
     if (typeof raw === "string" && raw.trim()) return raw.trim();
   }
-  return "Couldn't reach the agent right now — try again.";
+  return "Couldn't reach the agent right now - try again.";
 }
 
 /**
@@ -129,11 +129,11 @@ export default function useRentalAgent(): UseRentalAgentReturn {
       try {
         run = await getRentalAgentRun(runKey);
       } catch {
-        // transient poll failure — keep waiting; the task may still finish
+        // transient poll failure - keep waiting; the task may still finish
       }
     }
     if (!run) {
-      throw new Error("The agent is taking a while — check back shortly.");
+      throw new Error("The agent is taking a while - check back shortly.");
     }
     return run;
   }, []);
@@ -149,7 +149,7 @@ export default function useRentalAgent(): UseRentalAgentReturn {
         ...prev,
         sending: true,
         error: "",
-        lastAction: "Agent is thinking…",
+        lastAction: "Agent is thinking.",
         messages: [
           ...prev.messages,
           { id: -Date.now(), role: "user", content: clean, created_at: null, cards: [] },
@@ -191,7 +191,7 @@ export default function useRentalAgent(): UseRentalAgentReturn {
       await loadConversation(id);
       setState((prev) => ({
         ...prev,
-        lastAction: `Processed proposal ${proposalKey.slice(0, 8)}…`,
+        lastAction: `Processed proposal ${proposalKey.slice(0, 8)}.`,
       }));
     },
     [loadConversation]
