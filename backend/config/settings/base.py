@@ -114,6 +114,8 @@ INSTALLED_APPS = [
     "property_intelligence",
     # Phase 19.2 — AI Rental Agent (tenant-facing, grounded in real tool data)
     "rental_agent",
+    # Phase 19.3 — AI Listing Autopilot (landlord-side weekly recommendations)
+    "listing_autopilot",
 ]
 
 # ============================================================
@@ -307,6 +309,10 @@ REST_FRAMEWORK = {
         # scope is tighter than copilot — a chatty human is fine, a scripted
         # flood is not.
         "rental_agent": "40/hour",
+        # AI Listing Autopilot reads are cheap and bounded (landlord dashboard);
+        # the only expensive path is approve+apply, caught by the deliberate
+        # ceiling below per-listing actions.
+        "listing_autopilot": "120/hour",
         # Gateway callbacks have no user session (AllowAny/no auth), so they
         # can't use the "user" scope; keyed per-IP to absorb legitimate
         # gateway retries while still capping flood/replay attempts.
@@ -653,6 +659,19 @@ AGENTS_CONTEXT_WINDOW_MESSAGES = int(os.getenv("AGENTS_CONTEXT_WINDOW_MESSAGES",
 # Register debug tools (debug.echo, debug.marker). Forced OFF in production
 # unless explicitly enabled; automatically on under ENVIRONMENT=test or CI.
 AGENTS_DEBUG_TOOLS = os.getenv("AGENTS_DEBUG_TOOLS", "False") == "True"
+
+# ============================================================
+# AI Listing Autopilot (Phase 19.3) — landlord-side weekly recommendations
+# ============================================================
+# Hard switch: when False the weekly Celery task no-ops and the API reports
+# disabled (staged rollout beyond the feature flag itself).
+LISTING_AUTOPILOT_ENABLED = os.getenv("LISTING_AUTOPILOT_ENABLED", "True") == "True"
+# Renew a listing only after this many days without an update, when interest is
+# flat — conservative by default so the autopilot never nudges fresh listings.
+LISTING_AUTOPILOT_STALE_DAYS = int(os.getenv("LISTING_AUTOPILOT_STALE_DAYS", "45"))
+# Optional comma-separated ISO week keys (e.g. "2026-W35,2026-W36") to limit
+# rollout; empty = all weeks run.
+LISTING_AUTOPILOT_ROLLOUT_WEEK_KEYS = os.getenv("LISTING_AUTOPILOT_ROLLOUT_WEEK_KEYS", "")
 
 # ============================================================
 # Chat live translation EN⇄BN (Phase 15, B1) — see chat/translation.py
@@ -1152,6 +1171,13 @@ CELERY_BEAT_SCHEDULE = {
     "expire-agent-proposals": {
         "task": "agents.expire_proposals",
         "schedule": 86400.0,  # daily
+    },
+    # Phase 19.3 — AI Listing Autopilot: weekly analysis + proposal run for
+    # eligible landlord listings (Monday 06:30, after the market report 06:00
+    # so price statistics are fresh).
+    "run-listing-autopilot": {
+        "task": "listing_autopilot.tasks.run_weekly_autopilot",
+        "schedule": crontab(minute=30, hour=6, day_of_week=1),
     },
 }
 
