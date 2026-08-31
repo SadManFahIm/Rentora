@@ -129,6 +129,8 @@ urlpatterns = [
     path("api/v1/property-intelligence/", include("property_intelligence.urls")),
     # Phase 19.2 — AI Rental Agent (tenant chat + own-conversation surfaces)
     path("api/v1/rental/", include("rental_agent.urls")),
+    # Phase 19.3 — AI Listing Autopilot (landlord-side weekly recommendations)
+    path("api/v1/autopilot/", include("listing_autopilot.urls")),
 ]
 
 if settings.DEBUG:

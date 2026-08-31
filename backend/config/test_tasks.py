@@ -11,6 +11,7 @@ class CeleryWiringTests(TestCase):
         import ai_intelligence.tasks  # noqa: F401
         import analytics.tasks  # noqa: F401
         import fraud.tasks  # noqa: F401
+        import listing_autopilot.tasks  # noqa: F401
         import payments.tasks  # noqa: F401
         import pricing.tasks  # noqa: F401
         import rooms.tasks  # noqa: F401
@@ -53,6 +54,8 @@ class CeleryWiringTests(TestCase):
             # Phase 19 — Agent SDK
             "agents.execute_agent_run",
             "agents.expire_proposals",
+            # Phase 19.3 — AI Listing Autopilot
+            "listing_autopilot.tasks.run_weekly_autopilot",
         ]:
             with self.subTest(task=task_name):
                 self.assertIn(task_name, app.tasks)
@@ -96,6 +99,8 @@ class CeleryWiringTests(TestCase):
                 "warm-ai-dashboard-cache",
                 # Phase 19 — Agent SDK
                 "expire-agent-proposals",
+                # Phase 19.3 — AI Listing Autopilot
+                "run-listing-autopilot",
             },
         )
 
