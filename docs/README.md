@@ -7,7 +7,7 @@ Documentation is grouped by purpose so the repo stays navigable as it grows.
 | [`architecture.md`](architecture.md) | System design, data model, flows, deployment |
 | [`api-reference.md`](api-reference.md) | Full endpoint reference + curl examples |
 | [`adr/`](adr/) | Architecture Decision Records (0001, 0002, …) |
-| [`phases/`](phases/) | Per-phase specs — Phase 12…19.2, tier 1–5 upgrades |
+| [`phases/`](phases/) | Per-phase specs — Phase 12…19.3, tier 1–5 upgrades |
 | [`guides/`](guides/) | Feature deep-dives — Copilot, map, PWA, auth, search, payments |
 | [`ops/`](ops/) | Operational runbooks — backup/restore |
 | [`security/`](security/) | Security audit report + production checklist |

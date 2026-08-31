@@ -18,7 +18,7 @@
 ## 📚 Table of Contents
 
 - [Product Overview](#-product-overview)
-- [Changelog — Phase 19.2 · 19.1 · 19.0 · 18.4 · 18.3 · 18.2 · 18.1 · 17](#changelog)
+- [Changelog — Phase 19.3 · 19.2 · 19.1 · 19.0 · 18.4 · 18.3 · 18.2 · 18.1 · 17](#changelog)
 - [What's New in v2.0](#changelog--whats-new-in-v20)
 - [Delivery Roadmap](#-delivery-roadmap)
 - [Features](#-features)
@@ -70,6 +70,17 @@ Full gallery (79 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 ---
 
 ## 🆕 Changelog
+
+**Phase 19.3 — AI Listing Autopilot (landlord-side weekly analyzer)**
+
+- **Weekly autopilot with human review** — a Celery tasks (`run_weekly_autopilot`, Mon 06:30 beat) deterministically analyzes every eligible listing and mints typed, reviewable **proposals** — `TITLE_UPDATE`, `DESCRIPTION_UPDATE`, `AMENITY_UPDATE`, `PHOTO_RECOMMENDATION`, `PRICE_UPDATE`, `LISTING_RENEWAL` — which the landlord approves/rejects individually or in one batch; the AI never invents scores, prices or validity (LLM rewording is limited to grounded title/description drafts) and never self-approves
+- **One new app** (`listing_autopilot`) — `ListingAnalysis.restype` snapshot per (room, week) with `grounding_key` + per-field `stale_checks`; the analysis reuses the listing-quality, property-intelligence, price-engine, AI-vision and draft generator; a `register_listing_autopilot` seeder registers flag `ai.listing_autopilot` (**off by default**) + feature/prompt/agent in the Phase 18 registries for full telemetry and eval attribution
+- **No duplicates, ever** — one analysis per (room, week), no unresolved duplicate proposal per (room, type), idempotent weekly task (beat/double-fire safe), per-room `transaction.atomic` so one failing listing never aborts the run, and replay-safe apply via the Phase 19.0 SDK (`apply_proposal` no-ops on already-applied)
+- **Per-field staleness, not whole-listing** — `stale_checks` are field-wise checksums re-verified in the apply executor against the live DB row, so applying a `PRICE_UPDATE` never invalidates a sibling `TITLE_UPDATE` from the same snapshot; a landlord edit or deleted room after analysis is respected (`stale_grounding` / `room_missing`, never silently clobbered)
+- **Review-then-apply API** — `GET /api/v1/autopilot/overview|proposals|analyses/`, `POST /proposals/<key>/approve|reject/`, `POST /proposals/bulk-approve/` (owner-only, authority checked server-side on both read and write, 120/h throttle, audited via `audit.services.log_action`)
+- **Frontend** — `AutopilotPanel` inside the Dashboard **Insights** tab (landlord-only): weekly summary stats, status filter chips, single/bulk approve & apply, reject-with-reason, collapsible weekly snapshots, feature-off banner; backed by `useListingAutopilot` + `listingAutopilotService`
+- **One batched notification per landlord** — the weekly task builds a `landlord_digest` and sends exactly one `ai_alert` per landlord per week (never per-listing), only when there are recommendations
+- **Engineering** — 24 new tests + `config/test_tasks` beat guards, ruff-clean, full backend + frontend suites green. See [`docs/phases/phase-19-3-listing-autopilot.md`](docs/phases/phase-19-3-listing-autopilot.md)
 
 **Phase 19.2 — AI Rental Agent (tenant-facing agentic chat)**
 
@@ -1408,6 +1419,7 @@ Every shipped phase with its captured screenshots (all in `docs/screenshots/`):
 | 18 | AI Intelligence (dashboard + alerts) | [`phase18-ai-dashboard.png`](docs/screenshots/phase18-ai-dashboard.png) |
 | 19.1 | Property Intelligence (admin inspector) | [`phase19-1-property-intelligence.png`](docs/screenshots/phase19-1-property-intelligence.png) |
 | 19.2 | AI Rental Agent (grounded chat + bookmark consent) | [`phase19-2-rental-agent.png`](docs/screenshots/phase19-2-rental-agent.png) |
+| 19.3 | AI Listing Autopilot (landlord weekly recommendations panel) | [`phase-19-3-autopilot-panel.png`](docs/screenshots/phase-19-3-autopilot-panel.png) |
 
 Below, the detailed phase-by-phase screenshots.
 
@@ -1615,6 +1627,10 @@ Below, the detailed phase-by-phase screenshots.
 **Phase 19.2 — AI Rental Agent (tenant-facing grounded chat)** — Bengali-first agent inside the Copilot AI Tools: a real search turn ("মিরপুরে ২২০০০ টাকার মধ্যে একটা স্টুডিও রুম দেখাও") returns **grounded room cards** (Premium Studio · Cozy Studio), and the bookmark request sits in an amber **"await approval"** consent row the tenant reviews before the agent applies:
 
 <img width="1440" alt="Phase 19.2 AI Rental Agent" src="docs/screenshots/phase19-2-rental-agent.png" />
+
+**Phase 19.3 — AI Listing Autopilot (landlord weekly recommendations panel)** — in the Dashboard **Insights** tab the landlord sees the weekly autopilot summary (pending / applied / scored), typed proposals (title, description, amenities, photos, price, renewal) with per-card reject-with-reason and single or bulk "Approve & apply", plus collapsible weekly listing-analysis snapshots:
+
+<img width="1440" alt="Phase 19.3 AI Listing Autopilot" src="docs/screenshots/phase-19-3-autopilot-panel.png" />
 
 **Home & Listing Pages:**
 

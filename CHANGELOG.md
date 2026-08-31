@@ -6,6 +6,14 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 
 ## [Unreleased]
 
+## 2026-08-31
+
+### Phase 19.3 — AI Listing Autopilot
+- Weekly Celery analyzer (`listing_autopilot`) mints typed, reviewable proposals (TITLE/DESCRIPTION/AMENITY/PHOTO/PRICE/RENEWAL) over eligible listings; landlord approves/rejects individually or bulk through `/api/v1/autopilot/*` (owner-only, audited).
+- Deterministic analysis on top of the Phase 19.1/12.10/14 engines (LLM rewording limited to grounded title/description drafts); per-field `stale_checks` so sibling proposals stay independently applicable after apply.
+- Idempotency throughout: one analysis per (room, week), no unresolved duplicate proposal per (room, type), replay-safe apply, per-room transaction + failure isolation, one batched notification per landlord.
+- Frontend AutopilotPanel in Dashboard Insights (landlord-only); seeder registers flag `ai.listing_autopilot` (off by default) in the Phase 18 registries.
+
 ## 2026-08-30
 
 ### Workflow, docs & security
