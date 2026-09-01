@@ -1,14 +1,11 @@
 import { useState } from "react";
 import { Bot, ClipboardCheck, HandCoins, LifeBuoy, Loader2, Wand2 } from "lucide-react";
 import { sendSupportQuestion, type SupportAnswer } from "../../services/copilotService";
-import tier4Service, {
-  type AgreementCheck,
-  type NegotiationDraft,
-  type RentalAdvice,
-} from "../../services/tier4Service";
+import tier4Service, { type AgreementCheck, type RentalAdvice } from "../../services/tier4Service";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import NegotiationPanel from "../NegotiationPanel/NegotiationPanel";
 import RentalAgentPanel from "../RentalAgentPanel/RentalAgentPanel";
 
 type Tool = "rental" | "advisor" | "agreement" | "negotiate" | "support";
@@ -29,14 +26,10 @@ const TOOLS: { id: Tool; label: string; icon: typeof Wand2 }[] = [
 
 /**
  * Tier-4 AI tools — deterministic, data-grounded helpers inside the Copilot
- * widget: budget-based rental advice, agreement clause review, and a
- * negotiation counter-offer draft (EN + BN).
+ * widget: budget-based rental advice, agreement clause review, and the full
+ * AI Negotiation Agent (Phase 19.4) for a listing.
  */
-export default function AiToolsPanel({
-  listingId,
-  listingPrice,
-  initialTool = "advisor",
-}: AiToolsPanelProps) {
+export default function AiToolsPanel({ listingId, initialTool = "advisor" }: AiToolsPanelProps) {
   const [tool, setTool] = useState<Tool>(initialTool);
 
   return (
@@ -62,13 +55,12 @@ export default function AiToolsPanel({
       <div className="min-h-0 flex-1">
         {tool === "rental" ? (
           <RentalAgentPanel />
+        ) : tool === "negotiate" ? (
+          <NegotiationPanel roomId={listingId} />
         ) : (
           <div className="flex-1 overflow-y-auto px-3 py-3">
             {tool === "advisor" && <AdvisorTab />}
             {tool === "agreement" && <AgreementTab />}
-            {tool === "negotiate" && (
-              <NegotiateTab listingId={listingId} listingPrice={listingPrice} />
-            )}
             {tool === "support" && <SupportTab />}
           </div>
         )}
@@ -333,97 +325,6 @@ function AgreementTab() {
 
 /* ------------------------------- Negotiation ------------------------------ */
 
-function NegotiateTab({ listingId, listingPrice }: AiToolsPanelProps) {
-  const [target, setTarget] = useState("");
-  const [role, setRole] = useState<"tenant" | "landlord">("tenant");
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<NegotiationDraft | null>(null);
-  const [error, setError] = useState("");
-
-  if (!listingId) {
-    return (
-      <p className="text-xs text-gray-500">
-        Open a room&apos;s details and tap <b>“Draft negotiation”</b> to use the negotiation
-        assistant.
-      </p>
-    );
-  }
-
-  const run = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      setResult(
-        await tier4Service.negotiate({
-          listing_id: listingId,
-          target_price: target ? Number(target) : null,
-          role,
-        })
-      );
-    } catch {
-      setError("Couldn't draft a message right now.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="space-y-3 text-sm">
-      <p className="font-semibold text-foreground">
-        Negotiate this listing{listingPrice ? ` (৳${listingPrice.toLocaleString()}/mo)` : ""}
-      </p>
-      <div className="flex gap-2">
-        <Input
-          type="number"
-          min={0}
-          placeholder="Target price (৳)"
-          value={target}
-          onChange={(e) => setTarget(e.target.value)}
-          aria-label="Target price in taka"
-        />
-        <select
-          value={role}
-          onChange={(e) => setRole(e.target.value as "tenant" | "landlord")}
-          className="rounded-lg border border-gray-300 bg-white px-2 text-xs dark:border-gray-600 dark:bg-gray-900"
-          aria-label="Your role"
-        >
-          <option value="tenant">Tenant</option>
-          <option value="landlord">Landlord</option>
-        </select>
-      </div>
-      <Button type="button" size="sm" onClick={run} disabled={loading}>
-        {loading ? <Loader2 className="size-3.5 animate-spin" /> : "Draft message"}
-      </Button>
-      {error && <p className="text-xs text-rose-600">{error}</p>}
-      {result && (
-        <div className="space-y-2 text-xs">
-          <div className="rounded-lg bg-gray-50 px-2.5 py-2 dark:bg-gray-800/60">
-            <div className="mb-1 flex flex-wrap gap-1.5">
-              <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 font-semibold text-indigo-600 dark:text-indigo-400">
-                Suggested: ৳{result.suggested_offer.toLocaleString()}
-              </span>
-              {result.market_median != null && (
-                <span className="rounded-full bg-gray-200/60 px-2 py-0.5 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
-                  Area median: ৳{result.market_median.toLocaleString()}
-                </span>
-              )}
-            </div>
-            <p className="text-gray-600 dark:text-gray-400">{result.reason}</p>
-          </div>
-          <div className="rounded-lg border border-gray-100 p-2.5 dark:border-gray-800">
-            <b className="text-foreground">English draft</b>
-            <p className="mt-1 leading-relaxed text-gray-700 dark:text-gray-300">
-              {result.draft_en}
-            </p>
-          </div>
-          <div className="rounded-lg border border-gray-100 p-2.5 dark:border-gray-800">
-            <b className="text-foreground">বাংলা ড্রাফট</b>
-            <p className="mt-1 leading-relaxed text-gray-700 dark:text-gray-300">
-              {result.draft_bn}
-            </p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+/* The `negotiate` tool is handled by NegotiationPanel (full height) — see the
+ * render branch above. The legacy deterministic counter-offer draft was
+ * superseded by the consent-gated AI Negotiation Agent in Phase 19.4. */
