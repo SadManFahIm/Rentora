@@ -262,6 +262,13 @@ def register_builtin_tools() -> None:
     except Exception:
         pass  # listing autopilot app not installed
 
+    try:
+        from negotiation_agent.tools import register_negotiation_agent_tools
+
+        register_negotiation_agent_tools()
+    except Exception:
+        pass  # negotiation agent app not installed
+
 
 def render_results_json(results: list[dict[str, Any]]) -> str:
     """Compact, safe rendering of a tool result transcript fragment."""

@@ -1,4 +1,4 @@
-import { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from "axios";
+import axios, { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from "axios";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, clearTokens, setTokens, ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from "./api";
 
@@ -40,10 +40,12 @@ describe("api 401 handling — anonymous vs. session", () => {
       location: { ...window.location, assign: assignSpy, pathname: "/rooms" },
     });
     force401();
+    vi.spyOn(axios, "post").mockRejectedValue(new Error("No network in tests"));
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     delete api.defaults.adapter;
     clearTokens();
   });

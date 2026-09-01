@@ -55,12 +55,14 @@ import { cn } from "../../lib/utils";
 import BookingListItem from "./BookingListItem";
 import TwoFactorCard from "./TwoFactorCard";
 import ListingsTab from "./ListingsTab";
+import NegotiationPanel from "../../components/NegotiationPanel/NegotiationPanel";
 
 type DashboardTab =
   | "overview"
   | "listings"
   | "bookings"
   | "payments"
+  | "negotiations"
   | "wishlist"
   | "fraud"
   | "kyc"
@@ -79,6 +81,7 @@ const TABS: DashboardTab[] = [
   "listings",
   "bookings",
   "payments",
+  "negotiations",
   "wishlist",
   "fraud",
   "kyc",
@@ -638,6 +641,12 @@ export default function Dashboard() {
       {activeTab === "revenue" && isAdmin && <AdminRevenuePanel />}
 
       {activeTab === "ai" && isAdmin && <AdminAiPanel />}
+
+      {activeTab === "negotiations" && (
+        <div className="h-[70vh] min-h-[480px]">
+          <NegotiationPanel />
+        </div>
+      )}
 
       {selectedRoom && <RoomModal room={selectedRoom} onClose={() => setSelectedRoom(null)} />}
 
