@@ -198,7 +198,7 @@ jobs:
           mkdir -p ../frontend/src/generated
           python manage.py spectacular --file ../frontend/src/generated/openapi.json --format openapi-json 2>/dev/null
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -225,7 +225,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -273,7 +273,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -397,7 +397,7 @@ jobs:
           pip install -r requirements.txt
         working-directory: backend
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
