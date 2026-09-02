@@ -1,5 +1,15 @@
 import { useState } from "react";
-import { Bot, ClipboardCheck, HandCoins, LifeBuoy, Loader2, Wand2 } from "lucide-react";
+import {
+  Bot,
+  ClipboardCheck,
+  HandCoins,
+  LifeBuoy,
+  Loader2,
+  Wand2,
+  Mic,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import { sendSupportQuestion, type SupportAnswer } from "../../services/copilotService";
 import tier4Service, { type AgreementCheck, type RentalAdvice } from "../../services/tier4Service";
 import { cn } from "../../lib/utils";
@@ -7,8 +17,9 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import NegotiationPanel from "../NegotiationPanel/NegotiationPanel";
 import RentalAgentPanel from "../RentalAgentPanel/RentalAgentPanel";
+import useVoiceAgent from "../../hooks/useVoiceAgent";
 
-type Tool = "rental" | "advisor" | "agreement" | "negotiate" | "support";
+type Tool = "rental" | "advisor" | "agreement" | "negotiate" | "support" | "voice";
 
 interface AiToolsPanelProps {
   listingId?: number;
@@ -16,21 +27,29 @@ interface AiToolsPanelProps {
   initialTool?: Tool;
 }
 
-const TOOLS: { id: Tool; label: string; icon: typeof Wand2 }[] = [
+const TOOLS: { id: Tool; label: string; icon: typeof Bot }[] = [
   { id: "rental", label: "Rental Agent", icon: Bot },
   { id: "advisor", label: "Advisor", icon: Wand2 },
   { id: "agreement", label: "Agreement", icon: ClipboardCheck },
   { id: "negotiate", label: "Negotiation", icon: HandCoins },
   { id: "support", label: "Support", icon: LifeBuoy },
+  { id: "voice", label: "Voice", icon: Mic },
 ];
 
 /**
  * Tier-4 AI tools — deterministic, data-grounded helpers inside the Copilot
- * widget: budget-based rental advice, agreement clause review, and the full
- * AI Negotiation Agent (Phase 19.4) for a listing.
+ * widget: budget-based rental advice, agreement clause review, the full
+ * AI Negotiation Agent (Phase 19.4), and the AI Voice Agent (Phase 19.5).
  */
 export default function AiToolsPanel({ listingId, initialTool = "advisor" }: AiToolsPanelProps) {
   const [tool, setTool] = useState<Tool>(initialTool);
+
+  // Voice agent hook — ties STT → Rental Agent SDK → TTS
+  const voice = useVoiceAgent({
+    sttLang: "en-bn",
+    ttsLang: "en",
+    roomId: listingId != null ? Number(listingId) : undefined,
+  });
 
   return (
     <div className="flex h-full flex-col">
@@ -57,6 +76,8 @@ export default function AiToolsPanel({ listingId, initialTool = "advisor" }: AiT
           <RentalAgentPanel />
         ) : tool === "negotiate" ? (
           <NegotiationPanel roomId={listingId} />
+        ) : tool === "voice" ? (
+          <VoiceModePanel voice={voice} />
         ) : (
           <div className="flex-1 overflow-y-auto px-3 py-3">
             {tool === "advisor" && <AdvisorTab />}
@@ -64,6 +85,171 @@ export default function AiToolsPanel({ listingId, initialTool = "advisor" }: AiT
             {tool === "support" && <SupportTab />}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------- Voice Mode ------------------------------- */
+
+function VoiceModePanel({ voice }: { voice: ReturnType<typeof useVoiceAgent> }) {
+  const [showTranscript, setShowTranscript] = useState(false);
+
+  const toggleTranscript = () => setShowTranscript((v) => !v);
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Voice control bar */}
+      <div className="flex items-center gap-2 p-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+        <Button
+          type="button"
+          size="icon"
+          onClick={voice.toggleVoice}
+          disabled={voice.state === "processing" || voice.state === "speaking"}
+          className={cn(
+            "rounded-lg p-2",
+            voice.state === "listening"
+              ? "bg-red-500 text-white shadow-lg"
+              : voice.state === "processing"
+                ? "bg-yellow-500 text-black"
+                : voice.state === "speaking"
+                  ? "bg-blue-500 text-white"
+                  : "bg-gray-200 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+          )}
+        >
+          {voice.state === "listening" ? (
+            <VolumeX className="size-4" />
+          ) : voice.state === "processing" ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : voice.state === "speaking" ? (
+            <Volume2 className="size-4" />
+          ) : (
+            <Mic className="size-4" />
+          )}
+        </Button>
+
+        <span className="text-sm text-foreground">
+          {voice.state === "ready"
+            ? "Tap to speak"
+            : voice.state === "listening"
+              ? "Listening... 🎙"
+              : voice.state === "processing"
+                ? "Agent is thinking..."
+                : voice.state === "speaking"
+                  ? "Speaking..."
+                  : voice.state === "error"
+                    ? "Error — try again"
+                    : "Ready"}
+        </span>
+
+        {showTranscript && (
+          <Button
+            type="button"
+            size="icon"
+            onClick={toggleTranscript}
+            className="ml-2 text-[10px] p-1"
+          >
+            {voice.transcript ? "Hide transcript" : "Show transcript"}
+          </Button>
+        )}
+      </div>
+
+      {/* Transcript area (optional) */}
+      {showTranscript && (
+        <div className="p-3 text-xs text-gray-500 dark:text-gray-300 border-t border-gray-200 dark:border-gray-700 dark:bg-gray-900">
+          <div className="mb-1 font-medium text-foreground">Transcript</div>
+          <p className="whitespace-pre-wrap max-h-40 overflow-y-auto">
+            {voice.transcript || "(no transcript yet)"}
+          </p>
+          {voice.transcript && (
+            <div className="mt-2 text-[10px] text-gray-400">
+              {voice.isGrounded ? "(grounded response)" : "(unverified)"}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Processing / response area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Assistant response */}
+        {voice.response && (
+          <div
+            className={cn(
+              "max-w-[90%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed margin-auto",
+              voice.isGrounded
+                ? "bg-emerald-500/10 text-emerald-700"
+                : "bg-amber-500/10 text-amber-700"
+            )}
+          >
+            {voice.isGrounded ? (
+              <p className="whitespace-pre-line">{voice.response}</p>
+            ) : (
+              <p className="whitespace-pre-line">{voice.response}</p>
+            )}
+          </div>
+        )}
+
+        {/* TTS speak button (visible when we have a grounded response) */}
+        {voice.response && voice.isGrounded && (
+          <Button
+            type="button"
+            size="sm"
+            onClick={voice.speakResponse}
+            className="mt-2 w-full text-[11px] py-2"
+          >
+            {voice.ttsSupported ? "🔊 Speak response" : "📖 Show text (TTS unavailable)"}
+          </Button>
+        )}
+
+        {/* Error state */}
+        {voice.state === "error" && (
+          <p className="text-xs text-rose-600 mt-2">
+            {voice.response || "Voice error — try again"}
+          </p>
+        )}
+      </div>
+
+      {/* Footer with examples */}
+      <div className="p-3 text-xs text-gray-400 border-t border-gray-200 dark:border-gray-700 dark:bg-gray-900">
+        <div className="font-medium text-foreground">Examples</div>
+        <div className="mt-1 space-y-1">
+          <button
+            type="button"
+            onClick={() => {
+              voice.toggleVoice();
+            }}
+            className="rounded border border-gray-300 px-2 py-1 text-[10px] hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            "Uttara-te 15 hazar er moddhe furnished room dekhao"
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              voice.toggleVoice();
+            }}
+            className="rounded border border-gray-300 px-2 py-1 text-[10px] hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            "Ei room tar details bolo"
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              voice.toggleVoice();
+            }}
+            className="rounded border border-gray-300 px-2 py-1 text-[10px] hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            "Ei room theke Gulshan jete kemon?"
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              voice.toggleVoice();
+            }}
+            className="rounded border border-gray-300 px-2 py-1 text-[10px] hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            "Ei room tar rent market er tulonay kemon?"
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -117,7 +303,7 @@ function SupportTab() {
               "rounded-lg px-2.5 py-2 font-semibold",
               result.grounded
                 ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                : "bg-amber-500/10 text-amber-700 dark:text-amber-700"
             )}
           >
             {result.grounded ? result.title : `${result.title} (no exact match)`}
@@ -155,7 +341,7 @@ function SupportTab() {
   );
 }
 
-/* ---------------------------------- Advisor ------------------------------- */
+/* -------------------------------- Advisor ------------------------------- */
 
 function AdvisorTab() {
   const [budget, setBudget] = useState("");
@@ -209,9 +395,10 @@ function AdvisorTab() {
           className="mt-2"
           aria-label="Optional monthly income in taka"
         />
+
+        {error && <p className="text-xs text-rose-600">{error}</p>}
       </div>
 
-      {error && <p className="text-xs text-rose-600">{error}</p>}
       {result && (
         <div className="space-y-2">
           {result.affordability.ratio != null && (
@@ -293,8 +480,8 @@ function AgreementTab() {
             className={cn(
               "rounded-lg px-2.5 py-2 font-semibold",
               result.verdict === "review"
-                ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                ? "bg-amber-500/10 text-amber-700 dark:text-amber-700"
+                : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-700"
             )}
           >
             {result.verdict === "review"
@@ -322,9 +509,3 @@ function AgreementTab() {
     </div>
   );
 }
-
-/* ------------------------------- Negotiation ------------------------------ */
-
-/* The `negotiate` tool is handled by NegotiationPanel (full height) — see the
- * render branch above. The legacy deterministic counter-offer draft was
- * superseded by the consent-gated AI Negotiation Agent in Phase 19.4. */
