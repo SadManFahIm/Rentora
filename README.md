@@ -18,7 +18,7 @@
 ## 📚 Table of Contents
 
 - [Product Overview](#-product-overview)
-- [Changelog — Phase 19.3 · 19.2 · 19.1 · 19.0 · 18.4 · 18.3 · 18.2 · 18.1 · 17](#changelog)
+- [Changelog — Phase 19.4 · 19.3 · 19.2 · 19.1 · 19.0 · 18.4 · 18.3 · 18.2 · 18.1 · 17](#changelog)
 - [What's New in v2.0](#changelog--whats-new-in-v20)
 - [Delivery Roadmap](#-delivery-roadmap)
 - [Features](#-features)
@@ -70,6 +70,16 @@ Full gallery (79 screenshots, light + dark, desktop + mobile) in [🖼️ Screen
 ---
 
 ## 🆕 Changelog
+
+**Phase 19.4 — AI Negotiation Agent (bidirectional rent negotiation)**
+
+- **Bidirectional, peer-aware** — a negotiation agent in a new `negotiation_agent` app: 9 server-enforced states (`initiated` → `active`/`offer_pending`/`counter_offer_pending` → `accepted` / `rejected` / `expired` / `cancelled` / `closed`), one-to-one conversation model per party (`tenant_conversation` / `landlord_conversation`) backed by real peer `ChatRoom`s, unique `(room, tenant, landlord)` constraint, and idempotent seed via `register_negotiation_agent`
+- **Consent before every binding action** — every STATE_CHANGING tool creates a human-review proposal the user approves in chat; `message.send` requires *its own* separate approval (a draft never reaches the peer unapproved); HIGH_RISK accept/finalize need explicit in-chat approval and **never** book or create a payment/deposit — finalize is a booking hand-off only
+- **Reuses existing tools, no duplication** — `room.by_id`, `price.compare`, `property.intelligence` plus **8 negotiation-specific tools**: `negotiation.context` (READ_ONLY), `negotiation.history` (READ_ONLY), `negotiation.set_boundary` / `negotiation.create_offer` / `negotiation.counter_offer` / `message.send` (STATE_CHANGING), `negotiation.accept` / `negotiation.finalize` (HIGH_RISK); feature flag `ai.negotiation_agent` (disabled by default)
+- **Peer isolation** — each party sees only their own conversation history, event timeline and private boundaries; the negotiation context tool **never** reveals the counterparty's constraints; agent grounded strictly in the acting party's data
+- **Frontend** — `negotiationAgentService.ts` + `useNegotiationAgent` hook (conversation resume via `resolveBoundConversation`, 1500ms run polling, send/approve/reject/withdraw/rejectOffer) + `NegotiationPanel` (summary card, offer timeline with withdraw/reject/accept-via-chat buttons, consent proposal cards, suggestion chips, negotiation rail, chat input); Dashboard **negotiations** tab (all roles, deep-link `/dashboard?tab=negotiations`); AiToolsPanel `negotiate` tab replaced with contextual `NegotiationPanel`
+- **API** — `POST /api/v1/negotiation/chat/` (creates + continues, async run with eager fallback), `GET /negotiations/` + `GET /negotiations/<key>/`, `GET /conversations/` + `GET /conversations/<key>/` (enriched transcript), `GET /runs/<key>/`, `POST /consent/<key>/approve|reject/`, `POST /negotiations/<key>/reject|cancel/`, `POST /offers/<key>/reject|withdraw/` — auth + 120/h write + 300/h read throttle
+- **Engineering** — 53 backend tests (10 classes, all green) + 27 frontend tests (3 files, 449 total green), ruff-clean, TS strict + ESLint + Prettier clean, production build clean. See [`docs/phases/phase-19-4-ai-negotiation-agent.md`](docs/phases/phase-19-4-ai-negotiation-agent.md)
 
 **Phase 19.3 — AI Listing Autopilot (landlord-side weekly analyzer)**
 

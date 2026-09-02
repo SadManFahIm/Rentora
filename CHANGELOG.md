@@ -6,6 +6,15 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 
 ## [Unreleased]
 
+## 2026-09-01
+
+### Phase 19.4 — AI Negotiation Agent (bidirectional rent negotiation)
+- Bidirectional, peer-aware negotiation agent in a new `negotiation_agent` app: 9 server-enforced negotiation states, one-to-one conversation model per party (tenant_conversation / landlord_conversation) backed by real peer ChatRooms, unique `(room, tenant, landlord)` constraint, consent-gated offer lifecycle (draft → send approval → sent → accepted → finalize).
+- 8 negotiation-specific tools across 3 tiers — READ_ONLY (`negotiation.context`, `negotiation.history`), STATE_CHANGING (`negotiation.set_boundary`, `negotiation.create_offer`, `negotiation.counter_offer`, `message.send`), HIGH_RISK (`negotiation.accept`, `negotiation.finalize`) — reusing `room.by_id`/`price.compare`/`property.intelligence`; AI never books or makes payments autonomously.
+- Frontend: `negotiationAgentService.ts` + `useNegotiationAgent` hook (conversation resume via `resolveBoundConversation`, 1500ms polling, run state, send/approve/reject/withdraw/rejectOffer actions) + `NegotiationPanel` (summary card with offers timeline, consent cards, suggestion chips, negotiation rail, chat input); Dashboard "negotiations" tab (all roles) + AiToolsPanel "negotiate" tab contextual replacement.
+- Seeding: `register_negotiation_agent` (idempotent, disabled by default), registers flag `ai.negotiation_agent` + prompt + agent in Phase 18 registries.
+- 53 backend tests (10 classes, all green) + 27 frontend tests (3 files, 449 total green); ruff-clean, TS strict + ESLint + Prettier clean, production build clean. Fixed pre-existing flaky `api.test.ts` timeout; exported `UseNegotiationAgentReturn` type.
+
 ## 2026-08-31
 
 ### Phase 19.3 — AI Listing Autopilot

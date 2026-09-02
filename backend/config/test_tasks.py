@@ -101,6 +101,8 @@ class CeleryWiringTests(TestCase):
                 "expire-agent-proposals",
                 # Phase 19.3 — AI Listing Autopilot
                 "run-listing-autopilot",
+                # Phase 19.4 — AI Negotiation Agent
+                "expire-negotiations",
             },
         )
 
