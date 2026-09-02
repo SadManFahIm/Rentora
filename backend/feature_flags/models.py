@@ -121,6 +121,11 @@ def rollout_for(key: str, user=None, request=None, anonymous_id: str | None = No
     return flag.rollout_percentage
 
 
+VOICE_RENTAL_AGENT = "ai.voice_rental_agent"
+
+FEATURE_IDS: list[str] = [VOICE_RENTAL_AGENT]
+
+
 def invalidate_cache(key: str | None = None) -> None:
     """Drop the cached flag(s). All flags when ``key`` is None."""
     try:

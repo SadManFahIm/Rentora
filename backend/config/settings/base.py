@@ -116,6 +116,8 @@ INSTALLED_APPS = [
     "rental_agent",
     # Phase 19.3 — AI Listing Autopilot (landlord-side weekly recommendations)
     "listing_autopilot",
+    # Phase 19.4 — AI Negotiation Agent (tenant↔landlord price negotiation)
+    "negotiation_agent",
 ]
 
 # ============================================================
@@ -313,6 +315,12 @@ REST_FRAMEWORK = {
         # the only expensive path is approve+apply, caught by the deliberate
         # ceiling below per-listing actions.
         "listing_autopilot": "120/hour",
+        # AI Negotiation Agent turns run the full LLM + tool loop (same league
+        # as the rental agent) — tight dedicated scope.
+        "negotiation": "40/hour",
+        # Negotiation participant actions (consent, offer reject/withdraw,
+        # negotiate reject/cancel) are cheap and bounded.
+        "negotiation_action": "120/hour",
         # Gateway callbacks have no user session (AllowAny/no auth), so they
         # can't use the "user" scope; keyed per-IP to absorb legitimate
         # gateway retries while still capping flood/replay attempts.
@@ -672,6 +680,27 @@ LISTING_AUTOPILOT_STALE_DAYS = int(os.getenv("LISTING_AUTOPILOT_STALE_DAYS", "45
 # Optional comma-separated ISO week keys (e.g. "2026-W35,2026-W36") to limit
 # rollout; empty = all weeks run.
 LISTING_AUTOPILOT_ROLLOUT_WEEK_KEYS = os.getenv("LISTING_AUTOPILOT_ROLLOUT_WEEK_KEYS", "")
+
+# ============================================================
+# AI Negotiation Agent (Phase 19.4) — tenant↔landlord negotiation
+# ============================================================
+# Hard switch: when False the negotiation tools no-op and nothing can be
+# drafted/sent (staged rollout beyond the feature flag itself).
+NEGOTIATION_AGENT_ENABLED = os.getenv("NEGOTIATION_AGENT_ENABLED", "True") == "True"
+# Sent offers the other side must respond to before this many days.
+NEGOTIATION_AGENT_OFFER_TTL_DAYS = int(os.getenv("NEGOTIATION_AGENT_OFFER_TTL_DAYS", "7"))
+# An open negotiation expires after this many days without a sent offer.
+NEGOTIATION_AGENT_NEGOTIATION_TTL_DAYS = int(
+    os.getenv("NEGOTIATION_AGENT_NEGOTIATION_TTL_DAYS", "30")
+)
+# Peer chat tail surfaced to the agent for grounded drafting context.
+NEGOTIATION_AGENT_CONTEXT_MESSAGES = int(os.getenv("NEGOTIATION_AGENT_CONTEXT_MESSAGES", "20"))
+# Spam guard: max non-terminal offers per negotiation per party.
+NEGOTIATION_AGENT_MAX_OPEN_OFFERS = int(os.getenv("NEGOTIATION_AGENT_MAX_OPEN_OFFERS", "5"))
+# Offer amount bounds (BDT/month).
+NEGOTIATION_AGENT_MIN_AMOUNT = int(os.getenv("NEGOTIATION_AGENT_MIN_AMOUNT", "1"))
+NEGOTIATION_AGENT_MAX_AMOUNT = int(os.getenv("NEGOTIATION_AGENT_MAX_AMOUNT", "5000000"))
+NEGOTIATION_AGENT_MAX_MESSAGE_LEN = int(os.getenv("NEGOTIATION_AGENT_MAX_MESSAGE_LEN", "2000"))
 
 # ============================================================
 # Chat live translation EN⇄BN (Phase 15, B1) — see chat/translation.py
@@ -1178,6 +1207,12 @@ CELERY_BEAT_SCHEDULE = {
     "run-listing-autopilot": {
         "task": "listing_autopilot.tasks.run_weekly_autopilot",
         "schedule": crontab(minute=30, hour=6, day_of_week=1),
+    },
+    # Phase 19.4 — AI Negotiation Agent: expire stale sent offers and dormant
+    # open negotiations daily (cheap, idempotent; guards the state machine).
+    "expire-negotiations": {
+        "task": "negotiation_agent.expire_negotiations",
+        "schedule": 86400.0,  # daily
     },
 }
 
