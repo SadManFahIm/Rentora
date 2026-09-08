@@ -59,7 +59,7 @@ const redirectToAuth = (): void => {
 // await the same promise instead of each firing their own refresh call.
 let refreshPromise: Promise<string> | null = null;
 
-async function refreshAccessToken(): Promise<string> {
+export async function refreshAccessToken(): Promise<string> {
   const refresh = getRefreshToken();
   if (!refresh) throw new Error("No refresh token");
 

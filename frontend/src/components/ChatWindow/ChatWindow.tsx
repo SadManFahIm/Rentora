@@ -395,7 +395,15 @@ export default function ChatWindow() {
   }, [selectedRoomId]);
 
   const wsPath = selectedRoomId != null ? `/ws/chat/${selectedRoomId}/` : null;
-  const { sendMessage, lastMessage, isConnected } = useWebSocket<ChatWsEvent>(wsPath);
+  const { sendMessage, lastMessage, isConnected } = useWebSocket<ChatWsEvent>(wsPath, {
+    onError: ({ type }) => {
+      if (type === "auth_expired") {
+        toast.error("Your session expired — please sign in again.");
+      } else if (type === "forbidden") {
+        toast.error("You can't access this conversation.");
+      }
+    },
+  });
 
   useEffect(() => {
     if (!lastMessage) return;
@@ -475,8 +483,14 @@ export default function ChatWindow() {
     if (!content || !selectedRoomId) return;
     if (myTypingStopTimer.current) clearTimeout(myTypingStopTimer.current);
     sendMessage({ type: "typing", is_typing: false });
-    sendMessage({ type: "message", content });
-    setInput("");
+    const sent = sendMessage({ type: "message", content });
+    // Only clear the draft when the message actually went out — otherwise a
+    // dead socket would silently eat the user's text.
+    if (sent) {
+      setInput("");
+    } else {
+      toast.error("You're offline — your message wasn't sent.");
+    }
   };
 
   // ---- Message edit / delete (Tier-1 quick win) ----
@@ -544,12 +558,15 @@ export default function ChatWindow() {
     if (!file || !selectedRoomId) return;
     try {
       const { fileUrl, messageType } = await uploadFile.mutateAsync(file);
-      sendMessage({
+      const sent = sendMessage({
         type: "message",
         content: file.name,
         message_type: messageType,
         file_url: fileUrl,
       });
+      if (!sent) {
+        toast.error("You're offline — the file wasn't sent.");
+      }
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
