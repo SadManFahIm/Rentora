@@ -16,6 +16,7 @@ import json
 from typing import Any
 
 from channels.generic.websocket import AsyncWebsocketConsumer
+from django.utils import timezone
 
 from .utils import notification_group_name
 
@@ -41,9 +42,25 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         if getattr(self, "group_name", None):
             await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
-    # No receive() override: this consumer only ever pushes to the client, it
-    # never expects inbound frames (AsyncWebsocketConsumer's default receive()
-    # is a no-op, which is exactly what we want here).
+    async def receive(self, text_data: str | None = None, bytes_data=None) -> None:
+        """Server-push socket, but still answers heartbeat pings.
+
+        The browser WebSocket API never surfaces protocol pings to JS (the
+        runtime answers them silently), so the shared ``useWebSocket`` hook
+        sends ``{"type": "ping"}`` and relies on the ``{"type": "pong"}`` reply
+        to detect a half-open connection. Anything else is ignored — this
+        socket has no meaningful inbound payloads.
+        """
+        if not text_data:
+            return
+        try:
+            data = json.loads(text_data)
+        except json.JSONDecodeError:
+            return
+        if data.get("type") == "ping":
+            await self.send(
+                text_data=json.dumps({"type": "pong", "server_time": timezone.now().isoformat()})
+            )
 
     async def notification(self, event: dict[str, Any]) -> None:
         """Group handler → forward a pushed notification to this client."""

@@ -51,7 +51,7 @@ class FeatureFlag(models.Model):
     def applies_to_environment(self) -> bool:
         if not self.environments:
             return True
-        env = getattr(settings, "ENV_NAME", "dev")
+        env = getattr(settings, "ENVIRONMENT", "dev")
         return env in self.environments
 
     def applies_to_user(self, user) -> bool:

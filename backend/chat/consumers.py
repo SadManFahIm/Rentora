@@ -10,6 +10,8 @@ Inbound frames are dispatched by their ``type``:
 - ``"typing"`` — ephemeral typing-indicator broadcast, never persisted.
 - ``"mark_read"`` — bump the caller's ``last_read_at`` and broadcast a read
   receipt.
+- ``"ping"`` — application-level heartbeat; replies ``{"type": "pong"}`` so
+  clients can detect half-open connections.
 """
 
 from __future__ import annotations
@@ -109,6 +111,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             "message": self._handle_message,
             "typing": self._handle_typing,
             "mark_read": self._handle_mark_read,
+            "ping": self._handle_ping,
         }.get(event_type)
 
         if handler is None:
@@ -155,6 +158,17 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 "is_typing": is_typing,
                 "sender_channel": self.channel_name,
             },
+        )
+
+    async def _handle_ping(self, data: dict[str, Any]) -> None:
+        """Application-level heartbeat reply. The browser WebSocket API never
+        surfaces protocol pings to JS (the runtime answers pongs silently), so
+        the client sends `{"type":"ping"}` and uses this response to detect a
+        half-open connection: if no frame — a pong or any real message — is
+        received for some timeout, the client treats the socket as dead and
+        reconnects."""
+        await self.send(
+            text_data=json.dumps({"type": "pong", "server_time": timezone.now().isoformat()})
         )
 
     async def _handle_mark_read(self, data: dict[str, Any]) -> None:
