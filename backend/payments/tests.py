@@ -1,12 +1,14 @@
 """Tests for the payments app — booking payments, listing tier promotions."""
 
 from datetime import date, datetime, timedelta
+from io import StringIO
 from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TestCase
+from django.core.management import call_command
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
@@ -16,9 +18,11 @@ from rooms.models import Room
 
 from .models import Invoice, Payment, PaymentAuditLog, PaymentSchedule
 from .services import bkash
+from .services.bkash import BkashError
 from .services.invoice import generate_invoice_pdf, get_or_create_invoice_for_payment
 from .services.reminders import send_payment_reminders
 from .services.schedule import generate_payment_schedule
+from .services.webhook_security import check_webhook_ip
 from .views import (
     BkashCallbackView,
     BkashInitiateView,
@@ -970,3 +974,362 @@ class PaymentReminderTests(TestCase):
         )
         result = send_payment_reminders()
         self.assertEqual(result["sent"], 1)
+
+
+# ---------------------------------------------------------------------------
+# Management command test
+# ---------------------------------------------------------------------------
+
+
+class PaymentReminderCommandTests(TestCase):
+    def setUp(self):
+        self.landlord = User.objects.create_user(
+            username="cll", email="cll@example.com", password="test12345"
+        )
+        self.tenant = User.objects.create_user(
+            username="ctt", email="ctt@example.com", password="test12345"
+        )
+        self.room = Room.objects.create(
+            owner=self.landlord,
+            title="Cmd Reminder Room",
+            description="d",
+            room_type="single",
+            price=8000,
+            area="Mirpur",
+            address="x",
+            lat=23.8,
+            lng=90.4,
+            size_sqft=200,
+        )
+
+    @patch("django.utils.timezone.localdate", return_value=date(2026, 3, 12))
+    def test_command_sends_reminders(self, mock_today):
+        Booking.objects.create(
+            room=self.room,
+            tenant=self.tenant,
+            status=Booking.Status.APPROVED,
+            check_in=date(2026, 2, 15),
+            monthly_rent=8000,
+        )
+        out = StringIO()
+        call_command("send_payment_reminders", stdout=out)
+        output = out.getvalue()
+        self.assertIn("1 payment reminder(s)", output)
+        self.assertTrue(
+            self.tenant.notifications.filter(
+                notification_type=Notification.Type.PAYMENT_REMINDER
+            ).exists()
+        )
+
+    @patch("django.utils.timezone.localdate", return_value=date(2026, 3, 12))
+    def test_command_no_reminders_when_not_due(self, mock_today):
+        Booking.objects.create(
+            room=self.room,
+            tenant=self.tenant,
+            status=Booking.Status.APPROVED,
+            check_in=date(2026, 1, 15),
+            monthly_rent=8000,
+        )
+        out = StringIO()
+        call_command("send_payment_reminders", stdout=out)
+        self.assertIn("0 payment reminder(s)", out.getvalue())
+
+
+# ---------------------------------------------------------------------------
+# Webhook IP enforcement — the defense-in-depth layer for money callbacks.
+# ---------------------------------------------------------------------------
+
+
+class WebhookSecurityTests(TestCase):
+    def _fake_request(self, ip="192.168.1.1"):
+        from django.test import RequestFactory
+
+        factory = RequestFactory()
+        return factory.get("/", REMOTE_ADDR=ip)
+
+    def test_no_allowlist_always_accepts(self):
+        req = self._fake_request()
+        self.assertTrue(check_webhook_ip(req, allowlist=[], sandbox=False, gateway="sslcommerz"))
+
+    def test_matching_ip_accepted(self):
+        req = self._fake_request("10.0.0.1")
+        self.assertTrue(
+            check_webhook_ip(req, allowlist=["10.0.0.1"], sandbox=False, gateway="sslcommerz")
+        )
+
+    def test_non_matching_ip_rejected_when_not_sandbox(self):
+        req = self._fake_request("192.168.1.100")
+        self.assertFalse(
+            check_webhook_ip(req, allowlist=["10.0.0.1"], sandbox=False, gateway="sslcommerz")
+        )
+
+    def test_non_matching_ip_accepted_when_sandbox(self):
+        req = self._fake_request("192.168.1.100")
+        self.assertTrue(
+            check_webhook_ip(req, allowlist=["10.0.0.1"], sandbox=True, gateway="sslcommerz")
+        )
+
+
+class CallbackIpRejectionTests(_ThrottleOffMixin, BookingPaymentFixturesMixin, APITestCase):
+    """When sandbox=False and a non-allowlisted IP hits a callback, redirect to fail."""
+
+    views_to_unthrottle = (PaymentSuccessCallbackView, PaymentFailCallbackView)
+
+    @override_settings(
+        SSLCOMMERZ_IS_SANDBOX=False,
+        SSLCOMMERZ_WEBHOOK_IP_ALLOWLIST=["10.0.0.1"],
+    )
+    def test_success_callback_rejects_unknown_ip(self):
+        payment = self._make_payment(status=Payment.Status.PENDING)
+        from django.test import RequestFactory
+
+        factory = RequestFactory()
+        req = factory.post(
+            "/api/v1/payments/sslcommerz/success/",
+            {"tran_id": payment.transaction_id, "val_id": "VAL-1"},
+            REMOTE_ADDR="192.168.1.100",
+        )
+        view = PaymentSuccessCallbackView.as_view()
+        res = view(req)
+        self.assertEqual(res.status_code, 302)
+        self.assertIn("status=fail", res.url)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, Payment.Status.PENDING)
+
+    @override_settings(
+        SSLCOMMERZ_IS_SANDBOX=False,
+        SSLCOMMERZ_WEBHOOK_IP_ALLOWLIST=["10.0.0.1"],
+    )
+    def test_fail_callback_rejects_unknown_ip(self):
+        payment = self._make_payment(status=Payment.Status.PENDING)
+        from django.test import RequestFactory
+
+        factory = RequestFactory()
+        req = factory.get(
+            f"/api/v1/payments/sslcommerz/fail/?tran_id={payment.transaction_id}",
+            REMOTE_ADDR="192.168.1.100",
+        )
+        view = PaymentFailCallbackView.as_view()
+        res = view(req)
+        self.assertEqual(res.status_code, 302)
+        self.assertIn("status=fail", res.url)
+
+
+# ---------------------------------------------------------------------------
+# bKash refund path (only SSLCommerz refund was tested before).
+# ---------------------------------------------------------------------------
+
+
+class BkashRefundTests(_ThrottleOffMixin, BookingPaymentFixturesMixin, APITestCase):
+    def _settled_bkash_payment(self):
+        return self._make_payment(
+            payment_type=Payment.Type.SECURITY_DEPOSIT,
+            payment_method=Payment.Method.BKASH,
+            amount=5000,
+            gateway_response={"paymentID": "BK-123"},
+            gateway_transaction_id="TRX-BK-1",
+            status=Payment.Status.SUCCESS,
+        )
+
+    @patch("payments.services.bkash.refund_payment", return_value={"refundTrxID": "RF-1"})
+    def test_landlord_refunds_bkash_deposit(self, mock_refund):
+        payment = self._settled_bkash_payment()
+        self.client.force_authenticate(self.landlord)
+        res = self.client.post(f"/api/v1/payments/{payment.pk}/refund/", {}, format="json")
+        self.assertEqual(res.status_code, 200, res.data)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, Payment.Status.REFUNDED)
+        mock_refund.assert_called_once()
+        self.booking.refresh_from_db()
+        self.assertTrue(self.booking.security_deposit_refunded)
+
+    @patch("payments.services.bkash.refund_payment", side_effect=BkashError("bKash down"))
+    def test_bkash_refund_gateway_error_returns_502(self, mock_refund):
+        payment = self._settled_bkash_payment()
+        self.client.force_authenticate(self.landlord)
+        res = self.client.post(f"/api/v1/payments/{payment.pk}/refund/", {}, format="json")
+        self.assertEqual(res.status_code, 502)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, Payment.Status.SUCCESS)
+
+
+# ---------------------------------------------------------------------------
+# bKash initiate failure (only SSLCommerz failure was tested before).
+# ---------------------------------------------------------------------------
+
+
+class BkashInitiateFailureTests(_ThrottleOffMixin, BookingPaymentFixturesMixin, APITestCase):
+    views_to_unthrottle = (BkashInitiateView,)
+
+    @patch("payments.services.bkash.create_payment", side_effect=BkashError("bKash timeout"))
+    def test_bkash_initiate_failure_marks_payment_failed(self, mock_create):
+        self.client.force_authenticate(self.tenant)
+        res = self.client.post(
+            "/api/v1/payments/bkash/initiate/",
+            {"booking_id": self.booking.pk, "payment_type": Payment.Type.MONTHLY_RENT},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 502)
+        payment = Payment.objects.get()
+        self.assertEqual(payment.status, Payment.Status.FAILED)
+        self.assertIn("bKash timeout", payment.failure_reason)
+
+
+# ---------------------------------------------------------------------------
+# Partial refund, invalid refund amount, zero/negative.
+# ---------------------------------------------------------------------------
+
+
+class PartialAndEdgeRefundTests(_ThrottleOffMixin, BookingPaymentFixturesMixin, APITestCase):
+    def _settled_payment(self, **overrides):
+        return self._make_payment(
+            payment_type=Payment.Type.SECURITY_DEPOSIT,
+            amount=5000,
+            gateway_transaction_id="BANK-PE",
+            status=Payment.Status.SUCCESS,
+            **overrides,
+        )
+
+    @patch("payments.services.sslcommerz.refund_payment", return_value={"status": "success"})
+    def test_partial_refund_below_full_amount(self, mock_refund):
+        payment = self._settled_payment()
+        self.client.force_authenticate(self.landlord)
+        res = self.client.post(
+            f"/api/v1/payments/{payment.pk}/refund/", {"amount": 3000}, format="json"
+        )
+        self.assertEqual(res.status_code, 200, res.data)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, Payment.Status.REFUNDED)
+        # Partial refund still marks deposit refunded (one-shot in the model).
+        self.booking.refresh_from_db()
+        self.assertTrue(self.booking.security_deposit_refunded)
+        mock_refund.assert_called_once_with("BANK-PE", "3000.0")
+
+    def test_refund_amount_zero_rejected(self):
+        payment = self._settled_payment()
+        self.client.force_authenticate(self.landlord)
+        res = self.client.post(
+            f"/api/v1/payments/{payment.pk}/refund/", {"amount": 0}, format="json"
+        )
+        self.assertEqual(res.status_code, 400)
+
+    def test_refund_amount_negative_rejected(self):
+        payment = self._settled_payment()
+        self.client.force_authenticate(self.landlord)
+        res = self.client.post(
+            f"/api/v1/payments/{payment.pk}/refund/", {"amount": -100}, format="json"
+        )
+        self.assertEqual(res.status_code, 400)
+
+    def test_refund_invalid_amount_type_rejected(self):
+        payment = self._settled_payment()
+        self.client.force_authenticate(self.landlord)
+        res = self.client.post(
+            f"/api/v1/payments/{payment.pk}/refund/", {"amount": "abc"}, format="json"
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("invalid", str(res.data).lower())
+
+
+# ---------------------------------------------------------------------------
+# Schedule edge cases
+# ---------------------------------------------------------------------------
+
+
+class ScheduleEdgeCaseTests(TestCase):
+    def setUp(self):
+        self.landlord = User.objects.create_user(
+            username="sel", email="sel@example.com", password="test12345"
+        )
+        self.tenant = User.objects.create_user(
+            username="set", email="set@example.com", password="test12345"
+        )
+        self.room = Room.objects.create(
+            owner=self.landlord,
+            title="Edge Room",
+            description="d",
+            room_type="single",
+            price=8000,
+            area="Mirpur",
+            address="x",
+            lat=23.8,
+            lng=90.4,
+            size_sqft=200,
+        )
+
+    def test_zero_duration_lease_generates_no_entries(self):
+        booking = Booking.objects.create(
+            room=self.room,
+            tenant=self.tenant,
+            status=Booking.Status.APPROVED,
+            check_in=date(2026, 3, 1),
+            check_out=date(2026, 3, 1),
+            monthly_rent=8000,
+        )
+        entries = generate_payment_schedule(booking)
+        self.assertEqual(entries, [])
+        self.assertEqual(booking.payment_schedules.count(), 0)
+
+    @patch("django.conf.settings.DEFAULT_LEASE_SCHEDULE_MONTHS", 1)
+    def test_single_month_lease(self):
+        booking = Booking.objects.create(
+            room=self.room,
+            tenant=self.tenant,
+            status=Booking.Status.APPROVED,
+            check_in=date(2026, 6, 15),
+            monthly_rent=8000,
+        )
+        entries = generate_payment_schedule(booking)
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0].due_date, date(2026, 6, 15))
+
+    def test_monthly_rent_no_schedule_links_payment_anyway(self):
+        """If payment succeeds but no schedule rows exist (booking predates
+        the feature), the payment is still marked SUCCESS without error."""
+        booking = Booking.objects.create(
+            room=self.room,
+            tenant=self.tenant,
+            status=Booking.Status.APPROVED,
+            check_in=date(2026, 1, 15),
+            check_out=date(2026, 2, 1),
+            monthly_rent=8000,
+        )
+        # Manually delete any auto-generated schedule.
+        booking.payment_schedules.all().delete()
+        payment = Payment.objects.create(
+            booking=booking,
+            user=self.tenant,
+            amount=8000,
+            payment_type=Payment.Type.MONTHLY_RENT,
+            payment_method=Payment.Method.SSLCOMMERZ,
+            status=Payment.Status.PENDING,
+        )
+        from payments.views import _apply_success_side_effects
+
+        _apply_success_side_effects(payment)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, Payment.Status.PENDING)
+        # No schedule to link — no crash, no-op.
+        self.assertFalse(booking.payment_schedules.filter(payment=payment).exists())
+
+
+# ---------------------------------------------------------------------------
+# Payment summary — refunded totals
+# ---------------------------------------------------------------------------
+
+
+class PaymentSummaryRefundTests(_ThrottleOffMixin, BookingPaymentFixturesMixin, APITestCase):
+    def test_summary_includes_refunded_totals(self):
+        self._make_payment(status=Payment.Status.SUCCESS, amount=8000)
+        self._make_payment(
+            status=Payment.Status.REFUNDED,
+            amount=5000,
+            payment_type=Payment.Type.SECURITY_DEPOSIT,
+        )
+        self.client.force_authenticate(self.tenant)
+        res = self.client.get("/api/v1/payments/summary/")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["total_paid"], 8000.0)
+        self.assertEqual(res.data["total_refunded"], 5000.0)
+        self.assertEqual(res.data["count_paid"], 1)
+        self.assertEqual(res.data["count_refunded"], 1)
