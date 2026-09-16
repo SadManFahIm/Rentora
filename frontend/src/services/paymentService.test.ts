@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach, afterAll } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("./api", () => ({
   api: {
@@ -159,25 +159,21 @@ describe("paymentService history + summary", () => {
 });
 
 describe("paymentService downloads", () => {
-  const originalWindow = globalThis.window;
-  const originalDocument = globalThis.document;
-
   beforeEach(() => {
     vi.clearAllMocks();
     const click = vi.fn();
     const link = { href: "", download: "", click, remove: vi.fn() };
-    (globalThis as Record<string, unknown>).window = {
+    vi.stubGlobal("window", {
       URL: { createObjectURL: vi.fn(() => "blob:mock"), revokeObjectURL: vi.fn() },
-    };
-    (globalThis as Record<string, unknown>).document = {
+    });
+    vi.stubGlobal("document", {
       createElement: vi.fn(() => link),
       body: { appendChild: vi.fn() },
-    };
+    });
   });
 
-  afterAll(() => {
-    (globalThis as Record<string, unknown>).window = originalWindow;
-    (globalThis as Record<string, unknown>).document = originalDocument;
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("downloadReceipt uses the content-disposition filename", async () => {
