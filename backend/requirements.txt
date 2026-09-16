@@ -59,7 +59,7 @@ Twisted==26.4.0
 txaio==26.6.1
 typing_extensions==4.16.0
 tzdata==2026.3
-ujson==5.13.0
+ujson==6.0.0
 uritemplate==4.2.0
 urllib3==2.7.0
 webencodings==0.6.1
