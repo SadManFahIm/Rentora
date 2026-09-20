@@ -22,7 +22,7 @@ djangorestframework==3.18.0
 djangorestframework_simplejwt==5.5.1
 drf-spectacular==0.30.0
 hyperlink==21.0.0
-idna==3.18
+idna==3.19
 Incremental==24.11.0
 inflection==0.5.1
 joblib==1.5.3
