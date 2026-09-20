@@ -22,6 +22,12 @@ updates:
     ignore:
       - dependency-name: "typescript"
         versions: [">=6"]
+      # jsdom 30.1 breaks Radix Select inside the test environment: the
+      # dropdown never opens (pointer AND keyboard activation both fail), so
+      # AdminDisputesPanel.test.tsx times out on findByRole("listbox"). Pin
+      # 30.0.x until jsdom or Radix fixes the regression.
+      - dependency-name: "jsdom"
+        versions: [">=30.1"]
 
   - package-ecosystem: pip
     directory: /backend
