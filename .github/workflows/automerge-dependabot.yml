@@ -78,6 +78,7 @@ jobs:
           echo "eligible=true" >> "$GITHUB_OUTPUT"
 
       - name: Wait for all PR checks to complete
+        id: checks
         if: steps.eligible.outputs.eligible == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -127,6 +128,7 @@ jobs:
             exit 1
           fi
           echo "All checks passed"
+          echo "sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Merge (merge commit, repo convention)
         if: steps.eligible.outputs.eligible == 'true'
@@ -136,14 +138,31 @@ jobs:
         run: |
           set -euo pipefail
 
+          # The PR head must be the exact commit whose checks we just
+          # verified — a synchronize event during the wait would make this
+          # result stale (the newer run handles the newer head).
+          HEAD_NOW="$(gh pr view "$PR_URL" --json headRefOid --jq .headRefOid)"
+          if [ "$HEAD_NOW" != "${{ steps.checks.outputs.sha }}" ]; then
+            echo "::warning::PR head moved during wait — newer run will handle it"
+            exit 0
+          fi
+
           # Guard: PR may have been merged by a queued earlier run of this
           # same workflow (concurrency serializes, doesn't dedupe).
+          # UNSTABLE is expected here: this run's own check is still pending
+          # while the merge step executes, and it is deliberately
+          # non-required. Everything else that UNSTABLE could mean was
+          # already verified green by the wait step.
           STATE="$(gh pr view "$PR_URL" --json state,mergeStateStatus \
             --jq '.state + ":" + .mergeStateStatus')"
           echo "state:mergeStateStatus=$STATE"
           case "$STATE" in
-            OPEN:CLEAN|OPEN:UNBLOCKED|OPEN:HAS_HOOKS) ;;
-            OPEN:*) echo "::error::PR not mergeable ($STATE) — skipping"; exit 1 ;;
+            OPEN:CLEAN|OPEN:UNBLOCKED|OPEN:UNSTABLE|OPEN:HAS_HOOKS) ;;
+            OPEN:BEHIND)
+              echo "PR is BEHIND main — skipping; Dependabot will rebase and a fresh run will merge it"
+              exit 0 ;;
+            OPEN:*)
+              echo "::error::PR not mergeable ($STATE) — failing for manual review"; exit 1 ;;
             *) echo "PR is $STATE — nothing to do"; exit 0 ;;
           esac
 
