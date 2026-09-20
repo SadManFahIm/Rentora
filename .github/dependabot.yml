@@ -15,6 +15,13 @@ updates:
       frontend-deps:
         patterns:
           - "*"
+    # typescript majors are blocked until openapi-typescript supports them:
+    # its peer range (^5.x) makes `npm ci` fail with ERESOLVE when TS 6/7 is
+    # installed, breaking the whole grouped PR. TS 5.x minor/patch updates
+    # still flow through normally.
+    ignore:
+      - dependency-name: "typescript"
+        versions: [">=6"]
 
   - package-ecosystem: pip
     directory: /backend
