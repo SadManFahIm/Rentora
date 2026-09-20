@@ -1,0 +1,160 @@
+name: Auto-merge Dependabot
+
+# CI-gated auto-merge for Dependabot PRs. The repo has no branch protection,
+# so GitHub's native auto-merge would merge as soon as the PR is opened
+# without waiting for CI. This workflow waits for every check on the PR to
+# finish, verifies they all passed, and only then merges.
+#
+# Security notes:
+# - Only PRs authored by dependabot[bot] are eligible — a malicious PR from
+#   any other author can never trigger a merge here.
+# - Only dependency-manifest changes are eligible (package.json /
+#   package-lock.json / requirements.txt / workflow files). Anything touching
+#   application code is skipped for manual review.
+# - PR code is NEVER checked out or executed (pull_request_target runs in a
+#   trusted context — only file *names* are read via the REST API).
+# - Merge happens only when ALL other checks on the PR succeeded. Any
+#   failure → no merge, and a comment explains why.
+# - Caveat: the merge commit is pushed with GITHUB_TOKEN, so GitHub does not
+#   fire the main-branch `push` workflows for it. This is safe here because
+#   pull_request CI already validated the exact merged content (PR checks run
+#   on the merge ref), but coverage-history will not record these merges.
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: automerge-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+# Must match the job name below — this run's own check is excluded from the
+# "all checks passed" logic (otherwise the workflow would wait on itself).
+env:
+  SELF_CHECK_NAME: "Auto-merge Dependabot PR (CI-gated)"
+
+jobs:
+  automerge:
+    name: Auto-merge Dependabot PR (CI-gated)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check eligibility
+        id: eligible
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          set -euo pipefail
+
+          # 1. Author must be Dependabot.
+          if [ "$PR_AUTHOR" != "dependabot[bot]" ]; then
+            echo "Author $PR_AUTHOR is not dependabot[bot] — skipping"
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # 2. Only dependency-manifest files may change.
+          FILES_CHANGED="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \
+            --jq '.[].filename')"
+          echo "Files changed in PR:"
+          echo "$FILES_CHANGED"
+
+          ALLOWED_RE='^(frontend/(package\.json|package-lock\.json)|backend/requirements\.txt|\.github/workflows/[^/]+\.yml)$'
+          NOT_ALLOWED="$(echo "$FILES_CHANGED" | grep -Ev "$ALLOWED_RE" || true)"
+          if [ -n "$NOT_ALLOWED" ]; then
+            echo "PR touches non-dependency files — needs manual review:"
+            echo "$NOT_ALLOWED"
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "eligible=true" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for all PR checks to complete
+        if: steps.eligible.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -euo pipefail
+
+          # Grace period so every pull_request workflow has time to register
+          # its check-runs before the first poll (otherwise a poll that runs
+          # before CI registers could see "0 pending" and merge untested).
+          echo "Waiting 90s for check-runs to register..."
+          sleep 90
+
+          TIMEOUT=90   # minutes
+          START=$(date +%s)
+          while :; do
+            HEAD_SHA="$(gh pr view "$PR_URL" --json headRefOid --jq .headRefOid)"
+            RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?per_page=100")"
+            PENDING="$(echo "$RESPONSE" | jq --arg self "$SELF_CHECK_NAME" \
+              '[.check_runs[] | select(.name != $self and .status != "completed")] | length')"
+            OTHERS="$(echo "$RESPONSE" | jq --arg self "$SELF_CHECK_NAME" \
+              '[.check_runs[] | select(.name != $self)] | length')"
+            if [ "$OTHERS" -lt 1 ]; then
+              echo "::error::No other checks registered — refusing to merge without CI"
+              exit 1
+            fi
+            if [ "$PENDING" -eq 0 ]; then
+              echo "All $OTHERS other check(s) completed for $HEAD_SHA"
+              break
+            fi
+            NOW=$(date +%s)
+            if [ $(( (NOW - START) / 60 )) -ge "$TIMEOUT" ]; then
+              echo "::error::Timed out after ${TIMEOUT} min waiting for checks"
+              exit 1
+            fi
+            echo "$PENDING check(s) still pending — waiting 30s"
+            sleep 30
+          done
+
+          # All completed checks must have succeeded (skips/neutral allowed).
+          HEAD_SHA="$(gh pr view "$PR_URL" --json headRefOid --jq .headRefOid)"
+          FAILED="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?per_page=100" \
+            | jq --arg self "$SELF_CHECK_NAME" \
+            '[.check_runs[] | select(.name != $self and .conclusion != "success" and .conclusion != "skipped" and .conclusion != "neutral")] | length')"
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::$FAILED check(s) failed — not merging"
+            exit 1
+          fi
+          echo "All checks passed"
+
+      - name: Merge (merge commit, repo convention)
+        if: steps.eligible.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -euo pipefail
+
+          # Guard: PR may have been merged by a queued earlier run of this
+          # same workflow (concurrency serializes, doesn't dedupe).
+          STATE="$(gh pr view "$PR_URL" --json state,mergeStateStatus \
+            --jq '.state + ":" + .mergeStateStatus')"
+          echo "state:mergeStateStatus=$STATE"
+          case "$STATE" in
+            OPEN:CLEAN|OPEN:UNBLOCKED|OPEN:HAS_HOOKS) ;;
+            OPEN:*) echo "::error::PR not mergeable ($STATE) — skipping"; exit 1 ;;
+            *) echo "PR is $STATE — nothing to do"; exit 0 ;;
+          esac
+
+          gh pr merge "$PR_URL" --merge
+          echo "Merged $PR_URL"
+
+      - name: Notify on failed automerge
+        if: failure() && steps.eligible.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          gh pr comment "$PR_URL" --body \
+            "🤖 Auto-merge did **not** complete for this Dependabot PR — CI checks failed or the PR became unmergeable. Please review manually. (automerge-dependabot workflow)"

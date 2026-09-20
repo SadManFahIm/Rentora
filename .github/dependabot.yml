@@ -9,6 +9,12 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: fix(deps)
+    # Bundle all npm bumps into one PR per week — fewer PRs to review, and no
+    # package-lock.json conflicts between concurrent single-package PRs.
+    groups:
+      frontend-deps:
+        patterns:
+          - "*"
 
   - package-ecosystem: pip
     directory: /backend
@@ -17,6 +23,11 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: fix(deps)
+    # Same rationale as the npm group above.
+    groups:
+      backend-deps:
+        patterns:
+          - "*"
 
   - package-ecosystem: github-actions
     directory: /   # workflow files in .github/workflows
