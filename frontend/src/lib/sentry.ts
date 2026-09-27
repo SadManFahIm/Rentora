@@ -16,7 +16,7 @@ export function initSentry(): void {
     environment: import.meta.env.MODE,
     tracesSampleRate: 0.1,
     // Keep user emails/IDs out of events unless we explicitly tag them.
-    sendDefaultPii: false,
+    dataCollection: { userInfo: false },
     integrations: [Sentry.browserTracingIntegration()],
   });
 }
