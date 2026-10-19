@@ -43,7 +43,12 @@ jobs:
         # Audits the lockfile-equivalent requirements.txt against the PyPI
         # advisory database. Hard-fails on any known vulnerability (the
         # cryptography/pyOpenSSL pins here were fixed after a previous audit).
-        run: pip-audit -r requirements.txt
+        #
+        # TEMPORARY: CVE-2026-106454 (Twisted 26.4.0, via daphne/channels) has
+        # no fixed release yet. Ignored until 2026-11-19 so it doesn't block
+        # every merge; remove this flag once Twisted ships a fix and
+        # requirements.txt is bumped, or on that date, whichever comes first.
+        run: pip-audit -r requirements.txt --ignore-vuln CVE-2026-106454
 
       - name: Static analysis (Bandit)
         # Fail on MEDIUM+ severity/confidence. venv/migrations are excluded
