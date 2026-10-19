@@ -4,7 +4,7 @@
 # Commands:
 #   make help          list targets
 #   make setup         install Python + Node dependencies
-#   make dev           run backend (:8000) + frontend (:3001) together
+#   make dev           run backend (:8000) + frontend (:3000) together
 #   make run-backend   Django dev server only
 #   make run-frontend  Vite dev server only
 #   make migrate       apply Django migrations
@@ -30,8 +30,8 @@ setup: ## Install everything (Python deps + Node deps) — first time only
 
 install: setup ## Alias for setup
 
-dev: ## Run backend (:8000) + frontend (:3001) together
-	@echo "Starting backend :8000 and frontend :3001…"
+dev: ## Run backend (:8000) + frontend (:3000) together
+	@echo "Starting backend :8000 and frontend :3000…"
 	$(MAKE) run-backend &
 	$(MAKE) run-frontend &
 	wait
@@ -39,7 +39,7 @@ dev: ## Run backend (:8000) + frontend (:3001) together
 run-backend: ## Django dev server on :8000
 	cd backend && $(PY) manage.py runserver 0.0.0.0:8000
 
-run-frontend: ## Vite dev server on :3001
+run-frontend: ## Vite dev server on :3000
 	cd frontend && npm run dev
 
 migrate: ## Apply migrations
