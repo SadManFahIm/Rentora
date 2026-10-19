@@ -130,7 +130,7 @@ Full suites: **667 backend + 322 frontend (989 total)** — all passing.
 `docs/screenshots/tier5-price-recommendation.png` ·
 `tier5-ai-draft.png` · `tier5-copilot-photos.png`
 (capture script: `frontend/scripts/capture_tier5_shots.mjs` — backend :8000,
-frontend :3001).
+frontend :3000).
 
 ## Known limitations
 

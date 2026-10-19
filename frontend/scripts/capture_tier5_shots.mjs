@@ -1,9 +1,9 @@
 // Tier-5 screenshot capture — price recommendation, AI listing draft, Copilot photos.
-// Usage: node scripts/capture_tier5_shots.mjs  (backend on :8000, frontend on :3001)
+// Usage: node scripts/capture_tier5_shots.mjs  (backend on :8000, frontend on :3000)
 import { chromium } from "playwright";
 import fs from "node:fs";
 
-const BASE = "http://127.0.0.1:3001";
+const BASE = "http://127.0.0.1:3000";
 const OUT = "../docs/screenshots/";
 const SHOTS = [
   ["tier5-price-recommendation.png", ".bg-card:has-text('Price recommendation')"],

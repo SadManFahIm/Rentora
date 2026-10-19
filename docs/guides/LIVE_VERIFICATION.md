@@ -10,7 +10,7 @@
 
 | Component | Configuration |
 |---|---|
-| Frontend | Vite dev server `http://localhost:3001` (React 18, TS strict, Tailwind, MapLibre GL) |
+| Frontend | Vite dev server `http://localhost:3000` (React 18, TS strict, Tailwind, MapLibre GL) |
 | Backend | Django `manage.py runserver 127.0.0.1:8000` (dev settings, SQLite, LocMemCache) |
 | Browser | Headless Chrome (screenshot capture) + desktop WebView preview (interactive) |
 | Auth | Demo JWT tokens minted via Django shell (bypasses login throttle) |
