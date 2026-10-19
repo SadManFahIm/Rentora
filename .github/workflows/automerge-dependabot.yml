@@ -153,8 +153,16 @@ jobs:
           # while the merge step executes, and it is deliberately
           # non-required. Everything else that UNSTABLE could mean was
           # already verified green by the wait step.
-          STATE="$(gh pr view "$PR_URL" --json state,mergeStateStatus \
-            --jq '.state + ":" + .mergeStateStatus')"
+          # GitHub computes mergeStateStatus lazily, so it reads UNKNOWN for a
+          # short while (e.g. right after main moves). Re-query instead of
+          # failing on it; still UNKNOWN after ~60s falls through to OPEN:*.
+          for attempt in 1 2 3 4 5 6; do
+            STATE="$(gh pr view "$PR_URL" --json state,mergeStateStatus \
+              --jq '.state + ":" + .mergeStateStatus')"
+            [ "$STATE" != "OPEN:UNKNOWN" ] && break
+            echo "Merge state not computed yet — retrying in 10s ($attempt/6)"
+            sleep 10
+          done
           echo "state:mergeStateStatus=$STATE"
           case "$STATE" in
             OPEN:CLEAN|OPEN:UNBLOCKED|OPEN:UNSTABLE|OPEN:HAS_HOOKS) ;;
