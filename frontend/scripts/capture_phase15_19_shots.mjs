@@ -9,7 +9,7 @@
 import { chromium } from "playwright";
 import fs from "node:fs";
 
-const BASE = process.env.BASE || "http://localhost:3001";
+const BASE = process.env.BASE || "http://localhost:3000";
 const API = process.env.API || "http://127.0.0.1:8000/api/v1";
 const ADMIN = process.env.ADMIN || "http://127.0.0.1:8000";
 const OUT = "../docs/screenshots/";

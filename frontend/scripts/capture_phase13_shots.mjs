@@ -1,9 +1,9 @@
 // Phase 13 screenshot capture — SMS OTP login, WhatsApp share, area SEO pages.
-// Usage: node scripts/capture_phase13_shots.mjs  (backend on :8000, frontend on :3001)
+// Usage: node scripts/capture_phase13_shots.mjs  (backend on :8000, frontend on :3000)
 import { chromium } from "playwright";
 import fs from "node:fs";
 
-const BASE = "http://127.0.0.1:3001";
+const BASE = "http://127.0.0.1:3000";
 const OUT = "../docs/screenshots/";
 const SHOTS = [
   ["phase13-area-page.png", "area landing page hero + listings"],

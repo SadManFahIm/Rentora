@@ -1,6 +1,6 @@
 /* Capture Tier-3/Tier-4 feature screenshots (README phase gallery).
  *
- * Requires the stack running: backend on :8000, frontend dev server on :3001.
+ * Requires the stack running: backend on :8000, frontend dev server on :3000.
  *   node scripts/capture_tier4_shots.mjs
  *
  * Safe demo data only — no real PII. Outputs flat PNGs into ../docs/screenshots.
@@ -16,7 +16,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT = join(__dirname, "..", "..", "docs", "screenshots");
 mkdirSync(OUT, { recursive: true });
 
-const BASE = "http://localhost:3001";
+const BASE = "http://localhost:3000";
 const PASSWORD = "demo12345";
 
 async function shot(page, name) {

@@ -14,7 +14,7 @@
  * Requirements:
  *   - Node.js 22+ (uses the built-in fetch + WebSocket)
  *   - Google Chrome (auto-detected on Windows/macOS/Linux)
- *   - Backend running on :8000, frontend on :3001 (or override below)
+ *   - Backend running on :8000, frontend on :3000 (or override below)
  *
  * The demo users must exist and share the password set in DEMO_PASSWORD.
  * Screenshots land in docs/screenshots/ — commit them together with any
@@ -26,7 +26,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 // ---- Config (override via env) ----
-const FRONTEND = process.env.FRONTEND_URL ?? "http://localhost:3001";
+const FRONTEND = process.env.FRONTEND_URL ?? "http://localhost:3000";
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8000";
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? "demo12345";
 const DBG_PORT = Number(process.env.CHROME_DBG_PORT ?? 9333);

@@ -24,12 +24,13 @@ Requirements: **Python 3.12** (see `.python-version`) and **Node 22**
 
 ```bash
 make setup            # venv → pip install -r backend/requirements.txt → npm ci
-make dev              # backend on :8000, frontend (Vite) on :3001
+make dev              # backend on :8000, frontend (Vite) on :3000
 make seed             # idempotent demo data for the screenshot galleries
 ```
 
-> The frontend Vite dev server runs on **:3001** — the process on `:3000` is a
-> different app. Backend defaults to `:8000` with `runserver`.
+> The frontend Vite dev server runs on **:3000** (set in `frontend/vite.config.ts`);
+> if that port is already in use, Vite falls back to the next free port.
+> Backend defaults to `:8000` with `runserver`.
 
 Demo accounts (all password `demo12345`):
 `rahim.hossain@rentora.com` (landlord) · `tenant.pending@rentora.com` ·

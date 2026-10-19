@@ -1,12 +1,12 @@
 // Phase 14 screenshot capture - AI v3: photo intelligence (VisionCard on the
 // landlord dashboard) and image search (upload a photo, find look-alike rooms).
-// Usage: node scripts/capture_phase14_shots.mjs (backend :8000, frontend :3001)
+// Usage: node scripts/capture_phase14_shots.mjs (backend :8000, frontend :3000)
 import { chromium } from "playwright";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const BASE = "http://127.0.0.1:3001";
+const BASE = "http://127.0.0.1:3000";
 const OUT = "../docs/screenshots/";
 const TMP = path.join(os.tmpdir(), "rentora-phase14-query.png");
 

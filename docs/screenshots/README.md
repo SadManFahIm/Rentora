@@ -11,7 +11,7 @@ Tier-4+ captures are automated with Playwright — `frontend/scripts/capture_tie
 `capture_phase13_shots.mjs` (public pages, no login) and
 `capture_phase14_shots.mjs` (logs in as the `rahim.hossain` demo landlord for
 the vision panel, then captures the public image-search flow) run against the
-dev stack (backend :8000, frontend :3001) and capture real UI state. Older
+dev stack (backend :8000, frontend :3000) and capture real UI state. Older
 captures were done manually; the workflow below still applies to both:
 
 1. **Run the stack** — `cd backend && venv/Scripts/python.exe manage.py
