@@ -13,6 +13,7 @@ from django.test import override_settings
 from rest_framework.test import APITestCase
 
 from fraud.models import FraudReport
+from pricing.models import MarketStat
 from rooms.models import Room, RoomImage
 
 User = get_user_model()
@@ -145,6 +146,36 @@ class ListingQualityTests(APITestCase):
             self.assertIsNone(result["score"])
             self.assertIsNone(result["level"])
             self.assertEqual(result["suggestions"], [])
+
+    def _market(self):
+        stat = MarketStat.objects.create(
+            area="Mirpur",
+            room_type="single",
+            avg_price=10000,
+            median_price=10000,
+            min_price=8000,
+            max_price=12000,
+            percentile_25=9000,
+            percentile_75=11000,
+            sample_size=20,
+        )
+        return {("Mirpur", "single"): stat}
+
+    def test_low_but_plausible_price_scores_attractive(self):
+        room = make_room(make_user(), price=8000)
+        from rooms.listing_quality import get_listing_quality
+
+        result = get_listing_quality(room, market_stats=self._market())
+        self.assertEqual(result["category_scores"]["pricing"], 0.8)
+
+    def test_suspected_bait_price_scores_neutral_with_suggestion(self):
+        # 5000 is below the bait floor (0.60 x 9000 = 5400).
+        room = make_room(make_user(), price=5000)
+        from rooms.listing_quality import get_listing_quality
+
+        result = get_listing_quality(room, market_stats=self._market())
+        self.assertEqual(result["category_scores"]["pricing"], 0.5)
+        self.assertTrue(any("far below the market" in s for s in result["suggestions"]))
 
     def test_detail_api_exposes_listing_quality(self):
         owner = make_user()

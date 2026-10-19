@@ -22,6 +22,7 @@ from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from pricing.models import MarketStat
 from recommendations.models import UserActivity
 from rooms.area_aliases import find_areas_in_text, resolve_area
 from rooms.models import Room
@@ -234,6 +235,39 @@ class PriceAnomalyTests(APITestCase):
             return_value={"model_confidence": "low", "predicted_price": 10000},
         ):
             room = make_room(self._owner(), "Low Confidence", price=15000)
+            self.assertIsNone(get_price_anomaly(room))
+
+    def _market(self):
+        MarketStat.objects.create(
+            area="Mirpur",
+            room_type="single",
+            avg_price=10000,
+            median_price=10000,
+            min_price=8000,
+            max_price=12000,
+            percentile_25=9000,
+            percentile_75=11000,
+            sample_size=20,
+        )
+
+    def test_below_market_badge_for_plausible_price(self):
+        self._market()
+        with patch(
+            "pricing.services.prediction.predict_price_from_model",
+            return_value={"model_confidence": "high", "predicted_price": 10000},
+        ):
+            room = make_room(self._owner(), "Priced Low", price=7500)
+            anomaly = get_price_anomaly(room)
+        self.assertEqual(anomaly["badge"], "25% below market")
+
+    def test_no_badge_for_suspected_bait_price(self):
+        # 5000 is below the bait floor (0.60 x 9000 = 5400).
+        self._market()
+        with patch(
+            "pricing.services.prediction.predict_price_from_model",
+            return_value={"model_confidence": "high", "predicted_price": 10000},
+        ):
+            room = make_room(self._owner(), "Bait Price", price=5000)
             self.assertIsNone(get_price_anomaly(room))
 
     def test_disabled_flag_removes_field(self):

@@ -58,6 +58,8 @@ def _pricing_subscore(room: Room, market_stats: dict | None) -> tuple[float, str
 
     No market data -> neutral 0.5 (never punish a listing for a thin market).
     Inside ±15% of the segment average -> full marks; further out -> partial.
+    A suspected bait price (the fraud engine's rule) -> neutral 0.5 plus a
+    suggestion to check it, never the "attractive" below-market score.
     """
     if market_stats is None:
         return 0.5, None
@@ -68,6 +70,13 @@ def _pricing_subscore(room: Room, market_stats: dict | None) -> tuple[float, str
     price = float(room.price)
     if avg_price <= 0:
         return 0.5, None
+    from pricing.services.insight import is_suspiciously_low
+
+    if is_suspiciously_low(stat, price):
+        return 0.5, (
+            "Your price is far below the market for this area — check it is correct; "
+            "prices this low are flagged by fraud checks."
+        )
     diff = (price - avg_price) / avg_price
     if abs(diff) <= 0.15:
         return 1.0, None
