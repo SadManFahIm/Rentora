@@ -272,7 +272,7 @@ Seed the following flags in `sync_flags` command:
 | Face-Match | Face comparison API (Amazon Rekognition, FaceTec, or self-hosted) | Mock provider returning similarity score | HIGH |
 | NID OCR (enhanced) | Already has HTTP gateway pattern (`KYC_OCR_PROVIDER=http`) | Already mocked with `none` default | DONE |
 | GPS/Reverse Geocoding | Room area is already 20-area enum; GPS→area mapping is deterministic | No external provider needed — use Haversine distance to area centroid | NONE |
-| Review NLP/LLM | LLM API for review authenticity analysis (OpenAI, Anthropic, or local) | Mock provider with rule-based heuristics (keyword density, sentiment) | MEDIUM |
+| Review NLP/LLM | LLM API for review authenticity analysis (hosted or local) | Mock provider with rule-based heuristics (keyword density, sentiment) | MEDIUM |
 | Model Retraining | ML training infrastructure (GPU, training pipeline) | Admin manual trigger + training script (no automated pipeline needed initially) | LOW |
 
 **Provider abstraction pattern:** Follow existing `*_PROVIDER` env var pattern. Each new provider gets:
@@ -397,5 +397,5 @@ This document.
 ### Stage 10 — Documentation + Final Report
 - Update `docs/architecture.md`
 - Phase 17 implementation report (per feature: IMPLEMENTED / PARTIALLY IMPLEMENTED / MOCK / REQUIRES EXTERNAL PROVIDER / BLOCKED)
-- Update `CLAUDE.md` with new commands/settings
+- Update the project conventions file with new commands/settings
 - Update `docs/api-reference.md` with new endpoints

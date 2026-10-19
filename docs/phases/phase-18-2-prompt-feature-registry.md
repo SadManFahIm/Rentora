@@ -58,7 +58,7 @@ Phase 18.2 extends the AI Intelligence Layer from 18.1 (provider registry + tele
 New fields added in 18.2:
 - `status` — `active` | `deprecated` | `disabled`
 - `owner` — Team/developer responsible
-- `default_model` — e.g. `gpt-4o`, `claude-3-sonnet`
+- `default_model` — the provider's model identifier
 - `fallback_strategy` — `none` | `fallback_provider` | `cached_response` | `rule_based`
 - `feature_flag_key` — Links to a Django `FeatureFlag`
 
@@ -93,7 +93,7 @@ New fields added in 18.2:
 - Both must be True (or flag key not set) for the feature to be available
 
 ### Template Safety
-- `_validate_template_safety(template)` — Rejects templates containing `API_KEY`, `SECRET`, `PASSWORD`, `TOKEN`, `PRIVATE_KEY`, `AWS_`, `OPENAI_API`, `ANTHROPIC_API`
+- `_validate_template_safety(template)` — Rejects templates containing `API_KEY`, `SECRET`, `PASSWORD`, `TOKEN`, `PRIVATE_KEY`, `AWS_` and AI-provider API-key prefixes
 - Enforced on both `AIPrompt` creation and `AIPromptVersion` creation
 
 ---

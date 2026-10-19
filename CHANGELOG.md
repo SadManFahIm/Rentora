@@ -26,7 +26,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 ## 2026-08-30
 
 ### Workflow, docs & security
-- `docs(workflow)` — Team Workflow section upgraded (branching / PR gates / pre-commit / environments / release cadence); CLAUDE.md conventions aligned.
+- `docs(workflow)` — Team Workflow section upgraded (branching / PR gates / pre-commit / environments / release cadence); project conventions aligned.
 - `docs(SECURITY.md)` — professional security policy: layered model, CVSS severity, coordinated disclosure, threat model (incl. AI-tool abuse & marketplace scams), secret handling, incident response, data protection, audit checklist.
 - `docs(README)` — screenshot gallery extended to phases 15–19.2 (79 shots, light+dark, desktop+mobile) with per-phase detail blocks.
 
