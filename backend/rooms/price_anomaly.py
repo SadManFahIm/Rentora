@@ -24,6 +24,16 @@ from django.conf import settings
 from .models import Room
 
 
+def _is_suspected_bait(room: Room, price: float) -> bool:
+    """True when the fraud engine would flag ``price`` as a possible bait
+    listing — such a room gets no "below market" badge."""
+    from pricing.models import MarketStat
+    from pricing.services.insight import is_suspiciously_low
+
+    stat = MarketStat.objects.filter(area=room.area, room_type=room.room_type).first()
+    return stat is not None and is_suspiciously_low(stat, price)
+
+
 def get_price_anomaly(room: Room, trained_model: Any | None = None) -> dict | None:
     """Return the anomaly badge payload for ``room``, or None.
 
@@ -56,6 +66,8 @@ def get_price_anomaly(room: Room, trained_model: Any | None = None) -> dict | No
     difference = (actual - float(predicted)) / float(predicted)
     threshold = float(getattr(settings, "PRICE_ANOMALY_THRESHOLD", 0.20))
     if abs(difference) < threshold:
+        return None
+    if difference < 0 and _is_suspected_bait(room, actual):
         return None
 
     percentage = abs(round(difference * 100))

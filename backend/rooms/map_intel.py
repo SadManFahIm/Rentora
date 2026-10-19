@@ -45,6 +45,7 @@ from django.utils import timezone
 
 from bookings.models import Booking
 from pricing.models import MarketStat
+from pricing.services.insight import is_suspiciously_low
 from rooms.landmarks import METRO_STATIONS
 from rooms.listing_quality import get_listing_quality
 from rooms.models import Room, RoomView
@@ -283,14 +284,19 @@ def area_statistics(area: str | None = None) -> list[dict[str, Any]]:
 
 
 def _price_trend(area: str) -> float | None:
-    """% change between MarketStat avg and the current listing avg (or None)."""
-    market = MarketStat.objects.filter(area__iexact=area).order_by("-calculated_at").first()
-    if market is None:
+    """% change between the area's MarketStat snapshot and its live listings
+    (or None). MarketStat holds one row per room type, built from available
+    rooms only, so both sides cover every room type and available rooms only."""
+    stats = list(MarketStat.objects.filter(area__iexact=area))
+    sample = sum(s.sample_size for s in stats)
+    if not sample:
         return None
-    live = Room.objects.filter(area__iexact=area).aggregate(avg=Avg("price"))["avg"]
-    if live is None or float(market.avg_price) == 0:
+    snapshot_avg = sum(float(s.avg_price) * s.sample_size for s in stats) / sample
+    live_rooms = Room.objects.filter(area__iexact=area, is_available=True)
+    live = live_rooms.aggregate(avg=Avg("price"))["avg"]
+    if live is None or snapshot_avg == 0:
         return None
-    return round(((float(live) - float(market.avg_price)) / float(market.avg_price)) * 100, 1)
+    return round(((float(live) - snapshot_avg) / snapshot_avg) * 100, 1)
 
 
 def value_score(room: Room) -> dict[str, Any]:
@@ -311,7 +317,10 @@ def value_score(room: Room) -> dict[str, Any]:
     ratio: float | None = None
     if market is not None and float(market.median_price) > 0:
         ratio = float(room.price) / float(market.median_price)
-        price_fit = max(0.0, min(100.0, 100 - (ratio - 1.0) * 150))
+        if is_suspiciously_low(market, float(room.price)):
+            price_fit = 60.0  # suspected bait price — no reward for it
+        else:
+            price_fit = max(0.0, min(100.0, 100 - (ratio - 1.0) * 150))
     else:
         price_fit = 60.0  # no market baseline yet
 

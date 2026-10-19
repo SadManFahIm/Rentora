@@ -13,6 +13,7 @@ from rest_framework.test import APITestCase
 from pricing.models import MarketStat
 from rooms.landmarks import METRO_STATIONS
 from rooms.map_intel import (
+    _price_trend,
     commute_eta,
     haversine_km,
     metro_access_score,
@@ -252,6 +253,74 @@ class ValueScoreApiTests(APITestCase):
         res = self.client.get("/api/v1/rooms/map-intel/value/?ids=999999")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data, {})
+
+
+class ValueScoreBaitPriceTests(APITestCase):
+    def setUp(self):
+        self.landlord = User.objects.create_user(
+            username="bait_landlord", email="bait_landlord@example.com", password="test12345"
+        )
+        MarketStat.objects.create(
+            area="Uttara",
+            room_type="single",
+            avg_price=10000,
+            median_price=10000,
+            min_price=8000,
+            max_price=12000,
+            percentile_25=9500,
+            percentile_75=11000,
+            sample_size=20,
+        )
+
+    def test_low_but_plausible_price_gets_full_price_fit(self):
+        room = make_room(self.landlord, "Cheap Room", price=9000, area="Uttara")
+        self.assertEqual(value_score(room)["factors"]["price_fit"], 100)
+
+    def test_suspected_bait_price_gets_no_price_reward(self):
+        # 5000 is below the bait floor (0.60 x 9500 = 5700).
+        room = make_room(self.landlord, "Bait Room", price=5000, area="Uttara")
+        score = value_score(room)
+        self.assertEqual(score["factors"]["price_fit"], 60)
+        self.assertEqual(score["price_vs_market_pct"], -50.0)
+
+
+class PriceTrendTests(APITestCase):
+    def setUp(self):
+        self.landlord = User.objects.create_user(
+            username="trend_landlord", email="trend_landlord@example.com", password="test12345"
+        )
+        for room_type, price in (("single", 10000), ("studio", 20000)):
+            MarketStat.objects.create(
+                area="Uttara",
+                room_type=room_type,
+                avg_price=price,
+                median_price=price,
+                min_price=price,
+                max_price=price,
+                percentile_25=price,
+                percentile_75=price,
+                sample_size=1,
+            )
+            make_room(
+                self.landlord, f"{room_type} room", price=price, area="Uttara", room_type=room_type
+            )
+
+    def test_unchanged_market_has_zero_trend(self):
+        # Both room types are compared together, not one arbitrary MarketStat row.
+        self.assertEqual(_price_trend("Uttara"), 0.0)
+
+    def test_unavailable_rooms_are_ignored(self):
+        room = make_room(self.landlord, "Let room", price=90000, area="Uttara")
+        Room.objects.filter(pk=room.pk).update(is_available=False)
+        self.assertEqual(_price_trend("Uttara"), 0.0)
+
+    def test_live_price_rise_is_reported(self):
+        make_room(self.landlord, "New studio", price=30000, area="Uttara", room_type="studio")
+        # Live avg 20000 vs snapshot avg 15000.
+        self.assertEqual(_price_trend("Uttara"), 33.3)
+
+    def test_area_without_market_stats_has_no_trend(self):
+        self.assertIsNone(_price_trend("Mirpur"))
 
 
 class AffordabilityApiTests(APITestCase):
