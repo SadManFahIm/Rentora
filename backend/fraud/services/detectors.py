@@ -32,10 +32,9 @@ from ..models import FraudReport, FraudSignal
 
 logger = logging.getLogger(__name__)
 
-# Price-anomaly thresholds vs the (area, room_type) market segment:
-# below 60% of the 25th percentile is "too good to be true", above 150% of
-# the 75th percentile is "priced to fleece".
-PRICE_LOW_FACTOR = 0.60
+# Price-anomaly threshold vs the (area, room_type) market segment: above 150%
+# of the 75th percentile is "priced to fleece". The "too good to be true" low
+# end is `pricing.services.insight.is_suspiciously_low`, shared with pricing.
 PRICE_HIGH_FACTOR = 1.50
 
 # Duplicate / similarity thresholds (difflib ratio, 0..1).
@@ -65,6 +64,7 @@ def _suspicious_price(room: Room) -> Signal | None:
     """
     try:
         from pricing.models import MarketStat
+        from pricing.services.insight import is_suspiciously_low
     except ImportError:
         return None
 
@@ -79,7 +79,7 @@ def _suspicious_price(room: Room) -> Signal | None:
     p25, p75 = float(stat.percentile_25), float(stat.percentile_75)
     price = float(room.price)
 
-    if price < p25 * PRICE_LOW_FACTOR:
+    if is_suspiciously_low(stat, price):
         return Signal(
             detector=FraudSignal.Detector.SUSPICIOUS_PRICE,
             severity=FraudReport.Severity.MEDIUM,

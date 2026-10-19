@@ -28,6 +28,11 @@ GOOD_PRICE_THRESHOLD = -5
 FAIR_PRICE_THRESHOLD = 5
 ABOVE_AVERAGE_THRESHOLD = 15
 
+# A price below this fraction of the segment's 25th percentile is what the
+# fraud engine flags as a possible bait listing (see
+# `fraud.services.detectors._suspicious_price`).
+SUSPICIOUS_LOW_FACTOR = 0.60
+
 _MESSAGES = {
     "great_deal": "{pct}% below the market average — a great deal.",
     "good_price": "{pct}% below the market average — a good price.",
@@ -56,12 +61,23 @@ def _message(classification: str, percentage_diff: float) -> str:
     )
 
 
+def is_suspiciously_low(stat: MarketStat, price: float) -> bool:
+    """True when `price` is low enough for the fraud engine's bait-listing
+    check. Pricing and fraud both read this one rule, so a listing the fraud
+    engine flags is never also advertised as a great deal."""
+    return (
+        stat.sample_size >= MIN_SAMPLE_SIZE
+        and price < float(stat.percentile_25) * SUSPICIOUS_LOW_FACTOR
+    )
+
+
 def get_price_insight(room: Room) -> dict[str, Any] | None:
     """Return `room`'s price insight, or None if there isn't yet a market
     segment (or a big-enough one — see MIN_SAMPLE_SIZE) to compare it
-    against. Callers (the RoomDetailSerializer field, the standalone
-    endpoint) should both render that as a null/absent value rather than a
-    misleading "0% difference"."""
+    against, or if the price is low enough to be a suspected bait listing
+    (see `is_suspiciously_low`). Callers (the RoomDetailSerializer field, the
+    standalone endpoint) should both render that as a null/absent value
+    rather than a misleading "0% difference" or "great deal"."""
     try:
         stat = MarketStat.objects.get(area=room.area, room_type=room.room_type)
     except MarketStat.DoesNotExist:
@@ -72,6 +88,8 @@ def get_price_insight(room: Room) -> dict[str, Any] | None:
 
     avg_price = float(stat.avg_price)
     your_price = float(room.price)
+    if is_suspiciously_low(stat, your_price):
+        return None
     percentage_diff = round(((your_price - avg_price) / avg_price) * 100, 1) if avg_price else 0.0
     classification = _classify(percentage_diff)
 
