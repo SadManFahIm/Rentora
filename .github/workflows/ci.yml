@@ -139,8 +139,14 @@ jobs:
       - name: Dump base schema (worktree at base SHA)
         # On PRs the base is the target branch; on pushes it is the commit the
         # push was based on (github.event.before), so the gate also runs on main.
+        # A force-push or a new branch leaves no usable `before` commit; diff
+        # against the head's parent instead of failing.
         run: |
           BASE_SHA="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            echo "::notice::Base ${BASE_SHA} is not in history (force-push or new branch); diffing against HEAD^"
+            BASE_SHA="$(git rev-parse HEAD^)"
+          fi
           git worktree add /tmp/base "$BASE_SHA"
           (cd /tmp/base/backend && python manage.py spectacular --file /tmp/base-schema.json --format openapi-json 2>/dev/null)
           git worktree remove /tmp/base --force
