@@ -5,7 +5,7 @@ Automat==25.4.16
 bleach==6.4.0
 celery==5.6.3
 cbor2==6.1.5
-certifi==2026.7.22
+certifi==2026.10.18
 cffi==2.1.1
 channels==4.3.2
 channels_redis==4.3.0
