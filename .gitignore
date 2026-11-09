@@ -19,17 +19,30 @@ backend/backups/
 
 # General
 .DS_Store
+Thumbs.db
 *.pyc
+*.swp
 .vscode/
 .idea/
+node_modules/
+.venv/
+venv/
+*.sqlite3
+*.egg-info/
+coverage.xml
+
+# Environment files (keep the committed examples)
+.env
+.env.*
+!.env.example
+
+# Python tool caches
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
 
 # Local tooling
 .tmp-chrome-profile/
-.freebuff/
-.agents/
-
-# Skills install lockfile (local tooling)
-skills-lock.json
 
 # CI-generated OpenAPI types (frontend contract check)
 frontend/src/generated/
