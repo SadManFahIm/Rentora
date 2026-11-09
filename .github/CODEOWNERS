@@ -5,5 +5,5 @@
 * @SadManFahIm
 
 # High-sensitivity paths — security policy and CI must never change unreviewed.
-SECURITY.md @SadManFahIm
+.github/SECURITY.md @SadManFahIm
 .github/workflows/ @SadManFahIm

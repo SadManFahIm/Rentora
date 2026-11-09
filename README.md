@@ -458,7 +458,7 @@ The complete endpoint reference with request and response examples is in [`docs/
 - Upload validation with malware scanning support.
 - Automated security scanning in CI (see [Testing and Quality](#testing-and-quality)).
 
-To report a vulnerability, follow [SECURITY.md](SECURITY.md). Further details are in the [security audit](docs/security/SECURITY_AUDIT.md) and the [production checklist](docs/security/SECURITY_CHECKLIST.md).
+To report a vulnerability, follow [SECURITY.md](.github/SECURITY.md). Further details are in the [security audit](docs/security/SECURITY_AUDIT.md) and the [production checklist](docs/security/SECURITY_CHECKLIST.md).
 
 ---
 
@@ -508,7 +508,7 @@ Contributions follow a pull-request workflow against a protected `main` branch:
 - **Pull requests:** every PR describes what changed and why, the files touched, the testing performed, and screenshots for UI changes.
 - **Merging:** all CI gates must be green before merge.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) and [SUPPORT.md](SUPPORT.md) for community guidelines and help.
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for the full guide, and [CODE_OF_CONDUCT.md](.github/CODE_OF_CONDUCT.md) and [SUPPORT.md](.github/SUPPORT.md) for community guidelines and help.
 
 ---
 
