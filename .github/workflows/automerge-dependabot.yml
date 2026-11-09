@@ -133,7 +133,10 @@ jobs:
       - name: Merge (merge commit, repo convention)
         if: steps.eligible.outputs.eligible == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # A merge pushed with GITHUB_TOKEN does not trigger main's push
+          # workflows; AUTOMERGE_TOKEN (a Dependabot secret) does. Falls back
+          # to GITHUB_TOKEN when the secret is not set.
+          GH_TOKEN: ${{ secrets.AUTOMERGE_TOKEN || secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
           set -euo pipefail
