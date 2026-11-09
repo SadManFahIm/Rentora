@@ -4,13 +4,13 @@ Need help? Pick the channel that matches the kind of question you have.
 
 ## Documentation first
 
-- [README](README.md) — overview, features, roadmap, screenshots
+- [README](../README.md) — overview, features, roadmap, screenshots
 - [CONTRIBUTING](CONTRIBUTING.md) — local setup, workflow, coding standards
-- [docs/](docs/) — phase specs, architecture, API reference, security notes
+- [docs/](../docs/) — phase specs, architecture, API reference, security notes
 
 ## Bugs & feature requests
 
-- Open an issue using the [issue templates](.github/ISSUE_TEMPLATE/) —
+- Open an issue using the [issue templates](ISSUE_TEMPLATE/) —
   include the steps to reproduce (bug) or the problem you are solving
   (feature), the environment, and any relevant logs.
 - UI changes should include screenshots.
