@@ -37,30 +37,6 @@ services:
       timeout: 3s
       retries: 10
 
-  # Workspace container used by the VS Code devcontainer.
-  workspace:
-    build:
-      context: .
-      dockerfile: .devcontainer/Dockerfile
-    command: sleep infinity
-    working_dir: /workspaces/rentora
-    volumes:
-      - .:/workspaces/rentora
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    environment:
-      DJANGO_SETTINGS_MODULE: config.settings.dev
-      DB_ENGINE: postgres
-      DB_NAME: rentora
-      DB_USER: postgres
-      DB_PASSWORD: rentora
-      DB_HOST: db
-      DB_PORT: "5432"
-      REDIS_URL: redis://redis:6379/0
-
 volumes:
   pgdata:
   redisdata:
