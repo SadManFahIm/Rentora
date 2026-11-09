@@ -41,6 +41,12 @@ updates:
       backend-deps:
         patterns:
           - "*"
+    ignore:
+      # celery 5.7.0 pins python-dateutil==2.9.0.post0, which conflicts with
+      # the python-dateutil 4.x pin, so pip cannot resolve requirements.txt.
+      # Hold 5.6.x until celery relaxes the pin.
+      - dependency-name: "celery"
+        versions: [">=5.7"]
 
   - package-ecosystem: github-actions
     directory: /   # workflow files in .github/workflows
